@@ -39,14 +39,14 @@ Build scope by phase. Each phase ends with a "Done when" check. See `docs/DESIGN
 **Done when:** `dbt build` passes all tests on synthetic data, and the fixture test matches the hand-computed values exactly.
 
 ## Phase 3: Agent v0 (CLI)
-- [ ] `LLMClient` interface + Anthropic implementation; mock client for tests
-- [ ] SQL guard (§6.3) with unit tests for every rejection rule
-- [ ] Tools: `describe_table`, `run_sql`, `make_chart`, `final_answer`
-- [ ] Tool-calling loop with step limit and structured final answer (§6.1, §6.5)
-- [ ] Versioned system prompt `system_v1.md`; current date and timezone injected
-- [ ] Tracing to JSONL + `agent_traces` (§6.6)
-- [ ] `scrollback ask "..." --show-sql --chart`
-- [ ] Loop tests with scripted mock tool calls (happy path, SQL error, step limit)
+- [x] `LLMClient` interface + Anthropic implementation; mock client for tests
+- [x] SQL guard (§6.3) with unit tests for every rejection rule
+- [x] Tools: `describe_table`, `run_sql`, `make_chart`, `final_answer`
+- [x] Tool-calling loop with step limit and structured final answer (§6.1, §6.5)
+- [x] Versioned system prompt `system_v1.md`; current date and timezone injected
+- [x] Tracing to JSONL + `agent_traces` (§6.6)
+- [x] `scrollback ask "..." --show-sql --chart`
+- [x] Loop tests with scripted mock tool calls (happy path, SQL error, step limit)
 
 **Done when:** `scrollback ask "how many minutes did I watch yesterday"` returns a correct answer with SQL and a chart, and writes a trace.
 

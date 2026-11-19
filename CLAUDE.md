@@ -11,7 +11,7 @@ If you change a design decision, update `docs/DESIGN.md` in the same commit and 
 
 ## Current state
 
-Phases 0, 1 and 2 are done except ingesting a real export; see the roadmap checkboxes. No real
+Phases 0-3 are done except ingesting a real export; see the roadmap checkboxes. No real
 export has been ingested yet, so every TikTok-format assumption is listed in DESIGN §4.1
 "Format assumptions to verify against a real export". When a real export arrives, put it in
 `data/raw/`, run `scrollback ingest`, and update that list. An unknown structure (or a missing
@@ -38,6 +38,9 @@ uv run scrollback ingest data/sample/user_data_tiktok.json [--db path.duckdb] [-
 # warehouse (dbt) and parameter tuning
 uv run scrollback build [--db path.duckdb] [-q]   # dbt build with --vars from config.yaml
 uv run scrollback inspect gaps [--db path.duckdb] # gap distribution, aggregates only
+
+# agent (needs ANTHROPIC_API_KEY in .env; costs money: ~$0.01-0.02 per question on Sonnet 5.5)
+uv run scrollback ask "how many minutes did I watch yesterday" [--show-sql] [--chart] [--today YYYY-MM-DD]
 ```
 
 Never run `dbt` directly: `dbt_project.yml` has no var defaults on purpose, and
@@ -62,6 +65,12 @@ them; `tests/test_ingest_e2e.py` and CI fail if they drift.
 - `dbt/`: staging (`stg_*`), intermediate (`int_view_gaps`, `int_sessions`), marts (`fct_*`,
   `dim_date`, `agg_daily`), generic test `accepted_range`, singular tests in `dbt/tests/`.
 - `knowledge/metrics.yml`: metric definitions; `knowledge/docs/`: glossary docs.
+- `src/scrollback/agent/llm.py`: `LLMClient` protocol, `AnthropicLLMClient`, `ScriptedLLMClient`
+  (+ `mock_turn`), `create_llm_client` (tests monkeypatch it).
+- `src/scrollback/agent/sql_guard.py`: sqlglot guard with stable rule codes.
+- `src/scrollback/agent/tools.py`: describe_table, run_sql, make_chart, final_answer + schemas.
+- `src/scrollback/agent/loop.py`: `run_agent()`; prompts in `agent/prompts/system_v{N}.md`.
+- `src/scrollback/agent/pricing.py`: dated per-model prices; `tracing.py`: JSONL + `agent_traces`.
 
 ## Warehouse and metrics conventions
 
@@ -90,6 +99,18 @@ them; `tests/test_ingest_e2e.py` and CI fail if they drift.
 - Add dependencies only in the phase that needs them (`uv add <pkg>`, `uv add --dev <pkg>`).
 - Small, logical commits. Commit `uv.lock` with dependency changes.
 
+## Agent conventions
+
+- The E0 baseline is deliberately minimal (DESIGN §6.4, §7.5): no metrics.yml or glossary content
+  in `system_v1.md`, no descriptions in `describe_table`, no refusal or caveat rules. Improvements
+  go in a new prompt version or a config switch so each one is a measurable experiment; never
+  edit `system_v1.md` in place once evals exist.
+- Current Claude models reject sampling parameters and forced `tool_choice`; use `effort` and
+  `tool_choice: auto`. Append assistant turns unchanged. Refusal fallback is off (owner's choice).
+- Every new SQL guard rule needs a stable code and a unit test in `tests/test_sql_guard.py`.
+- Loop behaviour is tested with `ScriptedLLMClient`; never call the real API in tests or CI.
+- Commits and PRs carry no Claude attribution (no co-author trailer, no "Generated with" line).
+
 ## Privacy rules (DESIGN §4.6) — non-negotiable
 
 - Real exports go in `data/raw/` only. `data/raw/`, `data/warehouse/*.duckdb`, `.env`, `traces/`
@@ -98,6 +119,9 @@ them; `tests/test_ingest_e2e.py` and CI fail if they drift.
   name **keys only, never values**. CLI output reports counts, not records.
 - `source_file` stores the file's basename, not its full path.
 - Query results are sent to the LLM provider. `AGENT_RESULT_MODE=aggregate_only` (the default)
-  makes the SQL guard reject non-aggregate queries; keep it on for real data.
+  makes the SQL guard reject row-level results and `describe_table` hide `fct_*` rows; keep it on
+  for real data. `video_id` and search terms may appear in results (owner's decision).
+- Never log or print the API key. It is read once from settings into the SDK client; traces hold
+  a non-secret config snapshot only. `traces/` and `charts/` are git-ignored.
 - The Telegram bot only answers chat IDs in `TELEGRAM_ALLOWED_CHAT_IDS`.
 - Tests, evals and CI run against synthetic data only.

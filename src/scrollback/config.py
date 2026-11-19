@@ -49,6 +49,7 @@ class PathsConfig(_Strict):
     dbt_project_dir: Path = Path("dbt")
     traces_dir: Path = Path("traces")
     eval_runs_dir: Path = Path("eval/runs")
+    charts_dir: Path = Path("charts")
 
     def resolved(self, root: Path) -> PathsConfig:
         values = {
@@ -78,15 +79,27 @@ class MetricsConfig(_Strict):
 
 
 class LLMConfig(_Strict):
-    provider: str = "anthropic"
+    provider: Literal["anthropic"] = "anthropic"
     model: str = "claude-sonnet-5-5"
-    temperature: float = Field(0.0, ge=0.0, le=1.0)
-    max_steps: int = Field(8, gt=0)
+    # Sampling parameters (temperature etc.) are rejected by current models; depth and spend
+    # are controlled with effort instead (DESIGN §6.7).
+    effort: Literal["low", "medium", "high", "xhigh", "max"] = "medium"
+    max_tokens: int = Field(16000, gt=0)
+    timeout_sec: float = Field(120.0, gt=0)
     retrieval_k: int = Field(6, gt=0)
 
 
 class AgentConfig(_Strict):
+    # aggregate_only: the SQL guard rejects row-level results (DESIGN §4.6, §6.3).
     result_mode: Literal["aggregate_only", "full"] = "aggregate_only"
+    prompt_version: int = Field(1, gt=0)
+    max_steps: int = Field(8, gt=0)  # LLM calls per question
+    sql_max_retries: int = Field(2, ge=0)  # consecutive failed run_sql calls allowed to retry
+    max_result_rows: int = Field(200, gt=0)
+    statement_timeout_sec: float = Field(10.0, gt=0)
+    # E0 baseline switches (DESIGN §7.5): descriptions arrive in E1.
+    describe_include_descriptions: bool = False
+    describe_sample_rows: int = Field(3, ge=0)
 
 
 class Secrets(_Strict):
@@ -113,8 +126,8 @@ _ENV_OVERRIDES: dict[str, tuple[str, str]] = {
     "WAREHOUSE_PATH": ("paths", "warehouse"),
     "LLM_PROVIDER": ("llm", "provider"),
     "LLM_MODEL": ("llm", "model"),
-    "LLM_TEMPERATURE": ("llm", "temperature"),
-    "AGENT_MAX_STEPS": ("llm", "max_steps"),
+    "LLM_EFFORT": ("llm", "effort"),
+    "AGENT_MAX_STEPS": ("agent", "max_steps"),
     "AGENT_RESULT_MODE": ("agent", "result_mode"),
 }
 
