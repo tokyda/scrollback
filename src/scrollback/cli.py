@@ -230,14 +230,107 @@ def inspect_gaps(db: DbOption = None, config: ConfigOption = None) -> None:
     typer.echo(format_gap_report(stats))
 
 
+def _format_answer(result: object, show_sql: bool) -> str:
+    """Render an answered run in the DESIGN §6.5 layout."""
+    from scrollback.agent.loop import AgentResult
+
+    assert isinstance(result, AgentResult) and result.answer is not None
+    a = result.answer
+    lines = [a.text, ""]
+    if a.metrics_used:
+        lines.append(f"Metrics: {', '.join(a.metrics_used)}")
+    if a.assumptions:
+        lines.append("Assumptions:")
+        lines += [f"  - {x}" for x in a.assumptions]
+    n = len(a.sql_used)
+    if show_sql and n:
+        lines.append(f"SQL ({n} {'query' if n == 1 else 'queries'}):")
+        for sql in a.sql_used:
+            lines.append(f"  {sql}")
+    elif n:
+        lines.append(f"SQL: {n} {'query' if n == 1 else 'queries'} (use --show-sql to see)")
+    else:
+        lines.append("SQL: none (the answer is not based on a query result)")
+    if a.chart_path:
+        lines.append(f"Chart: {a.chart_path}")
+    return "\n".join(lines)
+
+
+def _trace_line(result: object) -> str:
+    from scrollback.agent.loop import AgentResult
+
+    assert isinstance(result, AgentResult)
+    t = result.trace
+    tokens = sum(t.tokens().values())
+    cost = f"${t.cost_usd:.4f}" if t.cost_usd is not None else "cost n/a"
+    return (
+        f"Trace {t.trace_id} · {t.status} · {t.steps} steps · {len(t.tool_calls)} tool calls · "
+        f"{tokens:,} tokens · {cost} · {t.latency_ms / 1000:.1f}s"
+    )
+
+
+STATUS_MESSAGES = {
+    "step_limit": "No answer: the agent reached its step limit without a final answer.",
+    "refused": "No answer: the model declined this request.",
+    "no_final_answer": "No answer: the agent stopped without giving a final answer.",
+    "max_tokens": "No answer: the model ran out of output tokens.",
+    "error": "No answer: the model call failed",
+}
+
+
 @app.command()
 def ask(
     question: Annotated[str, typer.Argument(help="Question in plain English.")],
     show_sql: Annotated[bool, typer.Option("--show-sql", help="Print the SQL used.")] = False,
-    chart: Annotated[bool, typer.Option("--chart", help="Render a chart if useful.")] = False,
+    chart: Annotated[bool, typer.Option("--chart", help="Ask for a supporting chart.")] = False,
+    today: Annotated[
+        str | None,
+        typer.Option(help="Pretend today is YYYY-MM-DD (default: today in local_tz)."),
+    ] = None,
+    db: DbOption = None,
+    config: ConfigOption = None,
 ) -> None:
     """Ask the agent a question about your viewing history."""
-    _not_implemented("ask", "Phase 3")
+    from datetime import date
+
+    from scrollback.agent import llm as llm_module
+    from scrollback.agent.llm import LLMError
+    from scrollback.agent.loop import run_agent
+    from scrollback.warehouse.db import has_view_data
+
+    settings = _settings(config)
+    db_path = db or settings.paths.warehouse
+    if not has_view_data(db_path):
+        typer.echo("No data: run `scrollback ingest <export>` first.", err=True)
+        raise typer.Exit(1)
+    try:
+        today_date = date.fromisoformat(today) if today else None
+    except ValueError:
+        typer.echo(f"--today must be YYYY-MM-DD, got {today!r}", err=True)
+        raise typer.Exit(2) from None
+    try:
+        client = llm_module.create_llm_client(settings)
+    except LLMError as exc:
+        typer.echo(f"LLM setup failed: {exc}", err=True)
+        raise typer.Exit(1) from None
+
+    result = run_agent(
+        question, settings=settings, llm=client, db_path=db_path, today=today_date,
+        want_chart=chart,
+    )  # fmt: skip
+    if result.status == "answered":
+        typer.echo(_format_answer(result, show_sql))
+    else:
+        message = STATUS_MESSAGES.get(result.status, f"No answer ({result.status}).")
+        if result.status == "error" and result.trace.error:
+            message += f": {result.trace.error}"
+        typer.echo(message, err=True)
+    typer.echo("")
+    typer.echo(_trace_line(result))
+    if result.trace_db_error:
+        typer.echo(f"Warning: {result.trace_db_error}", err=True)
+    if result.status != "answered":
+        raise typer.Exit(1)
 
 
 @app.command()

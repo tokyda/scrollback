@@ -382,6 +382,9 @@ Implemented in `src/scrollback/agent/sql_guard.py`. Every rejection has a stable
 - If the question is ambiguous, pick the most reasonable reading and state it. Don't ask questions back in single-shot mode.
 
 ### 6.5 Answer format
+`scrollback ask "<question>" [--show-sql] [--chart] [--today YYYY-MM-DD]` prints the answer text, `Metrics:` (the model's `metrics_used`; in E0 these are free text with no definitions, which arrive with the metrics layer in E2), the assumptions, the SQL (with `--show-sql`, otherwise just a count), the chart path, and a trace line (`trace_id · status · steps · tool calls · tokens · cost · latency`). Any status other than `answered` prints why and exits 1. `--today` pins the date for evals and reproducible checks.
+
+Target layout (once metric definitions are in the agent's reach):
 ```
 You watched ~142 min last Sunday (15 Nov), your 3rd-highest day this month.
 
@@ -476,7 +479,7 @@ Each step is one config. Results go into the README table.
 ## 8. Interfaces
 
 ### CLI (`scrollback`)
-`ingest`, `synth`, `build` (dbt), `inspect gaps`, `ask "<question>" [--show-sql] [--chart]`, `eval run|report`, `kb index`, `alerts check`, `digest send`, `serve api`, `serve bot`.
+`ingest`, `synth`, `build` (dbt), `inspect gaps`, `ask "<question>" [--show-sql] [--chart] [--today]`, `eval run|report`, `kb index`, `alerts check`, `digest send`, `serve api`, `serve bot`.
 
 `inspect gaps` *(added)* prints the distribution of gaps between consecutive views, for tuning `session_gap_min` and `view_cap_sec` on a real export (§14). It shows the count, percentiles for all gaps and for within-session gaps, and a histogram whose bin edges include the current parameter values. It also prints two what-if tables: how many sessions each candidate `session_gap_min` would give, and what share of within-session gaps each candidate `view_cap_sec` would cap. It prints aggregates only (no timestamps, IDs or rows), so it's safe on real data.
 

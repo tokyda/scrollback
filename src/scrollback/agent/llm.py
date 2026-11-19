@@ -219,3 +219,10 @@ class ScriptedLLMClient:
             raise AssertionError(f"script exhausted after {len(self.turns)} turns")
         turn = self.turns[index]
         return turn(messages) if callable(turn) else turn
+
+
+def create_llm_client(settings: Settings) -> LLMClient:
+    """The configured LLM client (the CLI calls this; tests replace it with a mock)."""
+    if settings.llm.provider == "anthropic":
+        return AnthropicLLMClient(settings)
+    raise LLMError("config", f"unsupported provider {settings.llm.provider!r}")
