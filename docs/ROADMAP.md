@@ -1,0 +1,104 @@
+# Scrollback — Roadmap
+
+Build scope by phase. Each phase ends with a "Done when" check. See `docs/DESIGN.md` for the specs referenced as §N.
+
+---
+
+## Phase 0: Foundations
+- [ ] Repo scaffold matching DESIGN §11, using `uv` and `pyproject.toml`
+- [ ] `config.py`: loads `config.yaml` + `.env` (timezone, paths, metric params, LLM settings)
+- [ ] `.gitignore` for real data, the warehouse file, `.env` and eval runs; `.env.example`
+- [ ] ruff, mypy, pytest set up; GitHub Actions CI running lint + tests
+- [ ] `CLAUDE.md` with project conventions and commands
+- [ ] Typer CLI skeleton with stubbed subcommands
+
+**Done when:** `uv run scrollback --help` lists every subcommand, and CI is green.
+
+## Phase 1: Synthetic data and ingestion
+- [ ] Synthetic generator (§4.5): realistic behaviour, injected events, noise, deterministic seed, at least 2 export format variants
+- [ ] Commit the generated sample to `data/sample/`
+- [ ] Format variant detection + tolerant parser (§4.1)
+- [ ] Pydantic validation; rejects go to `raw_rejects`
+- [ ] Idempotent load via `record_hash`; `ingest_log`
+- [ ] Unit tests: each variant, malformed records, video ID extraction, re-ingesting the same file adds 0 rows, overlapping exports merge correctly
+- [ ] Ingest one real export locally (never committed) and record anything new about the format in DESIGN §4.1
+
+**Done when:** `scrollback synth && scrollback ingest data/sample/...` loads the expected row counts, and running it twice changes nothing.
+
+## Phase 2: Warehouse and metrics layer
+- [ ] dbt-duckdb project; staging, intermediate and mart models (§4.4)
+- [ ] Session and watch-time estimation (§4.3), parameterised by dbt vars
+- [ ] `dim_date` spine; `agg_daily` with zero-filled days
+- [ ] dbt tests (§4.4), including the custom tests
+- [ ] `knowledge/metrics.yml` with the starter metric set (§5)
+- [ ] Glossary docs: watch-time estimation, timezone and day boundary, sessions, "what this data cannot answer"
+- [ ] Hand-built fixture test: about 15 views with hand-computed sessions and est_watch_sec
+- [ ] `scrollback build` runs `dbt build`
+
+**Done when:** `dbt build` passes all tests on synthetic data, and the fixture test matches the hand-computed values exactly.
+
+## Phase 3: Agent v0 (CLI)
+- [ ] `LLMClient` interface + Anthropic implementation; mock client for tests
+- [ ] SQL guard (§6.3) with unit tests for every rejection rule
+- [ ] Tools: `describe_table`, `run_sql`, `make_chart`, `final_answer`
+- [ ] Tool-calling loop with step limit and structured final answer (§6.1, §6.5)
+- [ ] Versioned system prompt `system_v1.md`; current date and timezone injected
+- [ ] Tracing to JSONL + `agent_traces` (§6.6)
+- [ ] `scrollback ask "..." --show-sql --chart`
+- [ ] Loop tests with scripted mock tool calls (happy path, SQL error, step limit)
+
+**Done when:** `scrollback ask "how many minutes did I watch yesterday"` returns a correct answer with SQL and a chart, and writes a trace.
+
+## Phase 4: Eval harness and baseline
+- [ ] `eval/questions.yaml`: 60+ questions across all categories (§7.1), with fixed `today` anchors
+- [ ] Gold-SQL validity check (runs in CI)
+- [ ] Scorers: execution accuracy, answer accuracy, metric selection, refusal, caveat, efficiency (§7.2)
+- [ ] Run, repeat and report commands; run artifacts layout (§7.4)
+- [ ] Auto-suggested bad-case labels from traces + manual label file (§7.3)
+- [ ] Run **E0 baseline** ×3; label every failure
+
+**Done when:** there's a baseline report with per-category accuracy and a labelled bad-case distribution.
+
+## Phase 5: RAG and optimisation ladder
+- [ ] Knowledge indexer: chunks `metrics.yml`, docs, `schema.yml` and examples → embeddings in DuckDB
+- [ ] `search_knowledge` with hybrid retrieval (embeddings + synonym/keyword match)
+- [ ] `knowledge/examples.yml` few-shot pairs + overlap check against the eval set
+- [ ] SQL error self-correction (max 2 retries)
+- [ ] Semantic compiler `metrics.yml → SQL` + `query_metric` tool
+- [ ] Refusal and caveat rules in the prompt
+- [ ] Run experiments **E1–E7** (§7.5); compare reports after each
+- [ ] Retrieval eval: for each question, is the right metric or doc in the top k (recall@k)
+- [ ] README results table: accuracy, bad-case mix, tokens and latency per experiment
+
+**Done when:** the best config beats E0 by a clear margin on execution accuracy, and every gain is linked to a run report.
+
+## Phase 6: Telegram bot
+- [ ] Telegram bot: free-text questions, chart as photo, "Show SQL" button, allowed chat IDs only
+- [ ] Bot commands: `/today`, `/week`, `/metrics`, `/feedback`
+- [ ] `/feedback` attaches to the trace; `scrollback eval import-feedback` turns bad feedback into candidate eval questions
+- [ ] `AGENT_RESULT_MODE=aggregate_only` enforced for real data
+
+**Done when:** asking a question from your phone returns an answer and chart, and bad feedback shows up as a candidate eval question.
+
+## Phase 7: Polish and demo
+- [ ] README: problem statement (DESIGN §0), architecture diagram, metric definitions (with the watch-time estimation story), eval results table, demo GIF, privacy note, quickstart using synthetic data
+- [ ] Rehearse the 3-minute demo script (DESIGN §8) on real data
+- [ ] dbt docs site (lineage graph) linked from the README
+- [ ] Short write-up: three most instructive bad cases and how each was fixed
+- [ ] Clean-clone check: a fresh clone runs end to end on synthetic data with only an API key
+
+**Done when:** a stranger can clone the repo, run the quickstart, and reproduce the headline eval numbers.
+
+---
+
+## Stretch backlog
+- FastAPI service: `/ask`, `/metrics`, `/health`, `/charts/{id}.png`, bearer-token auth (DESIGN §8)
+- Monitoring: robust z-score anomaly alerts with a "why?" button, data-health checks, scheduled jobs (DESIGN §9); test that injected synthetic events trigger alerts and normal days don't
+- Weekly "Wrapped" digest: deterministic numbers + short LLM narrative
+- oEmbed enrichment into `dim_video` + creator metrics (DESIGN §10)
+- LangGraph port of the agent loop; compare its eval results with the hand-built loop
+- Second source adapter (YouTube Takeout or Spotify extended history), sharing the metrics layer where it fits
+- Small web UI (chat + dashboard) on the FastAPI backend
+- Multi-turn conversation memory with follow-ups ("and the week before?")
+- Clarifying questions for ambiguous queries in interactive mode, with their own eval category
+- Cost guardrails: per-day token budget, cheap-model routing for simple questions

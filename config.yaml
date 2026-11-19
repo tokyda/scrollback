@@ -1,0 +1,36 @@
+# Scrollback configuration. Secrets live in .env (see .env.example).
+# Environment variables override values here (see src/scrollback/config.py).
+
+timezone:
+  source_tz: UTC              # timezone of timestamps in the TikTok export (DESIGN §4.1; unverified)
+  local_tz: Asia/Singapore    # timezone used for local_date / local_hour
+
+paths:
+  raw_dir: data/raw
+  sample_dir: data/sample
+  warehouse: data/warehouse/scrollback.duckdb
+  dbt_project_dir: dbt
+  traces_dir: traces
+  eval_runs_dir: eval/runs
+
+# Watch-time estimation and session parameters (DESIGN §4.3, §5).
+# These are the source of truth; dbt receives them as --vars.
+metrics:
+  session_gap_min: 30
+  view_cap_sec: 180
+  default_last_view_sec: 20
+  binge_threshold_min: 60
+  late_night_start_hour: 0
+  late_night_end_hour: 5
+  max_daily_views: 3000
+
+llm:
+  provider: anthropic
+  model: claude-sonnet-5-5
+  temperature: 0.0
+  max_steps: 8
+  retrieval_k: 6
+
+agent:
+  # aggregate_only: SQL guard rejects queries without GROUP BY / aggregation (DESIGN §4.6)
+  result_mode: aggregate_only
