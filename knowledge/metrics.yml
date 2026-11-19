@@ -1,0 +1,261 @@
+# Scrollback metrics layer (DESIGN §5): the single source of truth for metric definitions.
+#
+# type: simple  `sql` is an aggregate expression over `table`, filtered on `time_column`:
+#                 SELECT <sql> FROM <table> WHERE <time_column> BETWEEN $start AND $end
+#                 and optionally GROUP BY <time_column> for a per-day series.
+# type: query   `sql` is a complete query returning one row with a `value` column. It must use
+#               the named parameters $start and $end (inclusive local dates).
+#
+# {param} placeholders in text (descriptions, caveats) are filled from config.yaml `metrics:`
+# when the knowledge base is indexed (Phase 5), so text always matches the tuned values.
+# tests/test_metrics.py runs every metric against the synthetic warehouse and reconciles it
+# with the marts.
+
+version: 1
+
+watch_time_method:
+  name: gap_based
+  version: 1
+  doc: watch_time_estimation
+  summary: >
+    Each view's watch time is the gap to the next view, capped at {view_cap_sec} seconds.
+    The last view of a session gets the median of the session's other estimates, or
+    {default_last_view_sec} seconds for a single-view session. Sessions split on gaps longer
+    than {session_gap_min} minutes.
+
+caveats:
+  estimate: >
+    Watch time is an estimate. The export only records when each view started, never how long
+    it lasted.
+  pauses_counted_up_to_cap: >
+    Pauses of up to {view_cap_sec} seconds between two views count as watching.
+  long_videos_undercounted: >
+    A single view counts for at most {view_cap_sec} seconds, so long videos are undercounted.
+  background_play_invisible: >
+    Audio or background play without a new view event is invisible.
+  last_view_imputed: >
+    The last view of each session has no following view; its time is imputed from the
+    session's other views (or {default_last_view_sec} seconds for a single-view session).
+  session_rule: >
+    Sessions are split wherever the gap between views exceeds {session_gap_min} minutes.
+  sessions_by_start_date: >
+    A session that crosses midnight is counted on the date it started; its minutes are still
+    credited to each view's own date.
+  history_window: >
+    Only views inside the loaded export history are visible. A video last watched before the
+    export window starts is not recognised as a rewatch.
+  trailing_window_partial: >
+    Near the start of the history the trailing 7-day window has fewer than 7 days of data.
+  likes_include_unwatched: >
+    Likes count every like in the period, including likes of videos that were never viewed in
+    the watch history (e.g. liked from a profile page).
+
+metrics:
+  - name: views
+    label: Views
+    description: Number of view events (videos started).
+    type: simple
+    sql: COUNT(*)
+    table: fct_views
+    time_column: local_date
+    default_grain: day
+    unit: count
+    synonyms: [videos watched, number of videos, how many videos, view count, plays]
+
+  - name: unique_videos
+    label: Unique videos
+    description: Number of distinct videos viewed.
+    type: simple
+    sql: COUNT(DISTINCT video_id)
+    table: fct_views
+    time_column: local_date
+    default_grain: day
+    unit: count
+    caveats: [history_window]
+    synonyms: [distinct videos, different videos, unique videos watched]
+
+  - name: rewatch_rate
+    label: Rewatch rate
+    description: >
+      Share of views that are rewatches: views of a video already viewed earlier in the loaded
+      history, divided by all views.
+    type: simple
+    sql: AVG(CASE WHEN is_rewatch THEN 1.0 ELSE 0.0 END)
+    table: fct_views
+    time_column: local_date
+    default_grain: week
+    unit: ratio
+    caveats: [history_window]
+    synonyms: [rewatches, repeat views, watched again, share of rewatched videos]
+
+  - name: est_watch_minutes
+    label: Estimated watch time (minutes)
+    description: >
+      Sum of per-view estimated watch seconds / 60. Estimated from gaps between consecutive
+      views because the export has no durations. See "watch time estimation".
+    type: simple
+    sql: SUM(est_watch_sec) / 60.0
+    table: fct_views
+    time_column: local_date
+    default_grain: day
+    unit: minutes
+    params: [view_cap_sec, default_last_view_sec, session_gap_min]
+    caveats:
+      - estimate
+      - pauses_counted_up_to_cap
+      - long_videos_undercounted
+      - background_play_invisible
+      - last_view_imputed
+    synonyms: [watch time, screen time on tiktok, minutes watched, time spent, hours watched]
+
+  - name: active_days
+    label: Active days
+    description: Number of local calendar days with at least one view.
+    type: simple
+    sql: COUNT(DISTINCT local_date)
+    table: fct_views
+    time_column: local_date
+    default_grain: month
+    unit: days
+    synonyms: [days i used tiktok, dau-equivalent, days active, how many days]
+
+  - name: active_days_7d
+    label: Active days in the trailing 7 days
+    description: >
+      Number of active days in the 7-day window ending on the last day of the requested range
+      (inclusive). The single-user analogue of DAU/WAU. Per day, it is that day's trailing
+      7-day count.
+    type: simple
+    sql: ARG_MAX(active_days_7d, local_date)
+    table: agg_daily
+    time_column: local_date
+    default_grain: day
+    unit: days
+    caveats: [trailing_window_partial]
+    synonyms: [days active this week, active days last 7 days, weekly active days, wau]
+
+  - name: sessions
+    label: Sessions
+    description: >
+      Number of viewing sessions, counted on the date each session started.
+    type: simple
+    sql: COUNT(*)
+    table: fct_sessions
+    time_column: local_date
+    default_grain: day
+    unit: count
+    params: [session_gap_min]
+    caveats: [session_rule, sessions_by_start_date]
+    synonyms: [sessions, times i opened tiktok, viewing sessions, sittings]
+
+  - name: avg_session_minutes
+    label: Average session length (minutes)
+    description: Mean estimated watch time per session, in minutes.
+    type: simple
+    sql: AVG(est_watch_sec) / 60.0
+    table: fct_sessions
+    time_column: local_date
+    default_grain: week
+    unit: minutes
+    params: [session_gap_min, view_cap_sec, default_last_view_sec]
+    caveats: [estimate, session_rule, sessions_by_start_date]
+    synonyms: [average session, typical session length, session duration, mean session]
+
+  - name: binge_sessions
+    label: Binge sessions
+    description: >
+      Sessions whose estimated watch time is at least {binge_threshold_min} minutes.
+    type: simple
+    sql: COUNT(*) FILTER (WHERE is_binge)
+    table: fct_sessions
+    time_column: local_date
+    default_grain: week
+    unit: count
+    params: [binge_threshold_min, session_gap_min]
+    caveats: [estimate, session_rule, sessions_by_start_date]
+    synonyms: [binges, long sessions, binge watching, marathon sessions]
+
+  - name: late_night_share
+    label: Late-night share of views
+    description: >
+      Share of views whose local hour is in [{late_night_start_hour}, {late_night_end_hour}),
+      i.e. after midnight and before {late_night_end_hour}:00.
+    type: simple
+    sql: AVG(CASE WHEN is_late_night THEN 1.0 ELSE 0.0 END)
+    table: fct_views
+    time_column: local_date
+    default_grain: week
+    unit: ratio
+    params: [late_night_start_hour, late_night_end_hour]
+    synonyms: [after midnight, late night viewing, night owl, share at night]
+
+  - name: weekend_share
+    label: Weekend share of views
+    description: Share of views on Saturday or Sunday (local time).
+    type: simple
+    sql: AVG(CASE WHEN is_weekend THEN 1.0 ELSE 0.0 END)
+    table: fct_views
+    time_column: local_date
+    default_grain: month
+    unit: ratio
+    synonyms: [weekend viewing, weekends vs weekdays, share on weekends]
+
+  - name: likes
+    label: Likes
+    description: Number of likes given.
+    type: simple
+    sql: COUNT(*)
+    table: fct_likes
+    time_column: local_date
+    default_grain: day
+    unit: count
+    caveats: [likes_include_unwatched]
+    synonyms: [hearts, liked videos, likes given]
+
+  - name: like_rate
+    label: Like rate
+    description: Likes divided by views in the same period.
+    type: simple
+    sql: SUM(likes) * 1.0 / NULLIF(SUM(views), 0)
+    table: agg_daily
+    time_column: local_date
+    default_grain: week
+    unit: ratio
+    caveats: [likes_include_unwatched]
+    synonyms: [likes per view, how often i like, like ratio]
+
+  - name: searches
+    label: Searches
+    description: Number of searches made.
+    type: simple
+    sql: COUNT(*)
+    table: fct_searches
+    time_column: local_date
+    default_grain: day
+    unit: count
+    synonyms: [search count, things i searched, searches made]
+
+  - name: streak_days
+    label: Longest active streak (days)
+    description: >
+      Longest run of consecutive active days (days with at least one view) inside the requested
+      range. A streak that started before the range is only counted from the range start.
+    type: query
+    sql: |
+      WITH days AS (
+          SELECT local_date
+          FROM agg_daily
+          WHERE is_active AND local_date BETWEEN $start AND $end
+      ),
+      runs AS (
+          -- consecutive dates minus their row number share one key (gaps and islands)
+          SELECT local_date - CAST(ROW_NUMBER() OVER (ORDER BY local_date) AS INTEGER) AS run_key
+          FROM days
+      )
+      SELECT COALESCE(MAX(run_len), 0) AS value
+      FROM (SELECT run_key, COUNT(*) AS run_len FROM runs GROUP BY run_key)
+    table: agg_daily
+    time_column: local_date
+    default_grain: month
+    unit: days
+    synonyms: [streak, longest streak, consecutive days, days in a row]

@@ -86,6 +86,23 @@ Likes (liked_after_watch = a view of the same video at or before the like, <= 30
     l3 2026-03-06 11:40:00 video A -> latest earlier view v06 at 11:01:26 is
                                       38 min 34 s earlier (> 30 min)           -> False
 Search: "  Pasta   RECIPES " on 2026-03-07 09:00:00 -> search_term_norm "pasta recipes".
+
+Every metric in knowledge/metrics.yml over 2026-03-06..2026-03-07, by hand:
+    views               16
+    unique_videos       14   (A-N; A and H are each seen twice)
+    rewatch_rate        2 / 16 = 0.125            (v06 = A again, v12 = H again)
+    est_watch_minutes   964 / 60 = 16.0666...
+    active_days         2
+    active_days_7d      2    (window ending 03-07 holds 03-06 and 03-07)
+    sessions            5
+    avg_session_minutes 964 / 5 / 60 = 3.21333...
+    binge_sessions      1    (session A, 300 s >= 5 min)
+    late_night_share    2 / 16 = 0.125            (v15, v16)
+    weekend_share       2 / 16 = 0.125            (v15, v16 are on Saturday)
+    likes               3
+    like_rate           3 / 16 = 0.1875
+    searches            1
+    streak_days         2
 """
 
 from datetime import date, datetime
@@ -278,3 +295,34 @@ def test_totals_reconcile(fx: duckdb.DuckDBPyConnection) -> None:
     daily_total = fx.execute("SELECT sum(est_watch_min) * 60 FROM agg_daily").fetchone()
     assert views_total == sessions_total == (964.0,)
     assert daily_total is not None and daily_total[0] == pytest.approx(964.0)
+
+
+EXPECTED_METRICS: dict[str, float] = {
+    "views": 16,
+    "unique_videos": 14,
+    "rewatch_rate": 2 / 16,
+    "est_watch_minutes": 964 / 60,
+    "active_days": 2,
+    "active_days_7d": 2,
+    "sessions": 5,
+    "avg_session_minutes": 964 / 5 / 60,
+    "binge_sessions": 1,
+    "late_night_share": 2 / 16,
+    "weekend_share": 2 / 16,
+    "likes": 3,
+    "like_rate": 3 / 16,
+    "searches": 1,
+    "streak_days": 2,
+}
+
+
+def test_every_metric_matches_hand_computed(fx: duckdb.DuckDBPyConnection) -> None:
+    from scrollback.semantic.metrics import load_metrics, metric_query
+
+    metrics = load_metrics()
+    assert {m.name for m in metrics.metrics} == set(EXPECTED_METRICS)
+    params = {"start": date(2026, 3, 6), "end": date(2026, 3, 7)}
+    for name, expected in EXPECTED_METRICS.items():
+        row = fx.execute(metric_query(metrics.get(name)), params).fetchone()
+        assert row is not None
+        assert row[0] == pytest.approx(expected, abs=1e-12), name
