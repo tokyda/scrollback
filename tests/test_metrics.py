@@ -200,3 +200,18 @@ def test_streak_and_trailing_window_match_python(wh: duckdb.DuckDBPyConnection) 
         assert _value(wh, "streak_days", lo, hi) == longest_run(lo, hi), (lo, hi)
         expected_7d = sum(1 for i in range(7) if hi - timedelta(days=i) in active)
         assert _value(wh, "active_days_7d", lo, hi) == expected_7d, (lo, hi)
+
+
+GLOSSARY = ["watch_time_estimation", "timezone_and_day_boundary", "sessions", "cannot_answer"]
+
+
+@pytest.mark.parametrize("name", GLOSSARY)
+def test_glossary_doc_exists_and_renders(name: str) -> None:
+    path = DOCS_DIR / f"{name}.md"
+    rendered = render(path.read_text(encoding="utf-8"), repo_settings())
+    assert rendered.startswith("# ")
+    assert not placeholders(rendered)
+
+
+def test_watch_time_method_points_at_its_doc() -> None:
+    assert (DOCS_DIR / f"{METRICS.watch_time_method.doc}.md").exists()
