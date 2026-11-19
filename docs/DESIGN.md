@@ -470,9 +470,9 @@ Each step is one config. Results go into the README table.
 | E4 | + richer structured SQL errors: the valid tables and columns, did-you-mean suggestions for unknown names, and a short fix hint per guard rule | fewer unrecovered SQL errors |
 | E5 | + `query_metric` semantic-layer tool | biggest jump on metric questions, fewer tokens |
 | E6 | + "cannot answer" doc + refusal rules (and the estimate-caveat rule) | fewer failed refusals, check over-refusal |
+| E7 | model swap (small vs large) | the cost/accuracy tradeoff |
 
 *(E4 changed, 2026-11-20: basic self-correction, where the error goes back to the model with up to `sql_max_retries` = 2 retries, is already part of the E0 baseline, so E4 now measures richer error content instead. E0's errors are the guard's rule code plus DuckDB's or the guard's message.)*
-| E7 | model swap (small vs large) | the cost/accuracy tradeoff |
 
 ---
 
