@@ -357,7 +357,8 @@ Every run writes one JSON line to `traces/` and a row to `agent_traces` in DuckD
 
 ### 6.7 Config and versioning
 - The prompt lives in `src/scrollback/agent/prompts/system_v{N}.md`, and the version is recorded in traces and eval runs.
-- Model, temperature (default 0), max steps, retrieval k and tool on/off flags all come from `config.yaml` and env, so experiments are config diffs, not code diffs.
+- Model, effort (default `medium`), max steps, retrieval k and tool on/off flags all come from `config.yaml` and env, so experiments are config diffs, not code diffs. *(Changed: there's no `temperature`. Current Claude models reject sampling parameters, and from API version 2026-10-21 every model does; `effort` controls depth and spend instead, and §7.4's `--repeat 3` covers run-to-run variance. A config that still sets `temperature` fails validation.)*
+- Default model: `claude-sonnet-5-5` at `medium` effort for the E0 baseline. Comparing with `claude-opus-5-5` is E7.
 
 ---
 

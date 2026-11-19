@@ -12,6 +12,7 @@ paths:
   dbt_project_dir: dbt
   traces_dir: traces
   eval_runs_dir: eval/runs
+  charts_dir: charts
 
 # Watch-time estimation, session and data-quality parameters (DESIGN §4.3, §4.4, §5).
 # This is the single source of truth: `scrollback build` passes them to dbt as --vars and
@@ -29,10 +30,19 @@ metrics:
 llm:
   provider: anthropic
   model: claude-sonnet-5-5
-  temperature: 0.0
-  max_steps: 8
+  effort: medium            # low | medium | high | xhigh | max (no temperature: see DESIGN §6.7)
+  max_tokens: 16000
+  timeout_sec: 120
   retrieval_k: 6
 
 agent:
-  # aggregate_only: SQL guard rejects queries without GROUP BY / aggregation (DESIGN §4.6)
+  # aggregate_only: the SQL guard rejects row-level results (DESIGN §4.6, §6.3)
   result_mode: aggregate_only
+  prompt_version: 1         # src/scrollback/agent/prompts/system_v1.md
+  max_steps: 8              # LLM calls per question
+  sql_max_retries: 2        # consecutive failed run_sql calls before SQL is disabled
+  max_result_rows: 200
+  statement_timeout_sec: 10
+  # E0 baseline switches (DESIGN §7.5). E1 turns descriptions on.
+  describe_include_descriptions: false
+  describe_sample_rows: 3

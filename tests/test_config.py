@@ -97,3 +97,28 @@ def test_late_night_window_must_be_ordered(tmp_path: Path) -> None:
     )
     with pytest.raises(ConfigError, match="late_night_start_hour"):
         load_config(cfg, environ={})
+
+
+def test_agent_and_llm_defaults(tmp_path: Path) -> None:
+    settings = load_config(tmp_path / "config.yaml", environ={})
+    assert settings.llm.model == "claude-sonnet-5-5"
+    assert settings.llm.effort == "medium"
+    assert settings.agent.max_steps == 8
+    assert settings.agent.sql_max_retries == 2
+    assert settings.agent.max_result_rows == 200
+    assert settings.agent.describe_include_descriptions is False
+
+
+def test_effort_and_steps_from_env(tmp_path: Path) -> None:
+    settings = load_config(
+        tmp_path / "config.yaml", environ={"LLM_EFFORT": "high", "AGENT_MAX_STEPS": "5"}
+    )
+    assert settings.llm.effort == "high"
+    assert settings.agent.max_steps == 5
+
+
+def test_temperature_is_no_longer_accepted(tmp_path: Path) -> None:
+    # Current models reject sampling parameters; a stale config must fail loudly.
+    cfg = _write(tmp_path / "config.yaml", "llm:\n  temperature: 0.0\n")
+    with pytest.raises(ConfigError):
+        load_config(cfg, environ={})
