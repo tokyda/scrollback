@@ -54,7 +54,7 @@ The hard part isn't the chatbot. It's making the answers **trustworthy**: consis
 ```
             ┌──────────────────────────────────────────────────────────┐
  exports ──▶│ Ingestion  (parse → validate → hash → append raw)        │
- (JSON/TXT) └───────────────┬──────────────────────────────────────────┘
+ (JSON/zip) └───────────────┬──────────────────────────────────────────┘
                             ▼
             ┌──────────────────────────────────────────────────────────┐
             │ DuckDB warehouse  (dbt-duckdb)                           │
@@ -120,16 +120,44 @@ To get it: TikTok → Settings → Account → Download your data → choose **J
 | Searches | `… › Search History › SearchList` | `Date`, `SearchTerm` |
 | Shares | `… › Share History › ShareHistoryList` | `Date`, `Link`, `Method`, `SharedContent` |
 
-- **Date format** is `YYYY-MM-DD HH:MM:SS`, assumed to be UTC. *Validate this:* check a few views against times you remember. The source timezone is a config value (`SOURCE_TZ`), not hard-coded.
+- **Date format** is `YYYY-MM-DD HH:MM:SS`, assumed to be UTC. *Validate this:* check a few views against times you remember. The source timezone is a config value (`SOURCE_TZ`), not hard-coded. The display timezone is a separate config value (`LOCAL_TZ`, default `Asia/Singapore`), used for `local_date`, `local_hour` and so on.
 - **Video ID** is extracted from the link with the regex `/video/(\d+)`.
 - **Coverage:** the export may only hold a limited history window. Repeated exports overlap, so ingestion must be incremental and idempotent.
+- **Input:** a JSON export, either a `.json` file or a `.zip` containing exactly one `.json`. The TXT export is out of scope. *(Changed: §3 previously said JSON/TXT.)*
+
+**Variant detection** (`ingest/detect.py`) is declarative: each variant names an activity root key (`Activity` → `v1_activity`, `Your Activity` → `v2_your_activity`) and a `(section, list)` path per dataset. Detection fails loudly, naming the keys it found and never values, when:
+- no known root, or more than one, is present at the top level;
+- the root has no watch history section;
+- a known section is missing its list key, or the list isn't a list of objects;
+- any record key in a known list doesn't map to a known field for that dataset (keys match case-insensitively, ignoring spaces and underscores);
+- no record in a non-empty list has a required field.
+
+Missing optional sections (likes, favourites, searches, shares) are allowed and recorded as absent. Unrelated sections such as profile or DMs are ignored. A `null` section or list is treated as empty. An individual record that is missing a field is rejected (§4.2), not treated as a shape error.
+
+#### Format assumptions to verify against a real export
+None of these have been checked yet; all were built and tested against synthetic data. Update this list when the first real export is ingested.
+
+1. The export is a single JSON object, delivered as `user_data_tiktok.json` or as a zip containing it.
+2. The activity root is `Activity` or `Your Activity`, and exactly one of them is present.
+3. The watch history path is `Video Browsing History › VideoList` (v1) or `Watch History › VideoList` (v2).
+4. Likes, favourites, searches and shares sit at the same section/list names in both variants (`Like List › ItemFavoriteList`, `Favorite Videos › FavoriteVideoList`, `Search History › SearchList`, `Share History › ShareHistoryList`).
+5. Record field names are `Date`, `Link`, `SearchTerm`, `Method`, `SharedContent`, with casing that may vary (e.g. `date`/`link` in likes). Records have no other fields; an extra field currently fails ingestion.
+6. `Date` is always `YYYY-MM-DD HH:MM:SS`, with no timezone suffix, and the time is UTC.
+7. Watch, like and favourite links contain `/video/<digits>`, either as `tiktokv.com/share/video/<id>/` or as `tiktok.com/@<user>/video/<id>`.
+8. Share records may point at non-video content (a profile, a live stream, a sound), in which case `Link` has no video ID and `SharedContent` says what was shared.
+9. An empty history appears as `[]`, `null` or a missing section, and none of these means a broken export.
+10. Record order is unknown (newest first is assumed in the synthetic data); the parser doesn't rely on it.
+11. The file is UTF-8, possibly with a BOM.
+12. The export itself may contain exact duplicate records.
+13. How far back the export reaches (the history window) is unknown.
+14. A second-resolution timestamp plus video ID uniquely identifies a view; two genuine views of the same video in the same second don't occur.
 
 ### 4.2 Ingestion
 `scrollback ingest <path-to-export.json>`
 
 1. Detect the format variant, then extract each dataset into a list of normalised dicts.
-2. Validate each record with pydantic: date parses, link present, video ID extractable. Rejected records go to `raw_rejects` with a reason.
-3. Compute `record_hash = sha256(dataset|date|link_or_term)`.
+2. Validate each record with pydantic: date parses, link present, video ID extractable. Rejected records go to `raw_rejects` with a reason (`missing_date`, `invalid_date`, `missing_link`, `no_video_id`, `missing_search_term`). The link and video ID are required for watch, like and favourite records. For shares they're optional (`video_id` is null for non-video shares).
+3. Compute `record_hash = sha256(dataset|timestamp|key)`. `timestamp` is the parsed export timestamp reformatted as `YYYY-MM-DD HH:MM:SS` (no timezone conversion, so changing `SOURCE_TZ` never changes a hash). `key` is the video ID for watch/like/favourite, the normalised search term (NFKC, case-folded, whitespace collapsed) for searches, and the video ID, else the link, else `SharedContent` for shares. *(Changed from hashing the raw date and link strings: the same event can appear with different link shapes across variants, e.g. `tiktokv.com/share/video/<id>` vs `tiktok.com/@user/video/<id>`, and must deduplicate.)*
 4. Insert into `raw_*` with `ON CONFLICT DO NOTHING` on `record_hash`, so the step is idempotent.
 5. Write one row to `ingest_log`: file hash, variant, rows per dataset, how many were new vs duplicate vs rejected.
 6. Run `dbt build`.
