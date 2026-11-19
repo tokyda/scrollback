@@ -30,7 +30,11 @@ jobs:
           uv run scrollback synth
           uv run scrollback synth --variant v1_activity --out data/sample/user_data_tiktok_v1.json
           git diff --exit-code data/sample
-      - name: Synth -> ingest (twice)
+      - name: Synth -> ingest + dbt build (twice)
         run: |
           uv run scrollback ingest data/sample/user_data_tiktok.json --db "$RUNNER_TEMP/wh.duckdb"
           uv run scrollback ingest data/sample/user_data_tiktok.json --db "$RUNNER_TEMP/wh.duckdb"
+      - name: dbt build (standalone)
+        run: uv run scrollback build --db "$RUNNER_TEMP/wh.duckdb"
+      - name: Inspect gaps
+        run: uv run scrollback inspect gaps --db "$RUNNER_TEMP/wh.duckdb"
