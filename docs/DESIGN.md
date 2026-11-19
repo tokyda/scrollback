@@ -417,7 +417,9 @@ Each step is one config. Results go into the README table.
 ## 8. Interfaces
 
 ### CLI (`scrollback`)
-`ingest`, `synth`, `build` (dbt), `ask "<question>" [--show-sql] [--chart]`, `eval run|report`, `kb index`, `alerts check`, `digest send`, `serve api`, `serve bot`.
+`ingest`, `synth`, `build` (dbt), `inspect gaps`, `ask "<question>" [--show-sql] [--chart]`, `eval run|report`, `kb index`, `alerts check`, `digest send`, `serve api`, `serve bot`.
+
+`inspect gaps` *(added)* prints the distribution of gaps between consecutive views, for tuning `session_gap_min` and `view_cap_sec` on a real export (§14). It shows the count, percentiles for all gaps and for within-session gaps, and a histogram whose bin edges include the current parameter values. It also prints two what-if tables: how many sessions each candidate `session_gap_min` would give, and what share of within-session gaps each candidate `view_cap_sec` would cap. It prints aggregates only (no timestamps, IDs or rows), so it's safe on real data.
 
 ### HTTP API (FastAPI) *(stretch)*
 - `POST /ask {question} → {answer, sql[], metrics[], assumptions[], chart_url?, trace_id}`

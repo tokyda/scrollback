@@ -5,13 +5,17 @@ from scrollback.cli import NOT_IMPLEMENTED_EXIT_CODE, app
 
 runner = CliRunner()
 
-TOP_LEVEL = ["ingest", "synth", "build", "ask", "enrich", "eval", "kb", "alerts", "digest", "serve"]
+TOP_LEVEL = [
+    "ingest", "synth", "build", "inspect", "ask", "enrich",
+    "eval", "kb", "alerts", "digest", "serve",
+]  # fmt: skip
 GROUPS = {
     "eval": ["run", "report", "import-feedback"],
     "kb": ["index"],
     "alerts": ["check"],
     "digest": ["send"],
     "serve": ["api", "bot"],
+    "inspect": ["gaps"],
 }
 
 
