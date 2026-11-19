@@ -143,7 +143,9 @@ them; `tests/test_ingest_e2e.py` and CI fail if they drift.
 ## Code map (built so far)
 
 - `src/scrollback/config.py`: settings loader.
-- `src/scrollback/cli.py`: Typer app; `synth` and `ingest` are real, the rest are stubs.
+- `src/scrollback/cli.py`: Typer app; `ingest`, `synth`, `build`, `inspect gaps`, `ask` and `eval`
+  (`check-gold`, `run`, `rescore`, `report`) are real; `kb`, `serve`, `alerts`, `digest`, `enrich`
+  and `eval import-feedback` are stubs.
 - `src/scrollback/ingest/detect.py`: declarative format variants; `UnknownExportFormatError`.
 - `src/scrollback/ingest/parse.py`: pydantic validation, video ID extraction, `record_hash`.
 - `src/scrollback/ingest/load.py`: reads json/zip, idempotent load, `ingest_log`.
@@ -180,7 +182,9 @@ them; `tests/test_ingest_e2e.py` and CI fail if they drift.
 
 - Watch time follows DESIGN §4.3 exactly. `tests/test_watch_time_fixture.py` is the
   hand-computed reference; if a model change breaks it, the model is wrong unless DESIGN changes.
-- Marts are the only layer the agent may query. New columns need a `_marts.yml` description.
+- Marts are the only layer the agent may query (`agent.tables: marts`); the only exception is
+  the E-1 ablation experiment (`agent.tables: staging`). New columns need a `_marts.yml`
+  description.
 - A metric's SQL must match what the marts compute: add the metric to `knowledge/metrics.yml`,
   then to the reconciliation in `tests/test_metrics.py` and the hand values in the fixture test.
 - Text in `knowledge/` uses `{param}` placeholders for config values, never literal numbers
