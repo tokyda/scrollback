@@ -26,14 +26,15 @@ Build scope by phase. Each phase ends with a "Done when" check. See `docs/DESIGN
 **Done when:** `scrollback synth && scrollback ingest data/sample/...` loads the expected row counts, and running it twice changes nothing.
 
 ## Phase 2: Warehouse and metrics layer
-- [ ] dbt-duckdb project; staging, intermediate and mart models (§4.4)
-- [ ] Session and watch-time estimation (§4.3), parameterised by dbt vars
-- [ ] `dim_date` spine; `agg_daily` with zero-filled days
-- [ ] dbt tests (§4.4), including the custom tests
-- [ ] `knowledge/metrics.yml` with the starter metric set (§5)
-- [ ] Glossary docs: watch-time estimation, timezone and day boundary, sessions, "what this data cannot answer"
-- [ ] Hand-built fixture test: about 15 views with hand-computed sessions and est_watch_sec
-- [ ] `scrollback build` runs `dbt build`
+- [x] dbt-duckdb project; staging, intermediate and mart models (§4.4)
+- [x] Session and watch-time estimation (§4.3), parameterised by dbt vars
+- [x] `dim_date` spine; `agg_daily` with zero-filled days
+- [x] dbt tests (§4.4), including the custom tests
+- [x] `knowledge/metrics.yml` with the starter metric set (§5)
+- [x] Glossary docs: watch-time estimation, timezone and day boundary, sessions, "what this data cannot answer"
+- [x] Hand-built fixture test: about 15 views with hand-computed sessions and est_watch_sec
+- [x] `scrollback build` runs `dbt build`
+- [x] *(added)* `scrollback inspect gaps` for tuning parameters on a real export; `ingest` runs `dbt build`
 
 **Done when:** `dbt build` passes all tests on synthetic data, and the fixture test matches the hand-computed values exactly.
 
