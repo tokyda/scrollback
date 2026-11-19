@@ -210,15 +210,23 @@ Every raw table ends with the load metadata `source_file VARCHAR` (the file's ba
 - freshness: warn if the latest event is more than N days old
 
 ### 4.5 Synthetic data generator
-`scrollback synth --days 180 --seed 42 --out data/sample/user_data_tiktok.json`
+`scrollback synth --days 180 --seed 42 --end 2026-11-19 --variant v2_your_activity --out data/sample/user_data_tiktok.json`
 
-- Writes the **same JSON shape** as a real export (one variant per flag), so the real parser is exercised.
+- Writes the **same JSON shape** as a real export, one variant per `--variant` flag (`v1_activity` or `v2_your_activity`), so the real parser is exercised. The variants differ in their activity root and watch-history path; v2 also uses lowercase `date`/`link` keys and `tiktok.com/@user/video/<id>` links for likes and favourites. Unrelated decoy sections (profile, DMs, comments) are included so detection must ignore them. *(Added `--variant`.)*
+- The window ends on `--end`, which defaults to the **fixed** date `2026-11-19` rather than today, so output never depends on when it runs and matches the eval `today` anchors. *(Added `--end`.)*
+- **Deterministic universe:** each behavioural day (05:00 to 04:59 local) uses its own RNG seeded by `(seed, date)`. An export is a time window over that universe, so the same seed and window give byte-identical output, and a shorter or earlier window is an exact subset of a longer one. That models repeated, overlapping real exports.
+- Behaviour happens in the synthetic person's timezone (`--local-tz`, default `Asia/Singapore`), and timestamps are written in UTC, as a real export is assumed to be.
+- Writes `<name>.manifest.json` next to the export, holding the seed, window, variant, timezones, the injected events in the window and the **expected counts per dataset** (`records`, `valid_unique`, `duplicates`, `rejected`). The counts come from the generator's own events, not from re-parsing, and ingestion tests compare against them.
+- Committed samples (seed 42, 180 days): `data/sample/user_data_tiktok.json` (v2) and `data/sample/user_data_tiktok_v1.json` (v1), each with a manifest. A test fails if they drift from the generator.
 - Behaviour model:
   - weekday/weekend and hour-of-day intensity curves (evening peak, some late-night use)
   - session count per day ~ Poisson, views per session ~ lognormal, gaps between views ~ lognormal
   - injected events for testing anomaly detection and evals: a binge weekend, a "detox" week with near-zero use, a holiday spike
-  - likes at ~3–6% of views, searches with a small vocabulary of terms
-  - noise: exact duplicate records, a few malformed dates, links with no video ID
+  - likes at ~3–6% of views, searches with a small vocabulary of terms (some typed with different case or trailing spaces)
+  - a small number of favourites and shares, including non-video shares (a creator profile link), so every raw table is exercised *(added)*
+  - rewatches (about 3% of views repeat a video seen earlier that day) and a few likes of videos absent from watch history
+  - noise: exact duplicate records, a few malformed or empty dates, links with no video ID, a record with no link
+  - injected events are fixed calendar dates: `holiday_spike` 2026-08-09, `detox_week` 2026-09-07..13, `binge_weekend` 2026-10-24..25
 - Deterministic for a given seed. **Evals and CI run against this data only.**
 
 ### 4.6 Privacy
@@ -322,10 +330,10 @@ system prompt (role, rules, current date + timezone, table list)
 
 ### 6.5 Answer format
 ```
-You watched ~142 min last Sunday (16 Nov), your 3rd-highest day this month.
+You watched ~142 min last Sunday (15 Nov), your 3rd-highest day this month.
 
 Metric: est_watch_minutes (estimated from gaps between views; pauses up to 3 min count as watching)
-Range: 2026-11-16, Asia/Singapore
+Range: 2026-11-15, Asia/Singapore
 SQL: <collapsed>
 [chart]
 ```
