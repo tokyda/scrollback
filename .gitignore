@@ -1,0 +1,43 @@
+# --- Privacy (DESIGN §4.6): real data never leaves the machine ---
+data/raw/*
+!data/raw/.gitkeep
+data/warehouse/*
+!data/warehouse/.gitkeep
+*.duckdb
+*.duckdb.wal
+.env
+.env.*
+!.env.example
+
+# Agent traces and eval runs (may contain query results)
+traces/
+eval/runs/*
+!eval/runs/.gitkeep
+!eval/runs/**/summary.json
+
+# Charts produced at runtime
+charts/
+
+# dbt
+dbt/target/
+dbt/logs/
+dbt/dbt_packages/
+logs/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
