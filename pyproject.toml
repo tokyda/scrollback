@@ -5,6 +5,7 @@ description = "An LLM data agent over your own TikTok watch history."
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
+    "duckdb>=2.0.0",
     "pydantic>=2.7",
     "python-dotenv>=1.0",
     "pyyaml>=6.0",

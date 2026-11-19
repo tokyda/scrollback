@@ -1,0 +1,71 @@
+{
+  "generator_version": 1,
+  "seed": 42,
+  "start": "2026-05-24",
+  "end": "2026-11-19",
+  "days": 180,
+  "variant": "v1_activity",
+  "local_tz": "Asia/Singapore",
+  "source_tz": "UTC",
+  "injected_events": [
+    {
+      "name": "holiday_spike",
+      "start": "2026-08-09",
+      "end": "2026-08-09",
+      "description": "Public holiday (Sunday): many more and longer sessions."
+    },
+    {
+      "name": "detox_week",
+      "start": "2026-09-07",
+      "end": "2026-09-13",
+      "description": "Digital detox Monday-Sunday: near-zero use."
+    },
+    {
+      "name": "binge_weekend",
+      "start": "2026-10-24",
+      "end": "2026-10-25",
+      "description": "Binge weekend (Saturday-Sunday): very long sessions."
+    }
+  ],
+  "expected": {
+    "datasets": {
+      "watch": {
+        "records": 11953,
+        "valid_unique": 11885,
+        "duplicates": 54,
+        "rejected": 14
+      },
+      "like": {
+        "records": 575,
+        "valid_unique": 566,
+        "duplicates": 7,
+        "rejected": 2
+      },
+      "favorite": {
+        "records": 67,
+        "valid_unique": 67,
+        "duplicates": 0,
+        "rejected": 0
+      },
+      "search": {
+        "records": 115,
+        "valid_unique": 115,
+        "duplicates": 0,
+        "rejected": 0
+      },
+      "share": {
+        "records": 61,
+        "valid_unique": 61,
+        "duplicates": 0,
+        "rejected": 0
+      }
+    },
+    "totals": {
+      "records": 12771,
+      "valid_unique": 12694,
+      "duplicates": 61,
+      "rejected": 16
+    }
+  },
+  "note": "Synthetic data. Not a real person's viewing history."
+}

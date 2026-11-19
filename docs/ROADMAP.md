@@ -5,23 +5,23 @@ Build scope by phase. Each phase ends with a "Done when" check. See `docs/DESIGN
 ---
 
 ## Phase 0: Foundations
-- [ ] Repo scaffold matching DESIGN §11, using `uv` and `pyproject.toml`
-- [ ] `config.py`: loads `config.yaml` + `.env` (timezone, paths, metric params, LLM settings)
-- [ ] `.gitignore` for real data, the warehouse file, `.env` and eval runs; `.env.example`
-- [ ] ruff, mypy, pytest set up; GitHub Actions CI running lint + tests
-- [ ] `CLAUDE.md` with project conventions and commands
-- [ ] Typer CLI skeleton with stubbed subcommands
+- [x] Repo scaffold matching DESIGN §11, using `uv` and `pyproject.toml`
+- [x] `config.py`: loads `config.yaml` + `.env` (timezone, paths, metric params, LLM settings)
+- [x] `.gitignore` for real data, the warehouse file, `.env` and eval runs; `.env.example`
+- [x] ruff, mypy, pytest set up; GitHub Actions CI running lint + tests
+- [x] `CLAUDE.md` with project conventions and commands
+- [x] Typer CLI skeleton with stubbed subcommands
 
 **Done when:** `uv run scrollback --help` lists every subcommand, and CI is green.
 
 ## Phase 1: Synthetic data and ingestion
-- [ ] Synthetic generator (§4.5): realistic behaviour, injected events, noise, deterministic seed, at least 2 export format variants
-- [ ] Commit the generated sample to `data/sample/`
-- [ ] Format variant detection + tolerant parser (§4.1)
-- [ ] Pydantic validation; rejects go to `raw_rejects`
-- [ ] Idempotent load via `record_hash`; `ingest_log`
-- [ ] Unit tests: each variant, malformed records, video ID extraction, re-ingesting the same file adds 0 rows, overlapping exports merge correctly
-- [ ] Ingest one real export locally (never committed) and record anything new about the format in DESIGN §4.1
+- [x] Synthetic generator (§4.5): realistic behaviour, injected events, noise, deterministic seed, at least 2 export format variants
+- [x] Commit the generated sample to `data/sample/`
+- [x] Format variant detection + tolerant parser (§4.1)
+- [x] Pydantic validation; rejects go to `raw_rejects`
+- [x] Idempotent load via `record_hash`; `ingest_log`
+- [x] Unit tests: each variant, malformed records, video ID extraction, re-ingesting the same file adds 0 rows, overlapping exports merge correctly
+- [ ] Ingest one real export locally (never committed) and record anything new about the format in DESIGN §4.1 *(blocked: no real export yet; see the assumption list in DESIGN §4.1)*
 
 **Done when:** `scrollback synth && scrollback ingest data/sample/...` loads the expected row counts, and running it twice changes nothing.
 

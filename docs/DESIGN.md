@@ -54,7 +54,7 @@ The hard part isn't the chatbot. It's making the answers **trustworthy**: consis
 ```
             ┌──────────────────────────────────────────────────────────┐
  exports ──▶│ Ingestion  (parse → validate → hash → append raw)        │
- (JSON/TXT) └───────────────┬──────────────────────────────────────────┘
+ (JSON/zip) └───────────────┬──────────────────────────────────────────┘
                             ▼
             ┌──────────────────────────────────────────────────────────┐
             │ DuckDB warehouse  (dbt-duckdb)                           │
@@ -120,22 +120,51 @@ To get it: TikTok → Settings → Account → Download your data → choose **J
 | Searches | `… › Search History › SearchList` | `Date`, `SearchTerm` |
 | Shares | `… › Share History › ShareHistoryList` | `Date`, `Link`, `Method`, `SharedContent` |
 
-- **Date format** is `YYYY-MM-DD HH:MM:SS`, assumed to be UTC. *Validate this:* check a few views against times you remember. The source timezone is a config value (`SOURCE_TZ`), not hard-coded.
+- **Date format** is `YYYY-MM-DD HH:MM:SS`, assumed to be UTC. *Validate this:* check a few views against times you remember. The source timezone is a config value (`SOURCE_TZ`), not hard-coded. The display timezone is a separate config value (`LOCAL_TZ`, default `Asia/Singapore`), used for `local_date`, `local_hour` and so on.
 - **Video ID** is extracted from the link with the regex `/video/(\d+)`.
 - **Coverage:** the export may only hold a limited history window. Repeated exports overlap, so ingestion must be incremental and idempotent.
+- **Input:** a JSON export, either a `.json` file or a `.zip` containing exactly one `.json`. The TXT export is out of scope. *(Changed: §3 previously said JSON/TXT.)*
+
+**Variant detection** (`ingest/detect.py`) is declarative: each variant names an activity root key (`Activity` → `v1_activity`, `Your Activity` → `v2_your_activity`) and a `(section, list)` path per dataset. Record keys match known fields case-insensitively, ignoring spaces and underscores. Detection fails loudly, naming the keys it found and never values, when:
+- no known root, or more than one, is present at the top level;
+- the root has no watch history section;
+- a known section is missing its list key, or the list isn't a list of objects;
+- no record in a non-empty list has a required field.
+
+**Unknown extra fields are tolerated.** A record key that doesn't map to a known field for its dataset is logged as a warning (key names only, once per section), stored in the record's `extras` JSON column under its original name, and ingestion continues. Extras never affect `record_hash`, so a later export that adds a field doesn't create duplicates. The CLI prints the warning and `ingest_log.dataset_counts` records the unknown key names per dataset, so a new field gets noticed and can be mapped properly. *(Changed: unknown fields used to fail the whole ingest. A real export that adds a harmless field such as a duration shouldn't block loading; the structural checks above still fail loudly.)*
+
+Missing optional sections (likes, favourites, searches, shares) are allowed and recorded as absent. Unrelated sections such as profile or DMs are ignored. A `null` section or list is treated as empty. An individual record that is missing a field is rejected (§4.2), not treated as a shape error.
+
+#### Format assumptions to verify against a real export
+None of these have been checked yet; all were built and tested against synthetic data. Update this list when the first real export is ingested.
+
+1. The export is a single JSON object, delivered as `user_data_tiktok.json` or as a zip containing it.
+2. The activity root is `Activity` or `Your Activity`, and exactly one of them is present.
+3. The watch history path is `Video Browsing History › VideoList` (v1) or `Watch History › VideoList` (v2).
+4. Likes, favourites, searches and shares sit at the same section/list names in both variants (`Like List › ItemFavoriteList`, `Favorite Videos › FavoriteVideoList`, `Search History › SearchList`, `Share History › ShareHistoryList`).
+5. Record field names are `Date`, `Link`, `SearchTerm`, `Method`, `SharedContent`, with casing that may vary (e.g. `date`/`link` in likes). Any other field is kept in `extras` with a warning. Check the first real ingest for such warnings: a field like a watch duration would change the watch-time method in §4.3.
+6. `Date` is always `YYYY-MM-DD HH:MM:SS`, with no timezone suffix, and the time is UTC.
+7. Watch, like and favourite links contain `/video/<digits>`, either as `tiktokv.com/share/video/<id>/` or as `tiktok.com/@<user>/video/<id>`.
+8. Share records may point at non-video content (a profile, a live stream, a sound), in which case `Link` has no video ID and `SharedContent` says what was shared.
+9. An empty history appears as `[]`, `null` or a missing section, and none of these means a broken export.
+10. Record order is unknown (newest first is assumed in the synthetic data); the parser doesn't rely on it.
+11. The file is UTF-8, possibly with a BOM.
+12. The export itself may contain exact duplicate records.
+13. How far back the export reaches (the history window) is unknown.
+14. A second-resolution timestamp plus video ID uniquely identifies a view; two genuine views of the same video in the same second don't occur.
 
 ### 4.2 Ingestion
 `scrollback ingest <path-to-export.json>`
 
 1. Detect the format variant, then extract each dataset into a list of normalised dicts.
-2. Validate each record with pydantic: date parses, link present, video ID extractable. Rejected records go to `raw_rejects` with a reason.
-3. Compute `record_hash = sha256(dataset|date|link_or_term)`.
-4. Insert into `raw_*` with `ON CONFLICT DO NOTHING` on `record_hash`, so the step is idempotent.
-5. Write one row to `ingest_log`: file hash, variant, rows per dataset, how many were new vs duplicate vs rejected.
-6. Run `dbt build`.
+2. Validate each record with pydantic: date parses, link present, video ID extractable. Rejected records go to `raw_rejects` with a reason (`missing_date`, `invalid_date`, `missing_link`, `no_video_id`, `missing_search_term`). The link and video ID are required for watch, like and favourite records. For shares they're optional (`video_id` is null for non-video shares).
+3. Compute `record_hash = sha256(dataset|timestamp|key)`. `timestamp` is the parsed export timestamp reformatted as `YYYY-MM-DD HH:MM:SS` (no timezone conversion, so changing `SOURCE_TZ` never changes a hash). `key` is the video ID for watch/like/favourite, the normalised search term (NFKC, case-folded, whitespace collapsed) for searches, and the video ID, else the link, else `SharedContent` for shares. *(Changed from hashing the raw date and link strings: the same event can appear with different link shapes across variants, e.g. `tiktokv.com/share/video/<id>` vs `tiktok.com/@user/video/<id>`, and must deduplicate.)*
+4. Insert into `raw_*` with `ON CONFLICT DO NOTHING` on `record_hash`, so the step is idempotent. Rejects are keyed by `reject_hash = sha256(dataset|reason|canonical JSON payload)` with the same rule, so re-ingesting a file doesn't duplicate its rejects. *(Added: `raw_rejects` previously had no key.)* Steps 4–5 run in one transaction; shape errors (§4.1) are raised before anything is written.
+5. Write one row to `ingest_log` **on every run**: file hash, variant, rows per dataset, how many were new vs duplicate vs rejected. "Idempotent" means `raw_*` and `raw_rejects` don't change on a re-run; the log still records the attempt, with `rows_new = 0`. *(Clarified: the roadmap's "running it twice changes nothing" refers to the data tables, not the audit log.)* "Duplicate" counts valid records that weren't inserted, either because they repeat within the file or because they're already loaded.
+6. Run `dbt build`. *(Wired in Phase 2. Until then `ingest` prints that the step was skipped.)*
 
 ### 4.3 Core metric problem: there is no watch duration
-The export records **when a view started**, not how long it lasted, so watch time has to be estimated. The method is versioned in `metrics.yml` and parameterised in `dbt_project.yml` vars.
+The export records **when a view started**, not how long it lasted, so watch time has to be estimated. The method is versioned in `metrics.yml` and parameterised by dbt vars. The parameter values live in `config.yaml` (`metrics:`) as the single source of truth, and `dbt_runner` passes them to dbt as `--vars`; `dbt_project.yml` only holds fallback defaults. *(Clarified: previously both files looked authoritative.)*
 
 - **Session:** an ordered run of views where the gap between consecutive views is ≤ `session_gap_min` (default **30 min**).
 - **Per-view estimated watch seconds:**
@@ -148,10 +177,13 @@ This estimate is the project's main data-definition story. It belongs in the REA
 ### 4.4 Warehouse models
 
 **raw** (loaded as-is plus load metadata)
-- `raw_watch(record_hash PK, event_ts_raw VARCHAR, link VARCHAR, source_file VARCHAR, loaded_at TIMESTAMP)`
-- `raw_like`, `raw_favorite`, `raw_search`, `raw_share`: same pattern
-- `raw_rejects(dataset, payload JSON, reason, source_file, loaded_at)`
-- `ingest_log(...)`
+Every raw `*` table has an `extras JSON` column (NULL unless the record had unknown fields, see §4.1), and ends with the load metadata `source_file VARCHAR` (the file's basename, never a full path), `ingest_id BIGINT` (→ `ingest_log`) and `loaded_at TIMESTAMP` (UTC). `video_id` is derived at ingest because the record hash depends on it; everything else is stored as written.
+- `raw_watch(record_hash PK, event_ts_raw VARCHAR, link VARCHAR, video_id VARCHAR, …metadata)`
+- `raw_like`, `raw_favorite`: same columns as `raw_watch`
+- `raw_search(record_hash PK, event_ts_raw VARCHAR, search_term VARCHAR, …metadata)`: the term as written; normalisation happens in staging
+- `raw_share(record_hash PK, event_ts_raw VARCHAR, link VARCHAR, video_id VARCHAR NULL, method VARCHAR, shared_content VARCHAR, …metadata)`
+- `raw_rejects(reject_hash PK, dataset, payload JSON, reason, …metadata)`: the payload is the original record with its original keys
+- `ingest_log(ingest_id PK, source_file, file_sha256, variant, started_at, finished_at, rows_read, rows_new, rows_duplicate, rows_rejected, rejects_new, dataset_counts JSON)`: `dataset_counts` maps each dataset to `{present, read, valid, rejected, new, duplicate, unknown_fields}`, where `unknown_fields` holds key names only
 
 **staging** (typed, cleaned, deduped; one model per raw table)
 - `stg_watch(view_id, video_id, event_ts_utc, event_ts_local, local_date, local_hour, dow)`
@@ -179,15 +211,23 @@ This estimate is the project's main data-definition story. It belongs in the REA
 - freshness: warn if the latest event is more than N days old
 
 ### 4.5 Synthetic data generator
-`scrollback synth --days 180 --seed 42 --out data/sample/user_data_tiktok.json`
+`scrollback synth --days 180 --seed 42 --end 2026-11-19 --variant v2_your_activity --out data/sample/user_data_tiktok.json`
 
-- Writes the **same JSON shape** as a real export (one variant per flag), so the real parser is exercised.
+- Writes the **same JSON shape** as a real export, one variant per `--variant` flag (`v1_activity` or `v2_your_activity`), so the real parser is exercised. The variants differ in their activity root and watch-history path; v2 also uses lowercase `date`/`link` keys and `tiktok.com/@user/video/<id>` links for likes and favourites. Unrelated decoy sections (profile, DMs, comments) are included so detection must ignore them. *(Added `--variant`.)*
+- The window ends on `--end`, which defaults to the **fixed** date `2026-11-19` rather than today, so output never depends on when it runs and matches the eval `today` anchors. *(Added `--end`.)*
+- **Deterministic universe:** each behavioural day (05:00 to 04:59 local) uses its own RNG seeded by `(seed, date)`. An export is a time window over that universe, so the same seed and window give byte-identical output, and a shorter or earlier window is an exact subset of a longer one. That models repeated, overlapping real exports.
+- Behaviour happens in the synthetic person's timezone (`--local-tz`, default `Asia/Singapore`), and timestamps are written in UTC, as a real export is assumed to be.
+- Writes `<name>.manifest.json` next to the export, holding the seed, window, variant, timezones, the injected events in the window and the **expected counts per dataset** (`records`, `valid_unique`, `duplicates`, `rejected`). The counts come from the generator's own events, not from re-parsing, and ingestion tests compare against them.
+- Committed samples (seed 42, 180 days): `data/sample/user_data_tiktok.json` (v2) and `data/sample/user_data_tiktok_v1.json` (v1), each with a manifest. A test fails if they drift from the generator.
 - Behaviour model:
   - weekday/weekend and hour-of-day intensity curves (evening peak, some late-night use)
   - session count per day ~ Poisson, views per session ~ lognormal, gaps between views ~ lognormal
   - injected events for testing anomaly detection and evals: a binge weekend, a "detox" week with near-zero use, a holiday spike
-  - likes at ~3–6% of views, searches with a small vocabulary of terms
-  - noise: exact duplicate records, a few malformed dates, links with no video ID
+  - likes at ~3–6% of views, searches with a small vocabulary of terms (some typed with different case or trailing spaces)
+  - a small number of favourites and shares, including non-video shares (a creator profile link), so every raw table is exercised *(added)*
+  - rewatches (about 3% of views repeat a video seen earlier that day) and a few likes of videos absent from watch history
+  - noise: exact duplicate records, a few malformed or empty dates, links with no video ID, a record with no link
+  - injected events are fixed calendar dates: `holiday_spike` 2026-08-09, `detox_week` 2026-09-07..13, `binge_weekend` 2026-10-24..25
 - Deterministic for a given seed. **Evals and CI run against this data only.**
 
 ### 4.6 Privacy
@@ -291,10 +331,10 @@ system prompt (role, rules, current date + timezone, table list)
 
 ### 6.5 Answer format
 ```
-You watched ~142 min last Sunday (16 Nov), your 3rd-highest day this month.
+You watched ~142 min last Sunday (15 Nov), your 3rd-highest day this month.
 
 Metric: est_watch_minutes (estimated from gaps between views; pauses up to 3 min count as watching)
-Range: 2026-11-16, Asia/Singapore
+Range: 2026-11-15, Asia/Singapore
 SQL: <collapsed>
 [chart]
 ```
@@ -425,6 +465,7 @@ scrollback/
 ├── pyproject.toml
 ├── config.yaml
 ├── .env.example
+├── .github/workflows/ci.yml
 ├── docs/
 │   ├── DESIGN.md
 │   └── ROADMAP.md
@@ -461,6 +502,7 @@ scrollback/
 │   ├── labels/
 │   └── harness/{run.py, score.py, report.py}
 └── tests/
+    └── fixtures/            # static test inputs (synthetic only)
 ```
 
 ---
@@ -470,7 +512,7 @@ scrollback/
 - **dbt tests:** see §4.4.
 - **Agent:** tool contract tests with a mocked `LLMClient` (scripted tool calls), so the loop, retries and step limit are tested without network calls.
 - **Eval smoke test in CI:** a 10-question subset with a mocked or cheapest model, optional and behind a secret.
-- **CI (GitHub Actions):** ruff, mypy, pytest, `synth` → `ingest` → `dbt build`, and the eval gold-SQL validity check.
+- **CI (GitHub Actions):** ruff, mypy, pytest, a check that regenerating `data/sample/` gives identical files, `synth` → `ingest` (run twice) → `dbt build`, and the eval gold-SQL validity check.
 
 ---
 

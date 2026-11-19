@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Annotated
 
 import typer
+
+from scrollback.config import ConfigError, Settings, load_config
 
 app = typer.Typer(
     name="scrollback",
@@ -32,16 +35,119 @@ def _not_implemented(command: str, when: str) -> None:
     raise typer.Exit(NOT_IMPLEMENTED_EXIT_CODE)
 
 
+ConfigOption = Annotated[
+    Path | None, typer.Option("--config", help="Path to config.yaml (default: ./config.yaml).")
+]
+
+
+def _settings(config: Path | None) -> Settings:
+    try:
+        return load_config(config)
+    except ConfigError as exc:
+        typer.echo(f"Config error: {exc}", err=True)
+        raise typer.Exit(1) from None
+
+
 @app.command()
-def ingest() -> None:
+def ingest(
+    path: Annotated[
+        Path,
+        typer.Argument(exists=True, dir_okay=False, help="Export file (.json, or .zip with one)."),
+    ],
+    db: Annotated[
+        Path | None, typer.Option(help="DuckDB file (default: paths.warehouse in config).")
+    ] = None,
+    config: ConfigOption = None,
+) -> None:
     """Ingest a TikTok data export into the warehouse."""
-    _not_implemented("ingest", "Phase 1")
+    from scrollback.ingest.detect import UnknownExportFormatError
+    from scrollback.ingest.load import ExportReadError, ingest_file
+    from scrollback.warehouse.db import connect
+
+    settings = _settings(config)
+    db_path = db or settings.paths.warehouse
+    con = connect(db_path)
+    try:
+        summary = ingest_file(con, path)
+    except (UnknownExportFormatError, ExportReadError) as exc:
+        typer.echo(f"Ingest failed: {exc}", err=True)
+        raise typer.Exit(1) from None
+    finally:
+        con.close()
+
+    # Counts only: never print record contents (DESIGN §4.6).
+    typer.echo(
+        f"Ingested {summary.source_file} (variant {summary.variant}, id {summary.ingest_id})"
+    )
+    header = f"{'dataset':<10}{'read':>8}{'valid':>8}{'new':>8}{'dup':>8}{'rejected':>10}"
+    typer.echo(header)
+    for name, c in summary.datasets.items():
+        if not c.present:
+            typer.echo(f"{name:<10}{'(absent)':>8}")
+            continue
+        typer.echo(f"{name:<10}{c.read:>8}{c.valid:>8}{c.new:>8}{c.duplicate:>8}{c.rejected:>10}")
+    typer.echo(
+        f"{'total':<10}{summary.rows_read:>8}{'':>8}{summary.rows_new:>8}"
+        f"{summary.rows_duplicate:>8}{summary.rows_rejected:>10}"
+    )
+    typer.echo(f"New rejects stored: {summary.rejects_new}")
+    for name, c in summary.datasets.items():
+        if c.unknown_fields:
+            typer.echo(
+                f"Warning: {name} records have unrecognised fields {c.unknown_fields}; "
+                "kept in the extras column. Check DESIGN §4.1 and consider mapping them.",
+                err=True,
+            )
+    if summary.ignored_sections:
+        typer.echo(f"Ignored sections: {len(summary.ignored_sections)}")
+    typer.echo("dbt build: skipped (warehouse models arrive in Phase 2)")
+
+
+SAMPLE_FILE_NAME = "user_data_tiktok.json"
 
 
 @app.command()
-def synth() -> None:
-    """Generate a synthetic TikTok export."""
-    _not_implemented("synth", "Phase 1")
+def synth(
+    days: Annotated[int, typer.Option(min=1, help="Number of days of history.")] = 180,
+    seed: Annotated[int, typer.Option(help="Random seed (same seed = same output).")] = 42,
+    end: Annotated[
+        str, typer.Option(help="Last local date covered, YYYY-MM-DD (fixed for determinism).")
+    ] = "2026-11-19",
+    variant: Annotated[
+        str, typer.Option(help="Export format variant: v1_activity or v2_your_activity.")
+    ] = "v2_your_activity",
+    local_tz: Annotated[
+        str, typer.Option(help="Timezone the synthetic person lives in.")
+    ] = "Asia/Singapore",
+    out: Annotated[
+        Path | None,
+        typer.Option(help=f"Output file (default: <paths.sample_dir>/{SAMPLE_FILE_NAME})."),
+    ] = None,
+    config: ConfigOption = None,
+) -> None:
+    """Generate a synthetic TikTok export (and a manifest of expected counts)."""
+    from datetime import date
+
+    from scrollback.synth.generator import synthesize, write
+
+    try:
+        end_date = date.fromisoformat(end)
+        result = synthesize(days=days, seed=seed, end=end_date, variant=variant, local_tz=local_tz)
+    except ValueError as exc:
+        typer.echo(f"synth failed: {exc}", err=True)
+        raise typer.Exit(1) from None
+    out_path = out or _settings(config).paths.sample_dir / SAMPLE_FILE_NAME
+    manifest_path = write(result, out_path)
+    totals = result.manifest["expected"]["totals"]
+    typer.echo(
+        f"Wrote {out_path} ({variant}, {result.manifest['start']}..{result.manifest['end']}, "
+        f"seed {seed})"
+    )
+    typer.echo(
+        f"records {totals['records']}, expected valid_unique {totals['valid_unique']}, "
+        f"duplicates {totals['duplicates']}, rejected {totals['rejected']}"
+    )
+    typer.echo(f"Manifest: {manifest_path}")
 
 
 @app.command()
