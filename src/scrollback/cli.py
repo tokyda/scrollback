@@ -20,12 +20,17 @@ kb_app = typer.Typer(help="Knowledge base for retrieval (DESIGN §5).", no_args_
 alerts_app = typer.Typer(help="Anomaly alerts (DESIGN §9).", no_args_is_help=True)
 digest_app = typer.Typer(help="Weekly 'Scrollback Wrapped' digest.", no_args_is_help=True)
 serve_app = typer.Typer(help="Run the HTTP API or the Telegram bot.", no_args_is_help=True)
+inspect_app = typer.Typer(
+    help="Inspect warehouse distributions (aggregates only; safe on real data).",
+    no_args_is_help=True,
+)
 
 app.add_typer(eval_app, name="eval")
 app.add_typer(kb_app, name="kb")
 app.add_typer(alerts_app, name="alerts")
 app.add_typer(digest_app, name="digest")
 app.add_typer(serve_app, name="serve")
+app.add_typer(inspect_app, name="inspect")
 
 NOT_IMPLEMENTED_EXIT_CODE = 2
 
@@ -196,6 +201,33 @@ def build(
     """Run `dbt build` (models + data tests) with parameters from config.yaml."""
     settings = _settings(config)
     _run_build(settings, db or settings.paths.warehouse, quiet=quiet)
+
+
+@inspect_app.command("gaps")
+def inspect_gaps(db: DbOption = None, config: ConfigOption = None) -> None:
+    """Distribution of gaps between consecutive views, to tune session/cap parameters."""
+    import duckdb
+
+    from scrollback.warehouse.inspect import WarehouseNotBuiltError, format_gap_report, gap_stats
+
+    settings = _settings(config)
+    db_path = db or settings.paths.warehouse
+    if not db_path.exists():
+        typer.echo(f"No warehouse at {db_path.name}: run `scrollback ingest` first.", err=True)
+        raise typer.Exit(1)
+    con = duckdb.connect(str(db_path), read_only=True)
+    try:
+        stats = gap_stats(
+            con,
+            view_cap_sec=settings.metrics.view_cap_sec,
+            session_gap_min=settings.metrics.session_gap_min,
+        )
+    except WarehouseNotBuiltError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(1) from None
+    finally:
+        con.close()
+    typer.echo(format_gap_report(stats))
 
 
 @app.command()
