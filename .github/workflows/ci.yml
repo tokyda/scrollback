@@ -9,8 +9,8 @@ jobs:
   lint-and-test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
       - name: Install dependencies
@@ -25,3 +25,12 @@ jobs:
         run: uv run pytest
       - name: CLI help
         run: uv run scrollback --help
+      - name: Synthetic samples are reproducible
+        run: |
+          uv run scrollback synth
+          uv run scrollback synth --variant v1_activity --out data/sample/user_data_tiktok_v1.json
+          git diff --exit-code data/sample
+      - name: Synth -> ingest (twice)
+        run: |
+          uv run scrollback ingest data/sample/user_data_tiktok.json --db "$RUNNER_TEMP/wh.duckdb"
+          uv run scrollback ingest data/sample/user_data_tiktok.json --db "$RUNNER_TEMP/wh.duckdb"
