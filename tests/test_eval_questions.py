@@ -39,7 +39,7 @@ def _raw() -> dict[str, Any]:
 
 
 def test_set_size_and_categories() -> None:
-    assert 60 <= len(QSET.questions) <= 80
+    assert 60 <= len(QSET.questions) <= 100  # DESIGN §7.1: 60-100
     per_cat = Counter(q.category for q in QSET.questions)
     assert set(per_cat) == set(CATEGORIES)
     assert min(per_cat.values()) >= 6

@@ -1180,3 +1180,327 @@ questions:
     expected_metrics: [est_watch_minutes]
     requires_caveat: true
     likely_failure: missing_caveat
+
+  # ===================================================================================
+  # Round 2 (added 2026-11-20 after E0 scored ~95%): harder questions where no single
+  # column gives the answer away. Written without running the agent.
+  # ===================================================================================
+
+  - id: q077
+    question: How many minutes did I watch the week before last?
+    category: relative_date
+    difficulty: hard
+    split: dev
+    today: 2026-11-20
+    tests: "'week before last' on Fri 20 Nov = Mon 2 - Sun 8 Nov"
+    answer_type: scalar
+    gold_sql: |
+      SELECT sum(est_watch_sec) / 60.0 FROM fct_views
+      WHERE local_date BETWEEN DATE '2026-11-02' AND DATE '2026-11-08'
+    units: [minutes]
+    tolerance: 0.05
+    expected_metrics: [est_watch_minutes]
+    likely_failure: wrong_time_window
+
+  - id: q078
+    question: How many videos did I watch in my last full week?
+    category: relative_date
+    difficulty: hard
+    split: test
+    today: 2026-11-18
+    tests: "'last full week' on Wed 18 Nov = Mon 9 - Sun 15 Nov (not the last 7 days, 501)"
+    answer_type: scalar
+    gold_sql: |
+      SELECT count(*) FROM fct_views
+      WHERE local_date BETWEEN DATE '2026-11-09' AND DATE '2026-11-15'
+    units: [count]
+    expected_metrics: [views]
+    wrong_values: [501]
+    likely_failure: wrong_time_window
+
+  - id: q079
+    question: How many minutes have I watched so far this quarter?
+    category: relative_date
+    difficulty: hard
+    split: dev
+    today: 2026-11-20
+    tests: "'this quarter' = calendar Q4, 1 Oct - today"
+    answer_type: scalar
+    gold_sql: |
+      SELECT sum(est_watch_sec) / 60.0 FROM fct_views
+      WHERE local_date BETWEEN DATE '2026-10-01' AND DATE '2026-11-20'
+    units: [minutes]
+    tolerance: 0.05
+    expected_metrics: [est_watch_minutes]
+    likely_failure: wrong_time_window
+
+  - id: q080
+    question: How many searches have I made since the start of last month?
+    category: relative_date
+    difficulty: medium
+    split: dev
+    today: 2026-11-20
+    tests: "'since the start of last month' = 1 Oct - today (not only October)"
+    answer_type: scalar
+    gold_sql: |
+      SELECT count(*) FROM fct_searches
+      WHERE local_date BETWEEN DATE '2026-10-01' AND DATE '2026-11-20'
+    units: [count]
+    expected_metrics: [searches]
+    likely_failure: wrong_time_window
+
+  - id: q081
+    question: How many minutes did I watch on the same weekday last week?
+    category: relative_date
+    difficulty: hard
+    split: test
+    today: 2026-11-20
+    tests: "same weekday last week on Fri 20 Nov = Fri 13 Nov"
+    answer_type: scalar
+    gold_sql: |
+      SELECT sum(est_watch_sec) / 60.0 FROM fct_views WHERE local_date = DATE '2026-11-13'
+    units: [minutes]
+    tolerance: 0.05
+    expected_metrics: [est_watch_minutes]
+    likely_failure: wrong_time_window
+
+  - id: q082
+    question: How did my watch time last Monday compare with the Monday before?
+    category: comparison
+    difficulty: hard
+    split: dev
+    today: 2026-11-20
+    tests: "last Monday = 16 Nov, the Monday before = 9 Nov"
+    answer_type: table
+    gold_sql: |
+      SELECT sum(est_watch_sec) FILTER (WHERE local_date = DATE '2026-11-16') / 60.0 AS last_monday,
+             sum(est_watch_sec) FILTER (WHERE local_date = DATE '2026-11-09') / 60.0 AS monday_before
+      FROM fct_views
+    units: [minutes, minutes]
+    tolerance: 0.05
+    expected_metrics: [est_watch_minutes]
+    likely_failure: wrong_time_window
+
+  - id: q083
+    question: Did I watch more in the first half of October 2026 (1-15) or the second half (16-31)? Give both in minutes.
+    category: comparison
+    difficulty: medium
+    split: test
+    today: 2026-11-20
+    tests: two explicit sub-month windows
+    answer_type: table
+    gold_sql: |
+      SELECT sum(est_watch_sec) FILTER (WHERE local_date BETWEEN DATE '2026-10-01' AND DATE '2026-10-15') / 60.0 AS first_half,
+             sum(est_watch_sec) FILTER (WHERE local_date BETWEEN DATE '2026-10-16' AND DATE '2026-10-31') / 60.0 AS second_half
+      FROM fct_views
+    units: [minutes, minutes]
+    tolerance: 0.05
+    expected_metrics: [est_watch_minutes]
+
+  - id: q084
+    question: What was my median session length in October 2026, in minutes?
+    category: session_derived
+    difficulty: hard
+    split: dev
+    today: 2026-11-20
+    tests: median of estimated session watch time (no column holds it); span median is 6.63
+    answer_type: scalar
+    gold_sql: |
+      SELECT median(est_watch_sec) / 60.0 FROM fct_sessions
+      WHERE local_date BETWEEN DATE '2026-10-01' AND DATE '2026-10-31'
+    units: [minutes]
+    tolerance: 0.05
+    expected_metrics: [avg_session_minutes]
+    wrong_values: [6.633333]
+    likely_failure: wrong_metric_definition
+
+  - id: q085
+    question: What share of my October 2026 watch time came from sessions that started at or after 10pm?
+    category: session_derived
+    difficulty: hard
+    split: dev
+    today: 2026-11-20
+    tests: session-level (start hour) attribution, not view hour (0.134)
+    answer_type: scalar
+    gold_sql: |
+      SELECT sum(est_watch_sec) FILTER (WHERE hour(start_ts_local) >= 22) / sum(est_watch_sec)
+      FROM fct_sessions WHERE local_date BETWEEN DATE '2026-10-01' AND DATE '2026-10-31'
+    units: [ratio]
+    tolerance: 0.004
+    expected_metrics: [est_watch_minutes, sessions]
+    wrong_values: [0.1335]
+    likely_failure: join_or_grain_error
+
+  - id: q086
+    question: On the days I used TikTok in September 2026, how many sessions did I have per day on average?
+    category: session_derived
+    difficulty: hard
+    split: test
+    today: 2026-11-20
+    tests: sessions / active days (24), not / calendar days (30, gives 3.2)
+    answer_type: scalar
+    gold_sql: |
+      SELECT count(*) * 1.0 / (SELECT count(DISTINCT local_date) FROM fct_views
+                               WHERE local_date BETWEEN DATE '2026-09-01' AND DATE '2026-09-30')
+      FROM fct_sessions WHERE local_date BETWEEN DATE '2026-09-01' AND DATE '2026-09-30'
+    units: [number]
+    tolerance: 0.01
+    expected_metrics: [sessions, active_days]
+    wrong_values: [3.2]
+    likely_failure: aggregation_error
+
+  - id: q087
+    question: When was my longest session in September 2026, and how long was it in minutes?
+    category: session_derived
+    difficulty: hard
+    split: dev
+    today: 2026-11-20
+    tests: longest by estimated watch time (26 Sep, 34.8 min), not by span (14 Sep, 75.6 min)
+    answer_type: table
+    gold_sql: |
+      SELECT local_date, est_watch_sec / 60.0 FROM fct_sessions
+      WHERE local_date BETWEEN DATE '2026-09-01' AND DATE '2026-09-30'
+      GROUP BY local_date, est_watch_sec ORDER BY est_watch_sec DESC LIMIT 1
+    units: [date, minutes]
+    tolerance: 0.05
+    expected_metrics: [avg_session_minutes]
+    wrong_values: [75.6, 70.616667]
+    likely_failure: wrong_metric_definition
+
+  - id: q088
+    question: How many different videos have I watched more than once?
+    category: metric_definition
+    difficulty: hard
+    split: dev
+    today: 2026-11-20
+    tests: distinct rewatched videos (356), not rewatch views (364)
+    answer_type: scalar
+    gold_sql: |
+      SELECT count(*) FROM (SELECT video_id FROM fct_views GROUP BY 1 HAVING count(*) > 1)
+    units: [count]
+    expected_metrics: [rewatch_rate]
+    wrong_values: [364]
+    likely_failure: wrong_metric_definition
+
+  - id: q089
+    question: What was my longest run of consecutive days without watching anything?
+    category: multi_step
+    difficulty: hard
+    split: dev
+    today: 2026-11-20
+    tests: gaps and islands over inactive days (11-13 Sep = 3), not the detox week span (6)
+    answer_type: scalar
+    gold_sql: |
+      WITH idle AS (SELECT local_date FROM agg_daily WHERE NOT is_active),
+      runs AS (
+          SELECT local_date - CAST(row_number() OVER (ORDER BY local_date) AS INTEGER) AS k
+          FROM idle
+      )
+      SELECT max(n) FROM (SELECT k, count(*) AS n FROM runs GROUP BY k)
+    units: [days]
+    expected_metrics: [active_days]
+    wrong_values: [6, 7]
+    likely_failure: aggregation_error
+
+  - id: q090
+    question: Between 10pm and midnight on weekends in October 2026, how many minutes did I watch?
+    category: time_window
+    difficulty: medium
+    split: dev
+    today: 2026-11-20
+    tests: hour band and weekend filter combined
+    answer_type: scalar
+    gold_sql: |
+      SELECT sum(est_watch_sec) / 60.0 FROM fct_views
+      WHERE local_date BETWEEN DATE '2026-10-01' AND DATE '2026-10-31'
+        AND is_weekend AND local_hour >= 22
+    units: [minutes]
+    tolerance: 0.05
+    expected_metrics: [est_watch_minutes]
+
+  - id: q091
+    question: Which week (give its Monday) had the most views in my whole history?
+    category: ranking
+    difficulty: medium
+    split: dev
+    today: 2026-11-20
+    tests: Monday-Sunday weekly totals, argmax (no ties)
+    answer_type: scalar
+    gold_sql: |
+      SELECT d.week_start FROM agg_daily a JOIN dim_date d USING (local_date)
+      GROUP BY 1 ORDER BY sum(a.views) DESC LIMIT 1
+    units: [date]
+    expected_metrics: [views]
+
+  - id: q092
+    question: How many videos did I watch in the past fortnight?
+    category: ambiguous
+    difficulty: medium
+    split: test
+    today: 2026-11-20
+    tests: 14 days excl. today (6-19 Nov), incl. today (7-20 Nov), or the last two full weeks (2-15 Nov)
+    answer_type: scalar
+    gold_sql: |
+      SELECT count(*) FROM fct_views
+      WHERE local_date BETWEEN DATE '2026-11-06' AND DATE '2026-11-19'
+    alternatives:
+      - |
+        SELECT count(*) FROM fct_views
+        WHERE local_date BETWEEN DATE '2026-11-07' AND DATE '2026-11-20'
+      - |
+        SELECT count(*) FROM fct_views
+        WHERE local_date BETWEEN DATE '2026-11-02' AND DATE '2026-11-15'
+    units: [count]
+    expected_metrics: [views]
+
+  - id: q093
+    question: How long did I spend on the last video I watched on Sunday 15 November 2026, in seconds?
+    category: trap
+    difficulty: hard
+    split: dev
+    today: 2026-11-20
+    tests: the last view of a session has no next view; its 18.5 s is imputed, so it needs a caveat
+    answer_type: scalar
+    gold_sql: |
+      SELECT arg_max(est_watch_sec, event_ts_utc) FROM fct_views
+      WHERE local_date = DATE '2026-11-15'
+    units: [seconds]
+    tolerance: 0.5
+    expected_metrics: [est_watch_minutes]
+    requires_caveat: true
+    likely_failure: missing_caveat
+
+  - id: q094
+    question: Exactly how many minutes did I spend in binge sessions in October 2026?
+    category: trap
+    difficulty: hard
+    split: test
+    today: 2026-11-20
+    tests: binge sessions' estimated minutes, with an estimate caveat ("exactly" is a trap)
+    answer_type: scalar
+    gold_sql: |
+      SELECT sum(est_watch_sec) / 60.0 FROM fct_sessions
+      WHERE local_date BETWEEN DATE '2026-10-01' AND DATE '2026-10-31' AND is_binge
+    units: [minutes]
+    tolerance: 0.05
+    expected_metrics: [binge_sessions, est_watch_minutes]
+    requires_caveat: true
+    likely_failure: missing_caveat
+
+  - id: q095
+    question: Which TikTok filters or effects do I use the most?
+    category: unanswerable
+    difficulty: easy
+    split: dev
+    today: 2026-11-20
+    tests: no creation or effect data; no proxy
+    answer_type: refusal
+
+  - id: q096
+    question: How many minutes of TikTok LIVE did I watch last week?
+    category: unanswerable
+    difficulty: medium
+    split: test
+    today: 2026-11-20
+    tests: LIVE streams are not in the watch history; no proxy
+    answer_type: refusal

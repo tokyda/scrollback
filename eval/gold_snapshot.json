@@ -1089,5 +1089,274 @@
    ]
   },
   "alternatives": []
+ },
+ "q077": {
+  "gold": {
+   "columns": [
+    "(sum(est_watch_sec) / 60.0)"
+   ],
+   "rows": [
+    [
+     140.941667
+    ]
+   ]
+  },
+  "alternatives": []
+ },
+ "q078": {
+  "gold": {
+   "columns": [
+    "count_star()"
+   ],
+   "rows": [
+    [
+     480
+    ]
+   ]
+  },
+  "alternatives": []
+ },
+ "q079": {
+  "gold": {
+   "columns": [
+    "(sum(est_watch_sec) / 60.0)"
+   ],
+   "rows": [
+    [
+     2135.625
+    ]
+   ]
+  },
+  "alternatives": []
+ },
+ "q080": {
+  "gold": {
+   "columns": [
+    "count_star()"
+   ],
+   "rows": [
+    [
+     43
+    ]
+   ]
+  },
+  "alternatives": []
+ },
+ "q081": {
+  "gold": {
+   "columns": [
+    "(sum(est_watch_sec) / 60.0)"
+   ],
+   "rows": [
+    [
+     53.858333
+    ]
+   ]
+  },
+  "alternatives": []
+ },
+ "q082": {
+  "gold": {
+   "columns": [
+    "last_monday",
+    "monday_before"
+   ],
+   "rows": [
+    [
+     33.15,
+     51.458333
+    ]
+   ]
+  },
+  "alternatives": []
+ },
+ "q083": {
+  "gold": {
+   "columns": [
+    "first_half",
+    "second_half"
+   ],
+   "rows": [
+    [
+     549.966667,
+     942.758333
+    ]
+   ]
+  },
+  "alternatives": []
+ },
+ "q084": {
+  "gold": {
+   "columns": [
+    "(median(est_watch_sec) / 60.0)"
+   ],
+   "rows": [
+    [
+     6.354167
+    ]
+   ]
+  },
+  "alternatives": []
+ },
+ "q085": {
+  "gold": {
+   "columns": [
+    "(sum(est_watch_sec) FILTER (WHERE (\"hour\"(start_ts_local) >= 22)) / sum(est_watch_sec))"
+   ],
+   "rows": [
+    [
+     0.141799
+    ]
+   ]
+  },
+  "alternatives": []
+ },
+ "q086": {
+  "gold": {
+   "columns": [
+    "((count_star() * 1.0) / (SELECT count(DISTINCT local_date) FROM fct_views WHERE (local_date BETWEEN CAST('2026-09-01' AS DATE) AND CAST('2026-09-30' AS DATE))))"
+   ],
+   "rows": [
+    [
+     4.0
+    ]
+   ]
+  },
+  "alternatives": []
+ },
+ "q087": {
+  "gold": {
+   "columns": [
+    "local_date",
+    "(est_watch_sec / 60.0)"
+   ],
+   "rows": [
+    [
+     "2026-09-26",
+     34.783333
+    ]
+   ]
+  },
+  "alternatives": []
+ },
+ "q088": {
+  "gold": {
+   "columns": [
+    "count_star()"
+   ],
+   "rows": [
+    [
+     356
+    ]
+   ]
+  },
+  "alternatives": []
+ },
+ "q089": {
+  "gold": {
+   "columns": [
+    "max(n)"
+   ],
+   "rows": [
+    [
+     3
+    ]
+   ]
+  },
+  "alternatives": []
+ },
+ "q090": {
+  "gold": {
+   "columns": [
+    "(sum(est_watch_sec) / 60.0)"
+   ],
+   "rows": [
+    [
+     64.325
+    ]
+   ]
+  },
+  "alternatives": []
+ },
+ "q091": {
+  "gold": {
+   "columns": [
+    "week_start"
+   ],
+   "rows": [
+    [
+     "2026-10-19"
+    ]
+   ]
+  },
+  "alternatives": []
+ },
+ "q092": {
+  "gold": {
+   "columns": [
+    "count_star()"
+   ],
+   "rows": [
+    [
+     902
+    ]
+   ]
+  },
+  "alternatives": [
+   {
+    "columns": [
+     "count_star()"
+    ],
+    "rows": [
+     [
+      893
+     ]
+    ]
+   },
+   {
+    "columns": [
+     "count_star()"
+    ],
+    "rows": [
+     [
+      748
+     ]
+    ]
+   }
+  ]
+ },
+ "q093": {
+  "gold": {
+   "columns": [
+    "arg_max(est_watch_sec, event_ts_utc)"
+   ],
+   "rows": [
+    [
+     18.5
+    ]
+   ]
+  },
+  "alternatives": []
+ },
+ "q094": {
+  "gold": {
+   "columns": [
+    "(sum(est_watch_sec) / 60.0)"
+   ],
+   "rows": [
+    [
+     291.333333
+    ]
+   ]
+  },
+  "alternatives": []
+ },
+ "q095": {
+  "gold": null,
+  "alternatives": []
+ },
+ "q096": {
+  "gold": null,
+  "alternatives": []
  }
 }

@@ -201,7 +201,9 @@ def test_cli_run_without_yes_only_estimates(
               "--split", "dev", "--repeat", "3"],
     )  # fmt: skip
     assert result.exit_code == 0, result.output
-    assert "51 questions (dev) x 3 repeats = 153 agent runs on claude-sonnet-5-5" in result.output
+    n_dev = len(QSET.by_split("dev"))
+    expected = f"{n_dev} questions (dev) x 3 repeats = {3 * n_dev} agent runs on claude-sonnet-5-5"
+    assert expected in result.output
     assert "Estimated cost: $" in result.output
     assert "Not running. Re-run with --yes" in result.output
 
