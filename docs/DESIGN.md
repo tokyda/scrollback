@@ -163,7 +163,7 @@ None of these have been checked yet; all were built and tested against synthetic
 6. Run `dbt build`. *(Wired in Phase 2. Until then `ingest` prints that the step was skipped.)*
 
 ### 4.3 Core metric problem: there is no watch duration
-The export records **when a view started**, not how long it lasted, so watch time has to be estimated. The method is versioned in `metrics.yml` and parameterised in `dbt_project.yml` vars.
+The export records **when a view started**, not how long it lasted, so watch time has to be estimated. The method is versioned in `metrics.yml` and parameterised by dbt vars. The parameter values live in `config.yaml` (`metrics:`) as the single source of truth, and `dbt_runner` passes them to dbt as `--vars`; `dbt_project.yml` only holds fallback defaults. *(Clarified: previously both files looked authoritative.)*
 
 - **Session:** an ordered run of views where the gap between consecutive views is ≤ `session_gap_min` (default **30 min**).
 - **Per-view estimated watch seconds:**
@@ -464,6 +464,7 @@ scrollback/
 ├── pyproject.toml
 ├── config.yaml
 ├── .env.example
+├── .github/workflows/ci.yml
 ├── docs/
 │   ├── DESIGN.md
 │   └── ROADMAP.md
@@ -500,6 +501,7 @@ scrollback/
 │   ├── labels/
 │   └── harness/{run.py, score.py, report.py}
 └── tests/
+    └── fixtures/            # static test inputs (synthetic only)
 ```
 
 ---
@@ -509,7 +511,7 @@ scrollback/
 - **dbt tests:** see §4.4.
 - **Agent:** tool contract tests with a mocked `LLMClient` (scripted tool calls), so the loop, retries and step limit are tested without network calls.
 - **Eval smoke test in CI:** a 10-question subset with a mocked or cheapest model, optional and behind a secret.
-- **CI (GitHub Actions):** ruff, mypy, pytest, `synth` → `ingest` → `dbt build`, and the eval gold-SQL validity check.
+- **CI (GitHub Actions):** ruff, mypy, pytest, a check that regenerating `data/sample/` gives identical files, `synth` → `ingest` (run twice) → `dbt build`, and the eval gold-SQL validity check.
 
 ---
 
