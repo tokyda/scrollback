@@ -5,13 +5,17 @@ from scrollback.cli import NOT_IMPLEMENTED_EXIT_CODE, app
 
 runner = CliRunner()
 
-TOP_LEVEL = ["ingest", "synth", "build", "ask", "enrich", "eval", "kb", "alerts", "digest", "serve"]
+TOP_LEVEL = [
+    "ingest", "synth", "build", "inspect", "ask", "enrich",
+    "eval", "kb", "alerts", "digest", "serve",
+]  # fmt: skip
 GROUPS = {
     "eval": ["run", "report", "import-feedback"],
     "kb": ["index"],
     "alerts": ["check"],
     "digest": ["send"],
     "serve": ["api", "bot"],
+    "inspect": ["gaps"],
 }
 
 
@@ -33,7 +37,6 @@ def test_group_help_lists_subcommands(group: str) -> None:
 @pytest.mark.parametrize(
     ("args", "label"),
     [
-        (["build"], "Phase 2"),
         (["ask", "how much did I watch"], "Phase 3"),
         (["eval", "run", "--config", "x.yaml"], "Phase 4"),
         (["kb", "index"], "Phase 5"),

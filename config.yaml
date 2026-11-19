@@ -13,8 +13,9 @@ paths:
   traces_dir: traces
   eval_runs_dir: eval/runs
 
-# Watch-time estimation and session parameters (DESIGN §4.3, §5).
-# These are the source of truth; dbt receives them as --vars.
+# Watch-time estimation, session and data-quality parameters (DESIGN §4.3, §4.4, §5).
+# This is the single source of truth: `scrollback build` passes them to dbt as --vars and
+# dbt has no defaults of its own. Tune them with `scrollback inspect gaps`.
 metrics:
   session_gap_min: 30
   view_cap_sec: 180
@@ -22,7 +23,8 @@ metrics:
   binge_threshold_min: 60
   late_night_start_hour: 0
   late_night_end_hour: 5
-  max_daily_views: 3000
+  max_daily_views: 3000         # sanity bound tested by dbt
+  freshness_warn_days: 14       # dbt warns if the latest event is older than this
 
 llm:
   provider: anthropic

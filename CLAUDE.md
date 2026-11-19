@@ -11,7 +11,7 @@ If you change a design decision, update `docs/DESIGN.md` in the same commit and 
 
 ## Current state
 
-Phases 0 and 1 are done except ingesting a real export; see the roadmap checkboxes. No real
+Phases 0, 1 and 2 are done except ingesting a real export; see the roadmap checkboxes. No real
 export has been ingested yet, so every TikTok-format assumption is listed in DESIGN §4.1
 "Format assumptions to verify against a real export". When a real export arrives, put it in
 `data/raw/`, run `scrollback ingest`, and update that list. An unknown structure (or a missing
@@ -33,8 +33,16 @@ uv run scrollback --help                  # CLI
 # synthetic data -> raw layer
 uv run scrollback synth                   # writes data/sample/user_data_tiktok.json (+ manifest)
 uv run scrollback synth --variant v1_activity --out data/sample/user_data_tiktok_v1.json
-uv run scrollback ingest data/sample/user_data_tiktok.json [--db path.duckdb]
+uv run scrollback ingest data/sample/user_data_tiktok.json [--db path.duckdb] [--no-build]
+
+# warehouse (dbt) and parameter tuning
+uv run scrollback build [--db path.duckdb] [-q]   # dbt build with --vars from config.yaml
+uv run scrollback inspect gaps [--db path.duckdb] # gap distribution, aggregates only
 ```
+
+Never run `dbt` directly: `dbt_project.yml` has no var defaults on purpose, and
+`scrollback build` is what passes `config.yaml` values as `--vars`. To try other parameters,
+edit `config.yaml` (or pass `--config`) and rebuild.
 
 If you change the generator, regenerate both samples (the two `synth` commands above) and commit
 them; `tests/test_ingest_e2e.py` and CI fail if they drift.
@@ -48,6 +56,25 @@ them; `tests/test_ingest_e2e.py` and CI fail if they drift.
 - `src/scrollback/ingest/load.py`: reads json/zip, idempotent load, `ingest_log`.
 - `src/scrollback/warehouse/db.py`: DuckDB connection and raw-layer DDL.
 - `src/scrollback/synth/generator.py`: deterministic synthetic export + manifest.
+- `src/scrollback/warehouse/dbt_runner.py`: config.yaml → dbt `--vars`; runs dbt in a subprocess.
+- `src/scrollback/warehouse/inspect.py`: gap distribution for `inspect gaps`.
+- `src/scrollback/semantic/metrics.py`: `knowledge/metrics.yml` schema, loader, `{param}` render.
+- `dbt/`: staging (`stg_*`), intermediate (`int_view_gaps`, `int_sessions`), marts (`fct_*`,
+  `dim_date`, `agg_daily`), generic test `accepted_range`, singular tests in `dbt/tests/`.
+- `knowledge/metrics.yml`: metric definitions; `knowledge/docs/`: glossary docs.
+
+## Warehouse and metrics conventions
+
+- Watch time follows DESIGN §4.3 exactly. `tests/test_watch_time_fixture.py` is the
+  hand-computed reference; if a model change breaks it, the model is wrong unless DESIGN changes.
+- Marts are the only layer the agent may query. New columns need a `_marts.yml` description.
+- A metric's SQL must match what the marts compute: add the metric to `knowledge/metrics.yml`,
+  then to the reconciliation in `tests/test_metrics.py` and the hand values in the fixture test.
+- Text in `knowledge/` uses `{param}` placeholders for config values, never literal numbers
+  (except in clearly labelled worked examples).
+- dbt output and `inspect` print names and aggregates only; keep it that way (privacy).
+- Tests share one synthetic warehouse built per session (`tests/conftest.py`); use
+  `ingest --no-build` in tests that don't need dbt.
 
 ## Conventions
 

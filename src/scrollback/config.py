@@ -14,7 +14,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import yaml
 from dotenv import dotenv_values
-from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator
+from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator, model_validator
 
 DEFAULT_CONFIG_FILE = "config.yaml"
 CONFIG_PATH_ENV = "SCROLLBACK_CONFIG"
@@ -66,6 +66,15 @@ class MetricsConfig(_Strict):
     late_night_start_hour: int = Field(0, ge=0, le=23)
     late_night_end_hour: int = Field(5, ge=0, le=24)
     max_daily_views: int = Field(3000, gt=0)
+    freshness_warn_days: int = Field(14, gt=0)
+
+    @model_validator(mode="after")
+    def _consistent(self) -> MetricsConfig:
+        if self.default_last_view_sec > self.view_cap_sec:
+            raise ValueError("default_last_view_sec must be <= view_cap_sec")
+        if self.late_night_start_hour >= self.late_night_end_hour:
+            raise ValueError("late_night_start_hour must be < late_night_end_hour")
+        return self
 
 
 class LLMConfig(_Strict):

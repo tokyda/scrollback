@@ -100,3 +100,20 @@ def table_counts(con: duckdb.DuckDBPyConnection) -> dict[str, int]:
         row = con.execute(f"SELECT count(*) FROM {name}").fetchone()
         counts[name] = int(row[0]) if row else 0
     return counts
+
+
+def has_view_data(path: Path) -> bool:
+    """True when the warehouse file exists and raw_watch has at least one row."""
+    if not path.exists():
+        return False
+    con = duckdb.connect(str(path), read_only=True)
+    try:
+        exists = con.execute(
+            "SELECT count(*) FROM information_schema.tables WHERE table_name = 'raw_watch'"
+        ).fetchone()
+        if not exists or exists[0] == 0:
+            return False
+        row = con.execute("SELECT count(*) FROM raw_watch").fetchone()
+        return bool(row and row[0] > 0)
+    finally:
+        con.close()

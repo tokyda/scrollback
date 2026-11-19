@@ -1,0 +1,26 @@
+# Scrollback warehouse (DESIGN §4.4).
+# Run through `scrollback build`, which passes every var from config.yaml.
+# There are deliberately no var defaults here: config.yaml is the single source of truth,
+# so running `dbt build` directly without --vars fails loudly.
+name: scrollback
+version: "1.0.0"
+config-version: 2
+profile: scrollback
+
+model-paths: ["models"]
+macro-paths: ["macros"]
+test-paths: ["tests"]
+target-path: target
+clean-targets: [target]
+
+flags:
+  send_anonymous_usage_stats: false
+
+models:
+  scrollback:
+    staging:
+      +materialized: view
+    intermediate:
+      +materialized: view
+    marts:
+      +materialized: table
