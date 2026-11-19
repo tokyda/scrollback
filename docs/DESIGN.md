@@ -316,10 +316,18 @@ metrics:
 A plain tool-calling loop. No framework, so every step is visible and debuggable.
 
 ```
-system prompt (role, rules, current date + timezone, table list)
+system prompt (role, tools, table list, rules)          byte-stable, so cacheable
+user message (today + timezone, question, chart request?)
 → LLM ⇄ tools (max N steps, default 8)
-→ final_answer(text, sql_used[], metrics_used[], assumptions[], chart_path?)
+→ final_answer(text, result_ids[], metrics_used[], assumptions[], chart_id)
 ```
+
+Implemented in `src/scrollback/agent/loop.py` on the Messages API (manual loop; see §13).
+- **Today and timezone go in the user message, not the system prompt.** *(Changed: a date in the system prompt changes daily and breaks prompt caching.)*
+- **Tool choice is `auto`.** Current models reject forced tool use, so the prompt says to finish with `final_answer` and its schema is strict. A turn with no tool call gets one reminder; a second one ends the run as `no_final_answer`.
+- **One step is one LLM call.** All tool calls in a turn run (with `final_answer` last) and their results go back in a single user message.
+- **Statuses:** `answered`, `step_limit`, `refused`, `no_final_answer`, `max_tokens`, `error`. Only `answered` carries an answer; the others never produce a number.
+- **`final_answer` cites `result_ids`, not SQL.** The loop fills in `sql_used` from the queries that actually ran (after the guard's rewrite), so the SQL shown to the user is always the SQL that produced the numbers (U4). `chart_id` refers to a `make_chart` result. *(Changed from `sql_used[]` / `chart_path?`, which the model could misreport.)*
 
 ### 6.2 Tools
 
@@ -329,8 +337,12 @@ system prompt (role, rules, current date + timezone, table list)
 | `describe_table` | `table` | columns, types, descriptions, 3 sample rows | marts only |
 | `query_metric` | `metric`, `grain`, `start`, `end`, `filters`, `group_by` | rows + compiled SQL | compiles from `metrics.yml`; the preferred path |
 | `run_sql` | `sql` | rows (≤ 200), column names, row count, or error | read-only guard below |
-| `make_chart` | `rows`, `kind` (line/bar), `x`, `y`, `title` | PNG path | |
-| `final_answer` | structured | — | ends the loop |
+| `make_chart` | `result_id`, `kind` (line/bar), `x`, `y`, `title` | `chart_id` (PNG under `charts/`) | charts a real `run_sql` result *(changed from model-typed `rows`: cheaper, and the model can't chart invented numbers)* |
+| `final_answer` | `text`, `result_ids[]`, `metrics_used[]`, `assumptions[]`, `chart_id` | — | ends the loop; unknown ids are returned as an error to fix |
+
+**v0 (E0 baseline)** has only `describe_table`, `run_sql`, `make_chart` and `final_answer`. All four use strict JSON schemas and are validated again in code. `search_knowledge` and `query_metric` arrive in Phase 5.
+- `describe_table` returns columns, types and a row count. Column and table descriptions are behind `agent.describe_include_descriptions` (off in E0, on from E1). In `aggregate_only` mode it shows sample rows only for `agg_*`/`dim_*`, and column statistics for `fct_*` (§4.6).
+- `run_sql` results carry a `result_id` (`r1`, `r2`, …). Errors come back as `[rule_code] message` with `is_error`.
 
 ### 6.3 SQL guard (`run_sql`)
 - Parse with sqlglot (DuckDB dialect). Reject anything that isn't a single `SELECT`/`WITH`.
@@ -359,6 +371,9 @@ Implemented in `src/scrollback/agent/sql_guard.py`. Every rejection has a stable
 - **Retries:** after `sql_max_retries` (2) consecutive failed `run_sql` calls, `run_sql` stops executing and tells the model to answer with what it has. A success resets the count. In the E0 baseline the error text is the rule code plus DuckDB's or the guard's message; E4 enriches it (§7.5).
 
 ### 6.4 System prompt rules (abridged)
+
+**`system_v1.md` (E0) is deliberately minimal:** role, the four tools, the mart table names (no descriptions), "base every number on a run_sql result and cite its result_ids", the `aggregate_only` rule when it's on, relative dates resolved against the supplied today with Monday–Sunday weeks and the range stated in `assumptions`, ambiguity handling, "fix failing queries", and "lead with the number". It contains **no** metric definitions, glossary content, estimate caveats or refusal rules; those are what E1–E6 add and measure. The full target rule set is below.
+
 - Always resolve metric definitions through `search_knowledge` before computing anything.
 - Prefer `query_metric`, and fall back to `run_sql` for anything it can't express.
 - Resolve relative dates ("last week") against the supplied `today` and timezone. State the resolved range in `assumptions`. Weeks run Monday to Sunday.
@@ -378,6 +393,14 @@ SQL: <collapsed>
 
 ### 6.6 Tracing
 Every run writes one JSON line to `traces/` and a row to `agent_traces` in DuckDB. Each record holds the question, model, prompt version, every tool call (name, args, duration, error), the final answer, tokens, cost estimate and latency. Traces are the raw material for bad-case analysis.
+
+Implemented in `src/scrollback/tracing.py`:
+- **JSONL:** `traces/YYYY-MM-DD.jsonl`, one line per run, written for every status including failures.
+- **Each record:** `trace_id`, `today`, `local_tz`, the model requested and the models that served, `prompt_version`, and a snapshot of the non-secret config (llm, agent, metric params, timezones). Per LLM call: step, stop reason, input/output/cache-read/cache-write tokens, estimated cost, latency, text, tool names and request ID. Per tool call: input, duration, error code, a capped copy of the output, and metadata (the executed SQL, `result_id`, row count, chart path). Plus the final answer with `sql_used`, status and total latency.
+- **Cost** is estimated from a dated per-model price table (`agent/pricing.py`) applied to each call's usage and serving model; an unknown model gives `null`, not a guess.
+- **Writing `agent_traces`:** the agent's read-only connection is closed before the row is written through a separate write connection. If the warehouse is locked, the JSONL line is still written and the CLI warns.
+- **Privacy:** traces contain aggregated query results and live only in git-ignored places. They never contain secrets; a test plants a fake key and checks both stores.
+- `agent_traces` isn't a mart, so the agent can't query it.
 
 ### 6.7 Config and versioning
 - The prompt lives in `src/scrollback/agent/prompts/system_v{N}.md`, and the version is recorded in traces and eval runs.
@@ -438,12 +461,14 @@ Each step is one config. Results go into the README table.
 | ID | Change | Hypothesis |
 |---|---|---|
 | E0 | schema only, `run_sql` only | baseline |
-| E1 | + table and column descriptions | fewer hallucinated columns |
+| E1 | + table and column descriptions (`describe_include_descriptions: true`) | fewer hallucinated columns |
 | E2 | + metrics glossary via RAG | fewer wrong metric definitions |
 | E3 | + few-shot examples via RAG | better time-window and session SQL |
-| E4 | + SQL error self-correction | fewer unrecovered SQL errors |
+| E4 | + richer structured SQL errors: the valid tables and columns, did-you-mean suggestions for unknown names, and a short fix hint per guard rule | fewer unrecovered SQL errors |
 | E5 | + `query_metric` semantic-layer tool | biggest jump on metric questions, fewer tokens |
-| E6 | + "cannot answer" doc + refusal rules | fewer failed refusals, check over-refusal |
+| E6 | + "cannot answer" doc + refusal rules (and the estimate-caveat rule) | fewer failed refusals, check over-refusal |
+
+*(E4 changed, 2026-11-20: basic self-correction, where the error goes back to the model with up to `sql_max_retries` = 2 retries, is already part of the E0 baseline, so E4 now measures richer error content instead. E0's errors are the guard's rule code plus DuckDB's or the guard's message.)*
 | E7 | model swap (small vs large) | the cost/accuracy tradeoff |
 
 ---

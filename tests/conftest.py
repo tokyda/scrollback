@@ -54,3 +54,21 @@ def wh(synthetic_warehouse: BuiltWarehouse) -> Iterator[duckdb.DuckDBPyConnectio
     con = synthetic_warehouse.connect()
     yield con
     con.close()
+
+
+@pytest.fixture
+def agent_settings(synthetic_warehouse: BuiltWarehouse, tmp_path: Path) -> Iterator[Settings]:
+    """Repo settings pointed at a private copy of the synthetic warehouse and tmp dirs."""
+    import shutil
+
+    db_copy = tmp_path / "agent_wh.duckdb"
+    shutil.copy(synthetic_warehouse.path, db_copy)
+    settings = repo_settings()
+    settings.paths = settings.paths.model_copy(
+        update={
+            "warehouse": db_copy,
+            "traces_dir": tmp_path / "traces",
+            "charts_dir": tmp_path / "charts",
+        }
+    )
+    yield settings
