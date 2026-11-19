@@ -39,7 +39,7 @@ from scrollback.config import Settings
 from scrollback.evals.gold import QuestionGold, compute_golds
 from scrollback.evals.labels import suggest_label, suspect_scoring, write_label_file
 from scrollback.evals.questions import Question, QuestionSet
-from scrollback.evals.score import AgentOutput, ResultTable, score
+from scrollback.evals.score import AgentOutput, ResultTable, describe_table_values, score
 from scrollback.evals.warehouses import build_anchors, eval_settings
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -190,6 +190,7 @@ def run_one(
         assumptions=answer.assumptions if answer else [],
         results=cited,
         all_results=all_results,
+        tool_values=describe_table_values([asdict(t) for t in result.trace.tool_calls]),
     )
     s = score(q, gold, out)
     trace = result.trace
@@ -400,6 +401,9 @@ def rescore_run(
                 for rid, c in r.get("cited_results", {}).items()
             },
             all_results=_all_results(r, traces.get(r.get("trace_id"), {})),
+            tool_values=describe_table_values(
+                traces.get(r.get("trace_id"), {}).get("tool_calls", [])
+            ),
         )
         s = score(q, golds[q.id], out)
         tool_calls = traces.get(r.get("trace_id"), {}).get("tool_calls", [])

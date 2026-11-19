@@ -68,7 +68,9 @@ COVERAGE_RE = re.compile(
 )
 NO_DATA_RE = re.compile(
     r"\b(?:no data|no (?:views?|records?|activity|watch(?:ing)? history) (?:recorded |yet |"
-    r"for|logged|on)|not (?:yet )?(?:in the (?:data|export|history)|available|included|"
+    r"for|logged|on)|no (?:watch )?(?:events?|views?|data|records?|activity) (?:for|on|today|"
+    r"recorded|yet|logged)|(?:data|history|export) (?:ends?|stops?|finishes) (?:on|at)|"
+    r"not (?:yet )?(?:in the (?:data|export|history)|available|included|"
     r"covered|been (?:exported|loaded|recorded))|(?:data|history|export) (?:only )?(?:ends?|"
     r"runs?|goes|covers?) (?:up )?(?:to|through|until)|latest (?:data|date|record|day)|"
     r"most recent (?:data|day|date)|up to yesterday|through yesterday|can'?t (?:tell|see|"
@@ -348,8 +350,11 @@ def _numeric_grid(result: ResultTable) -> list[list[float | None]]:
     return grid
 
 
-def derived_values(result: ResultTable) -> list[float]:
-    """Simple arithmetic an answer may do on top of a query result.
+Derivation = tuple[float, tuple[float, ...]]  # (value, the cells it was computed from)
+
+
+def derivations(result: ResultTable) -> list[Derivation]:
+    """Simple arithmetic an answer may do on top of a query result, with its operand cells.
 
     Contiguous range sums of a column (e.g. summing per-day rows into a weekend), and +, -,
     x, / of two cells in the same row or (difference, ratio) in the same column.
@@ -358,44 +363,66 @@ def derived_values(result: ResultTable) -> list[float]:
     if not grid:
         return []
     ncols = max(len(r) for r in grid)
-    out: list[float] = []
+    out: list[Derivation] = []
+
+    def pair(a: float, b: float, ops: str) -> None:
+        if "+" in ops:
+            out.append((a + b, (a, b)))
+        out.extend([(a - b, (a, b)), (b - a, (a, b))])
+        if "*" in ops:
+            out.append((a * b, (a, b)))
+        if b:
+            out.append((a / b, (a, b)))
+        if a:
+            out.append((b / a, (a, b)))
+
     for j in range(ncols):
         col = [r[j] if j < len(r) else None for r in grid]
         for i in range(len(col)):
-            total = 0.0
+            total, used = 0.0, []
             for k in range(i, len(col)):
                 v = col[k]
                 if v is None:
                     break
                 total += v
+                used.append(v)
                 if k > i:
-                    out.append(total)
+                    out.append((total, tuple(used)))
         vals = [v for v in col if v is not None]
         for a_i, a in enumerate(vals):
             for b in vals[a_i + 1 :]:
-                out += [a - b, b - a]
-                if b:
-                    out.append(a / b)
-                if a:
-                    out.append(b / a)
+                pair(a, b, "")
     for row in grid:
         vals = [v for v in row if v is not None]
         for a_i, a in enumerate(vals):
             for b in vals[a_i + 1 :]:
-                out += [a + b, a - b, b - a, a * b]
-                if b:
-                    out.append(a / b)
-                if a:
-                    out.append(b / a)
+                pair(a, b, "+*")
     return out
 
 
-def derived_match(q: Question, gold: GoldAnswer, result: ResultTable) -> bool:
-    """Every gold value (scalar or one-row table) is a cell of, or derivable from, ``result``."""
+def derived_values(result: ResultTable) -> list[float]:
+    return [v for v, _ in derivations(result)]
+
+
+def _stated(value: float, text_nums: list[TextNumber], unit: str, tolerance: float) -> bool:
+    units = (unit, "number") if unit != "number" else ("number",)
+    return any(text_number_match(value, n, u, tolerance) for n in text_nums for u in units)
+
+
+def derived_match(
+    q: Question, gold: GoldAnswer, result: ResultTable, text_nums: list[TextNumber]
+) -> bool:
+    """Every gold value (scalar or one-row table) is a cell of, or derived from, ``result``.
+
+    A derived value counts only when the answer shows the arithmetic: the text states the
+    derived value *and* every cell it was computed from. So "Saturday 293 + Sunday 186 =
+    about 479 min" counts, while two unrelated cells whose difference happens to equal the
+    gold (8.1 - 3.9 = 4.2 vs 4.18) do not.
+    """
     if q.answer_type not in ("scalar", "table") or len(gold.rows) != 1:
         return False
     cells = [v for row in _numeric_grid(result) for v in row if v is not None]
-    derived = derived_values(result)
+    derived = derivations(result)
     for value, unit in zip(gold.rows[0], q.units, strict=True):
         g = _as_float(value)
         if g is None or unit in NON_NUMERIC_UNITS:
@@ -404,7 +431,12 @@ def derived_match(q: Question, gold: GoldAnswer, result: ResultTable) -> bool:
             continue
         if any(numeric_match(g, c, unit, q.tolerance) for c in cells):
             continue
-        if not any(numeric_match(g, d, unit, q.tolerance, decimals=6) for d in derived):
+        if not any(
+            numeric_match(g, d, unit, q.tolerance, decimals=6)
+            and _stated(d, text_nums, unit, q.tolerance)
+            and all(_stated(o, text_nums, "number", 0.0) for o in operands)
+            for d, operands in derived
+        ):
             return False
     return True
 
@@ -503,8 +535,14 @@ SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?])\s+|\n+")
 GROUNDING_UNITS = ("number", "minutes", "seconds", "ratio")
 
 
-def grounded(n: TextNumber, results: list[ResultTable]) -> bool:
-    """``n`` is a cell of, simple arithmetic on, or the row count of a query result."""
+def grounded(
+    n: TextNumber, results: list[ResultTable], extra_values: list[float] | None = None
+) -> bool:
+    """``n`` is a cell of, simple arithmetic on, or the row count of a query result, or a
+    value a describe_table call returned (row count, column statistics, sample cells)."""
+    for v in extra_values or []:
+        if any(text_number_match(v, n, unit, 0.0) for unit in GROUNDING_UNITS):
+            return True
     for table in results:
         values = [v for row in _numeric_grid(table) for v in row if v is not None]
         values += derived_values(table)
@@ -516,7 +554,7 @@ def grounded(n: TextNumber, results: list[ResultTable]) -> bool:
 
 
 def refusal_ungrounded_numbers(
-    text: str, question: str, results: list[ResultTable]
+    text: str, question: str, results: list[ResultTable], extra_values: list[float] | None = None
 ) -> list[float] | None:
     """For an unanswerable question: the numbers that make the refusal fail.
 
@@ -537,7 +575,7 @@ def refusal_ungrounded_numbers(
         return first_amounts or [n.value for n in nums]
     rest = text[len(first) :]
     return [n.value for n in numbers_in(rest) if n.value not in in_question
-            and not grounded(n, results)]  # fmt: skip
+            and not grounded(n, results, extra_values)]  # fmt: skip
 
 
 TODAY_RE = re.compile(
@@ -590,6 +628,32 @@ class AgentOutput:
     # Every successful run_sql result of the run (cited or not); used to ground numbers in
     # refusals. Falls back to ``results`` when empty.
     all_results: dict[str, ResultTable] = field(default_factory=dict)
+    # Numbers returned by describe_table (row counts, column stats, sample cells).
+    tool_values: list[float] = field(default_factory=list)
+
+
+def describe_table_values(tool_calls: list[dict[str, Any]]) -> list[float]:
+    """Numeric values from the run's describe_table outputs (as stored in its trace)."""
+    import json
+
+    values: list[float] = []
+    for call in tool_calls:
+        if call.get("name") != "describe_table" or call.get("is_error"):
+            continue
+        try:
+            payload = json.loads(call.get("output", ""))
+        except json.JSONDecodeError:
+            continue  # truncated in the trace
+        if isinstance(payload.get("row_count"), int | float):
+            values.append(float(payload["row_count"]))
+        for stat in payload.get("column_stats", []):
+            for key in ("min", "max", "distinct"):
+                v = _as_float(stat.get(key)) if not isinstance(stat.get(key), bool) else None
+                if v is not None:
+                    values.append(v)
+        for row in payload.get("sample_rows", []):
+            values += [v for v in (_as_float(c) for c in row if not isinstance(c, bool)) if v]
+    return values
 
 
 @dataclass
@@ -629,7 +693,7 @@ def score(q: Question, gold: QuestionGold, out: AgentOutput) -> Score:
 
     if q.answer_type == "refusal":
         ungrounded = refusal_ungrounded_numbers(
-            text, q.question, list((out.all_results or out.results).values())
+            text, q.question, list((out.all_results or out.results).values()), out.tool_values
         )
         ok = refused and ungrounded == []
         return Score(passed=ok, refusal=ok, caveat=caveat, refused=refused,
@@ -646,6 +710,7 @@ def score(q: Question, gold: QuestionGold, out: AgentOutput) -> Score:
                      fabricated=amounts, notes=notes)  # fmt: skip
 
     readings = gold.all()
+    text_nums = numbers_in(text)
     cited = [out.results[r] for r in out.result_ids if r in out.results]
     execution = False
     execution_strict = False
@@ -656,7 +721,7 @@ def score(q: Question, gold: QuestionGold, out: AgentOutput) -> Score:
     for idx, g in enumerate(readings):
         strict_ok = any(table_match(q, g, r) for r in cited)
         execution_strict = execution_strict or strict_ok
-        exec_ok = strict_ok or any(derived_match(q, g, r) for r in cited)
+        exec_ok = strict_ok or any(derived_match(q, g, r, text_nums) for r in cited)
         values = [g.scalar] if q.answer_type == "scalar" else [v for row in g.rows for v in row]
         units = (
             [q.units[0]]

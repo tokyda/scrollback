@@ -323,11 +323,18 @@ def test_fix_b_ratio_and_difference() -> None:
         ["2026-09-28", 238.983333], ["2026-10-05", 354.575], ["2026-10-12", 176.958333],
         ["2026-10-19", 590.816667], ["2026-10-26", 288.916667],
     ]  # fmt: skip
-    text = "+413.9 minutes: the week starting 19 Oct 2026 had the biggest increase."
+    text = (
+        "+413.9 minutes: the week starting 19 Oct 2026 had the biggest increase. Watch time was "
+        "590.8 min, up from 177.0 min the week before."
+    )
     assert run("q052", text, rows).passed
+    # Without the operands the arithmetic isn't shown, so it doesn't count as execution.
+    bare = "+413.9 minutes: the week starting 19 Oct 2026 had the biggest increase."
+    s = run("q052", bare, rows)
+    assert s.answer and not s.execution and not s.passed
 
 
-def test_fix_b_subset_range_sums() -> None:
+def test_fix_b_range_sum_needs_its_cells_in_the_text() -> None:
     days = [
         51.458333,
         5.866667,
@@ -342,9 +349,31 @@ def test_fix_b_subset_range_sums() -> None:
         102.741667,
     ]  # 9-19 Nov
     rows = [[f"2026-11-{9 + i:02d}", m] for i, m in enumerate(days)]
-    text = "This week so far about 188.8 min vs about 273.1 min last week."
-    s = run("q034", text, rows)
+    totals_only = "This week so far about 188.8 min vs about 273.1 min last week."
+    s = run("q034", totals_only, rows)
+    assert s.answer and not s.execution and not s.passed
+    shown = (
+        "This week so far about 188.8 min (40.1 + 24.5 + 21.4 + 102.7) vs about 273.1 min last "
+        "week (51.5 + 5.9 + 23.1 + 16.9 + 62.0 + 54.4 + 59.4)."
+    )
+    s = run("q034", shown, rows)
     assert s.passed and not s.execution_strict
+
+
+def test_fix_b_q044_coincidence_is_not_execution() -> None:
+    # E-1 q044: cells 8.1 and 3.9 differ by 4.2, within tolerance of the gold 4.18, but the
+    # answer never computes 8.1 - 3.9; it reports 8.1 as the longest session.
+    rows = [
+        [1, 15, "2026-10-13T00:00:17", "2026-10-13T00:08:23", 8.1],
+        [3, 12, "2026-10-13T23:41:50", "2026-10-13T23:45:44", 3.9],
+        [2, 9, "2026-10-13T18:36:42", "2026-10-13T18:40:00", 3.3],
+    ]
+    text = (
+        "Your longest session on Tue 13 Oct 2026 was about 8.1 minutes (00:00:17-00:08:23, 15 "
+        "videos). The other two sessions were 3.9 and 3.3 minutes."
+    )
+    s = run("q044", text, rows)
+    assert not s.execution and not s.passed
 
 
 def test_fix_b_does_not_rescue_a_wrong_number() -> None:
@@ -410,3 +439,30 @@ def test_fix_d_numbers_without_a_leading_refusal_fail() -> None:
 def test_fix_d_no_numbers_refusal_anywhere_still_passes() -> None:
     text = "That is outside what your export holds. I can't see followers at all."
     assert run("q067", text).passed
+
+
+def test_describe_table_values_are_grounded() -> None:
+    from scrollback.evals.gold import GoldAnswer, QuestionGold
+    from scrollback.evals.score import AgentOutput, describe_table_values, score
+
+    calls = [{"name": "describe_table", "is_error": False,
+              "output": '{"table": "fct_likes", "row_count": 566, "columns": []}'}]  # fmt: skip
+    values = describe_table_values(calls)
+    assert values == [566.0]
+    text = "I can't tell you your follower count. I could give the likes you've given (566)."
+    out = AgentOutput(status="answered", text=text, tool_values=values)
+    assert score(QSET.get("q067"), QuestionGold(None), out).passed
+    out = AgentOutput(status="answered", text=text)  # without the describe_table call
+    assert not score(QSET.get("q067"), QuestionGold(None), out).passed
+    assert GoldAnswer is not None
+
+
+def test_widened_no_data_pattern() -> None:
+    text = (
+        "I can't give a watch duration. There are no watch events for today (2026-11-20), and "
+        "the data ends on 2026-11-19 at 19:46 local time."
+    )
+    assert run("q072", text).passed
+    zero = "There are 0 watch events for today (2026-11-20), so I can't report any watch time."
+    s = run("q072", zero)
+    assert not s.passed and s.fabricated == [0.0]

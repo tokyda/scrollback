@@ -929,6 +929,16 @@
       0.17602
      ]
     ]
+   },
+   {
+    "columns": [
+     "avg(CASE  WHEN (((local_hour >= 22) OR (local_hour < 6))) THEN (1.0) ELSE 0.0 END)"
+    ],
+    "rows": [
+     [
+      0.330585
+     ]
+    ]
    }
   ]
  },
