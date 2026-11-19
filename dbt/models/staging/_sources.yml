@@ -1,0 +1,13 @@
+version: 2
+
+sources:
+  - name: raw
+    description: Raw layer written by `scrollback ingest` (DESIGN §4.2). Not managed by dbt.
+    schema: main
+    tables:
+      - name: raw_watch
+      - name: raw_like
+      - name: raw_favorite
+      - name: raw_search
+      - name: raw_share
+      - name: ingest_log
