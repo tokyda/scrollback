@@ -434,6 +434,21 @@ Implemented in `src/scrollback/tracing.py`:
 
 Gold answers are computed by running `gold_sql` against the **synthetic dataset at a fixed seed**, so they're reproducible in CI. A check fails if any gold SQL errors or returns empty when it shouldn't.
 
+**As built** (`src/scrollback/evals/`, data in `eval/`):
+- **Pinned parameters.** `questions.yaml` starts with a `params:` block (timezones and every metric parameter) used for both gold answers and eval runs. Tuning `config.yaml` on real data therefore never moves the gold answers. *(Added.)*
+- **One warehouse per `today` anchor.** For anchor T, the committed sample is filtered to records whose local date is ≤ T, as if exported at the end of that day, then ingested and built with the pinned params. A question asked "on" T can't see later data, and "this month" on the 1st really is one day. Warehouses are cached in `data/warehouse/eval/`, keyed by the sample, anchor, params and dbt project. *(Added: a single full warehouse would let past anchors see "future" data.)*
+- **Extra question fields:**
+  - `split` (dev/test, stratified by category; test is held out for baseline and final runs);
+  - `tests` (one line on what the question checks);
+  - `units` (one per gold column, which drives tolerant matching);
+  - `alternatives` (other acceptable readings, `ambiguous` only);
+  - `wrong_values` (numbers that only come from a wrong definition);
+  - `requires_caveat` (true for every `trap`);
+  - `likely_failure` (a hint for label suggestion);
+  - `expect_empty`.
+- **Writing rules.** Gold SQL follows `knowledge/metrics.yml` and the glossary, and questions were written without running the agent on them.
+- **`scrollback eval check-gold`** (runs in CI) validates the schema and its invariants: unique ids, ≥ 6 per category, both splits in every category, refusal ⇔ `unanswerable`, caveat ⇔ `trap`. It also runs every gold SQL and alternative and checks shapes, that `expected_metrics` exist, and that no wrong value equals its gold. Finally it compares against the committed `eval/gold_snapshot.json`, so any gold change (from models, generator or params) is a deliberate `--update`.
+
 ### 7.2 Scoring (deterministic first)
 
 | Score | How |
@@ -560,15 +575,17 @@ scrollback/
 │   ├── agent/{loop.py, tools.py, sql_guard.py, llm.py, prompts/}
 │   ├── charts.py
 │   ├── tracing.py
+│   ├── evals/{questions.py, warehouses.py, gold.py, score.py, run.py, labels.py, report.py}
 │   ├── monitor/{anomaly.py, digest.py}
 │   ├── api/app.py
 │   └── bot/telegram_bot.py
-├── eval/
+├── eval/                    # eval data; the code lives in src/scrollback/evals/ (importable, typed)
 │   ├── questions.yaml
+│   ├── gold_snapshot.json
 │   ├── experiments/*.yaml
 │   ├── runs/                # git-ignored except selected summaries
 │   ├── labels/
-│   └── harness/{run.py, score.py, report.py}
+│   └── reports/             # committed baseline/experiment reports
 └── tests/
     └── fixtures/            # static test inputs (synthetic only)
 ```

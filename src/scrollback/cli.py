@@ -341,6 +341,57 @@ def enrich(
     _not_implemented("enrich", "stretch")
 
 
+@eval_app.command("check-gold")
+def eval_check_gold(
+    update: Annotated[
+        bool, typer.Option("--update", help="Rewrite eval/gold_snapshot.json from current golds.")
+    ] = False,
+    show: Annotated[bool, typer.Option("--show", help="Print every gold answer.")] = False,
+    config: ConfigOption = None,
+) -> None:
+    """Validate eval/questions.yaml and every gold SQL (runs in CI)."""
+    from pydantic import ValidationError
+
+    from scrollback.evals.gold import check_gold, compute_golds, snapshot_drift, write_snapshot
+    from scrollback.evals.questions import load_questions
+    from scrollback.evals.warehouses import build_anchors
+
+    try:
+        qset = load_questions()
+    except ValidationError as exc:
+        typer.echo(f"questions.yaml is invalid:\n{exc}", err=True)
+        raise typer.Exit(1) from None
+    warehouses = build_anchors(qset.anchors, base=_settings(config), params=qset.params)
+    try:
+        golds = compute_golds(qset, warehouses)
+    except Exception as exc:  # a gold SQL failed to run
+        typer.echo(f"gold SQL failed: {type(exc).__name__}: {exc}", err=True)
+        raise typer.Exit(1) from None
+    problems = check_gold(qset, golds)
+    if show:
+        for q in qset.questions:
+            g = golds[q.id]
+            value = "refusal" if g.gold is None else g.gold.rows
+            typer.echo(f"{q.id} [{q.category}/{q.split}] {value}")
+            for i, alt in enumerate(g.alternatives, 1):
+                typer.echo(f"      alt{i}: {alt.rows}")
+    if update and not problems:
+        write_snapshot(golds)
+        typer.echo("gold snapshot updated")
+    else:
+        problems += snapshot_drift(golds)
+    n_dev = len(qset.by_split("dev"))
+    typer.echo(
+        f"{len(qset.questions)} questions ({n_dev} dev / {len(qset.questions) - n_dev} test), "
+        f"{len(qset.anchors)} anchors"
+    )
+    if problems:
+        for problem in problems:
+            typer.echo(f"  PROBLEM {problem}", err=True)
+        raise typer.Exit(1)
+    typer.echo("gold check: ok")
+
+
 @eval_app.command("run")
 def eval_run(
     config: Annotated[str, typer.Option(help="Experiment config YAML.")],
