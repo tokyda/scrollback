@@ -1266,16 +1266,21 @@ questions:
 
   - id: q082
     question: How did my watch time last Monday compare with the Monday before?
-    category: comparison
+    category: ambiguous
     difficulty: hard
     split: dev
     today: 2026-11-20
-    tests: "last Monday = 16 Nov, the Monday before = 9 Nov"
+    tests: "on a Friday 'last Monday' is 16 Nov (vs 9 Nov) or the Monday of last week, 9 Nov (vs 2 Nov)"
     answer_type: table
     gold_sql: |
       SELECT sum(est_watch_sec) FILTER (WHERE local_date = DATE '2026-11-16') / 60.0 AS last_monday,
              sum(est_watch_sec) FILTER (WHERE local_date = DATE '2026-11-09') / 60.0 AS monday_before
       FROM fct_views
+    alternatives:
+      - |
+        SELECT sum(est_watch_sec) FILTER (WHERE local_date = DATE '2026-11-09') / 60.0 AS last_monday,
+               sum(est_watch_sec) FILTER (WHERE local_date = DATE '2026-11-02') / 60.0 AS monday_before
+        FROM fct_views
     units: [minutes, minutes]
     tolerance: 0.05
     expected_metrics: [est_watch_minutes]
@@ -1315,7 +1320,7 @@ questions:
     likely_failure: wrong_metric_definition
 
   - id: q085
-    question: What share of my October 2026 watch time came from sessions that started at or after 10pm?
+    question: What share of my October 2026 watch time came from sessions starting between 10pm and midnight?
     category: session_derived
     difficulty: hard
     split: dev

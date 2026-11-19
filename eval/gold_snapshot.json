@@ -1168,7 +1168,20 @@
     ]
    ]
   },
-  "alternatives": []
+  "alternatives": [
+   {
+    "columns": [
+     "last_monday",
+     "monday_before"
+    ],
+    "rows": [
+     [
+      51.458333,
+      9.166667
+     ]
+    ]
+   }
+  ]
  },
  "q083": {
   "gold": {
