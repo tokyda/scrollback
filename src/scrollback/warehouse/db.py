@@ -25,6 +25,9 @@ RAW_COLUMNS: dict[Dataset, tuple[str, ...]] = {
     Dataset.SHARE: ("event_ts_raw", "link", "video_id", "method", "shared_content"),
 }
 
+# Unknown extra fields from the export, as a JSON object (NULL when there are none).
+EXTRAS_COLUMN = "extras"
+
 _LOAD_METADATA = (
     "source_file VARCHAR NOT NULL, ingest_id BIGINT NOT NULL, loaded_at TIMESTAMP NOT NULL"
 )
@@ -37,7 +40,8 @@ def _raw_table_ddl(dataset: Dataset) -> str:
     )
     return (
         f"CREATE TABLE IF NOT EXISTS {RAW_TABLES[dataset]} (\n"
-        f"    record_hash VARCHAR PRIMARY KEY,\n    {cols},\n    {_LOAD_METADATA}\n)"
+        f"    record_hash VARCHAR PRIMARY KEY,\n    {cols},\n"
+        f"    {EXTRAS_COLUMN} JSON,\n    {_LOAD_METADATA}\n)"
     )
 
 
@@ -83,6 +87,9 @@ def connect(path: Path, read_only: bool = False) -> duckdb.DuckDBPyConnection:
 def ensure_raw_schema(con: duckdb.DuckDBPyConnection) -> None:
     for statement in SCHEMA_DDL:
         con.execute(statement)
+    # Migration: warehouses created before the extras column existed.
+    for table in RAW_TABLES.values():
+        con.execute(f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {EXTRAS_COLUMN} JSON")
 
 
 def table_counts(con: duckdb.DuckDBPyConnection) -> dict[str, int]:

@@ -91,6 +91,13 @@ def ingest(
         f"{summary.rows_duplicate:>8}{summary.rows_rejected:>10}"
     )
     typer.echo(f"New rejects stored: {summary.rejects_new}")
+    for name, c in summary.datasets.items():
+        if c.unknown_fields:
+            typer.echo(
+                f"Warning: {name} records have unrecognised fields {c.unknown_fields}; "
+                "kept in the extras column. Check DESIGN §4.1 and consider mapping them.",
+                err=True,
+            )
     if summary.ignored_sections:
         typer.echo(f"Ignored sections: {len(summary.ignored_sections)}")
     typer.echo("dbt build: skipped (warehouse models arrive in Phase 2)")

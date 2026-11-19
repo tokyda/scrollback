@@ -14,7 +14,7 @@ import duckdb
 
 from scrollback.ingest.detect import Dataset, DetectedExport, detect
 from scrollback.ingest.parse import ParsedRecord, ParseResult, Reject, parse_export
-from scrollback.warehouse.db import RAW_COLUMNS, RAW_TABLES, ensure_raw_schema
+from scrollback.warehouse.db import EXTRAS_COLUMN, RAW_COLUMNS, RAW_TABLES, ensure_raw_schema
 
 
 class ExportReadError(ValueError):
@@ -29,6 +29,7 @@ class DatasetCounts:
     rejected: int = 0
     new: int = 0
     duplicate: int = 0
+    unknown_fields: list[str] = field(default_factory=list)  # key names only
 
 
 @dataclass
@@ -133,9 +134,9 @@ def _load_dataset(
 ) -> int:
     table = RAW_TABLES[dataset]
     unique = _dedupe_records(records)
-    columns = ["record_hash", *RAW_COLUMNS[dataset]]
+    columns = ["record_hash", *RAW_COLUMNS[dataset], EXTRAS_COLUMN]
     values: list[list[Any]] = [list(unique.keys())]
-    for col in RAW_COLUMNS[dataset]:
+    for col in (*RAW_COLUMNS[dataset], EXTRAS_COLUMN):
         values.append([getattr(rec, col) for rec in unique.values()])
     before = _count(con, table)
     _insert_columns(con, table, columns, values, meta)
@@ -187,6 +188,7 @@ def load_parsed(
             read=parsed.read_counts[dataset],
             valid=len(records),
             rejected=sum(1 for r in parsed.rejects if r.dataset is dataset),
+            unknown_fields=list(parsed.unknown_keys.get(dataset, [])),
         )
 
     con.execute("BEGIN TRANSACTION")

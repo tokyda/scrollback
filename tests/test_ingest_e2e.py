@@ -152,3 +152,20 @@ def test_cli_ingest_uses_configured_warehouse(tmp_path: Path) -> None:
     row = con.execute("SELECT count(*) FROM raw_watch").fetchone()
     con.close()
     assert row is not None and row[0] > 0
+
+
+def test_cli_warns_on_unknown_fields_with_key_names_only(tmp_path: Path) -> None:
+    result = synthesize(days=3)
+    videos = result.export["Your Activity"]["Watch History"]["VideoList"]
+    for record in videos:
+        record["WatchDuration"] = "secret-duration-value"
+    export = tmp_path / "export.json"
+    export.write_text(json.dumps(result.export))
+    out = runner.invoke(app, ["ingest", str(export), "--db", str(tmp_path / "wh.duckdb")])
+    assert out.exit_code == 0, out.output
+    assert "Warning: watch records have unrecognised fields ['WatchDuration']" in out.output
+    assert "secret-duration-value" not in out.output
+    con = connect(tmp_path / "wh.duckdb")
+    row = con.execute("SELECT count(*) FROM raw_watch WHERE extras IS NOT NULL").fetchone()
+    con.close()
+    assert row is not None and row[0] > 0

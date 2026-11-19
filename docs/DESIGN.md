@@ -125,12 +125,13 @@ To get it: TikTok → Settings → Account → Download your data → choose **J
 - **Coverage:** the export may only hold a limited history window. Repeated exports overlap, so ingestion must be incremental and idempotent.
 - **Input:** a JSON export, either a `.json` file or a `.zip` containing exactly one `.json`. The TXT export is out of scope. *(Changed: §3 previously said JSON/TXT.)*
 
-**Variant detection** (`ingest/detect.py`) is declarative: each variant names an activity root key (`Activity` → `v1_activity`, `Your Activity` → `v2_your_activity`) and a `(section, list)` path per dataset. Detection fails loudly, naming the keys it found and never values, when:
+**Variant detection** (`ingest/detect.py`) is declarative: each variant names an activity root key (`Activity` → `v1_activity`, `Your Activity` → `v2_your_activity`) and a `(section, list)` path per dataset. Record keys match known fields case-insensitively, ignoring spaces and underscores. Detection fails loudly, naming the keys it found and never values, when:
 - no known root, or more than one, is present at the top level;
 - the root has no watch history section;
 - a known section is missing its list key, or the list isn't a list of objects;
-- any record key in a known list doesn't map to a known field for that dataset (keys match case-insensitively, ignoring spaces and underscores);
 - no record in a non-empty list has a required field.
+
+**Unknown extra fields are tolerated.** A record key that doesn't map to a known field for its dataset is logged as a warning (key names only, once per section), stored in the record's `extras` JSON column under its original name, and ingestion continues. Extras never affect `record_hash`, so a later export that adds a field doesn't create duplicates. The CLI prints the warning and `ingest_log.dataset_counts` records the unknown key names per dataset, so a new field gets noticed and can be mapped properly. *(Changed: unknown fields used to fail the whole ingest. A real export that adds a harmless field such as a duration shouldn't block loading; the structural checks above still fail loudly.)*
 
 Missing optional sections (likes, favourites, searches, shares) are allowed and recorded as absent. Unrelated sections such as profile or DMs are ignored. A `null` section or list is treated as empty. An individual record that is missing a field is rejected (§4.2), not treated as a shape error.
 
@@ -141,7 +142,7 @@ None of these have been checked yet; all were built and tested against synthetic
 2. The activity root is `Activity` or `Your Activity`, and exactly one of them is present.
 3. The watch history path is `Video Browsing History › VideoList` (v1) or `Watch History › VideoList` (v2).
 4. Likes, favourites, searches and shares sit at the same section/list names in both variants (`Like List › ItemFavoriteList`, `Favorite Videos › FavoriteVideoList`, `Search History › SearchList`, `Share History › ShareHistoryList`).
-5. Record field names are `Date`, `Link`, `SearchTerm`, `Method`, `SharedContent`, with casing that may vary (e.g. `date`/`link` in likes). Records have no other fields; an extra field currently fails ingestion.
+5. Record field names are `Date`, `Link`, `SearchTerm`, `Method`, `SharedContent`, with casing that may vary (e.g. `date`/`link` in likes). Any other field is kept in `extras` with a warning. Check the first real ingest for such warnings: a field like a watch duration would change the watch-time method in §4.3.
 6. `Date` is always `YYYY-MM-DD HH:MM:SS`, with no timezone suffix, and the time is UTC.
 7. Watch, like and favourite links contain `/video/<digits>`, either as `tiktokv.com/share/video/<id>/` or as `tiktok.com/@<user>/video/<id>`.
 8. Share records may point at non-video content (a profile, a live stream, a sound), in which case `Link` has no video ID and `SharedContent` says what was shared.
@@ -176,13 +177,13 @@ This estimate is the project's main data-definition story. It belongs in the REA
 ### 4.4 Warehouse models
 
 **raw** (loaded as-is plus load metadata)
-Every raw table ends with the load metadata `source_file VARCHAR` (the file's basename, never a full path), `ingest_id BIGINT` (→ `ingest_log`) and `loaded_at TIMESTAMP` (UTC). `video_id` is derived at ingest because the record hash depends on it; everything else is stored as written.
+Every raw `*` table has an `extras JSON` column (NULL unless the record had unknown fields, see §4.1), and ends with the load metadata `source_file VARCHAR` (the file's basename, never a full path), `ingest_id BIGINT` (→ `ingest_log`) and `loaded_at TIMESTAMP` (UTC). `video_id` is derived at ingest because the record hash depends on it; everything else is stored as written.
 - `raw_watch(record_hash PK, event_ts_raw VARCHAR, link VARCHAR, video_id VARCHAR, …metadata)`
 - `raw_like`, `raw_favorite`: same columns as `raw_watch`
 - `raw_search(record_hash PK, event_ts_raw VARCHAR, search_term VARCHAR, …metadata)`: the term as written; normalisation happens in staging
 - `raw_share(record_hash PK, event_ts_raw VARCHAR, link VARCHAR, video_id VARCHAR NULL, method VARCHAR, shared_content VARCHAR, …metadata)`
 - `raw_rejects(reject_hash PK, dataset, payload JSON, reason, …metadata)`: the payload is the original record with its original keys
-- `ingest_log(ingest_id PK, source_file, file_sha256, variant, started_at, finished_at, rows_read, rows_new, rows_duplicate, rows_rejected, rejects_new, dataset_counts JSON)`: `dataset_counts` maps each dataset to `{present, read, valid, rejected, new, duplicate}`
+- `ingest_log(ingest_id PK, source_file, file_sha256, variant, started_at, finished_at, rows_read, rows_new, rows_duplicate, rows_rejected, rejects_new, dataset_counts JSON)`: `dataset_counts` maps each dataset to `{present, read, valid, rejected, new, duplicate, unknown_fields}`, where `unknown_fields` holds key names only
 
 **staging** (typed, cleaned, deduped; one model per raw table)
 - `stg_watch(view_id, video_id, event_ts_utc, event_ts_local, local_date, local_hour, dow)`
