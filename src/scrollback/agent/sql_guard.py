@@ -38,6 +38,15 @@ ResultMode = Literal["aggregate_only", "full"]
 
 ALLOWED_TABLE_RE = re.compile(r"^(fct|dim|agg)_[a-z0-9_]+$")
 AGGREGATED_TABLE_RE = re.compile(r"^(agg|dim)_[a-z0-9_]+$")
+NOTHING_RE = re.compile(r"(?!)")
+
+# Which tables the agent may query. "staging" is the E-1 warehouse ablation (DESIGN §7.5):
+# stg_* views only, none of which are pre-aggregated.
+TableScope = Literal["marts", "staging"]
+SCOPES: dict[str, tuple[re.Pattern[str], re.Pattern[str], str]] = {
+    "marts": (ALLOWED_TABLE_RE, AGGREGATED_TABLE_RE, "the marts (fct_*, dim_*, agg_*)"),
+    "staging": (re.compile(r"^stg_[a-z0-9_]+$"), NOTHING_RE, "the staging views (stg_*)"),
+}
 ALLOWED_SCHEMAS = frozenset({"", "main"})
 
 FORBIDDEN_NODES: tuple[type[exp.Expr], ...] = (
@@ -91,7 +100,8 @@ def _is_set_operation(node: exp.Expr) -> bool:
     return isinstance(node, exp.Union | exp.Intersect | exp.Except)
 
 
-def _check_tables(root: exp.Expr) -> list[str]:
+def _check_tables(root: exp.Expr, scope: TableScope = "marts") -> list[str]:
+    allowed_re, _, described = SCOPES[scope]
     ctes = _cte_names(root)
     tables: list[str] = []
     for table in root.find_all(exp.Table):
@@ -104,10 +114,9 @@ def _check_tables(root: exp.Expr) -> list[str]:
             raise SqlGuardError("schema_not_allowed", f"schema {table.db!r} is not allowed")
         if not schema and name in ctes:
             continue
-        if not ALLOWED_TABLE_RE.match(name):
+        if not allowed_re.match(name):
             raise SqlGuardError(
-                "table_not_allowed",
-                f"table {table.name!r} is not allowed; query the marts (fct_*, dim_*, agg_*)",
+                "table_not_allowed", f"table {table.name!r} is not allowed; query {described}"
             )
         tables.append(name)
     return sorted(set(tables))
@@ -131,22 +140,28 @@ def _has_aggregate_projection(select: exp.Select) -> bool:
     return False
 
 
-def _source_is_aggregated(source: exp.Expr, ctes: dict[str, exp.Expr]) -> bool:
+def _source_is_aggregated(
+    source: exp.Expr, ctes: dict[str, exp.Expr], aggregated_re: re.Pattern[str]
+) -> bool:
     if isinstance(source, exp.Table):
         name = source.name.lower()
         if not source.db and name in ctes:
-            return _query_is_aggregated(ctes[name], ctes)
-        return bool(AGGREGATED_TABLE_RE.match(name))
+            return _query_is_aggregated(ctes[name], ctes, aggregated_re)
+        return bool(aggregated_re.match(name))
     if isinstance(source, exp.Subquery):
-        return _query_is_aggregated(source.this, ctes)
+        return _query_is_aggregated(source.this, ctes, aggregated_re)
     return False
 
 
-def _query_is_aggregated(node: exp.Expr, ctes: dict[str, exp.Expr]) -> bool:
+def _query_is_aggregated(
+    node: exp.Expr, ctes: dict[str, exp.Expr], aggregated_re: re.Pattern[str] = AGGREGATED_TABLE_RE
+) -> bool:
     if _is_set_operation(node):
-        return _query_is_aggregated(node.this, ctes) and _query_is_aggregated(node.expression, ctes)
+        return _query_is_aggregated(node.this, ctes, aggregated_re) and _query_is_aggregated(
+            node.expression, ctes, aggregated_re
+        )
     if isinstance(node, exp.Subquery):
-        return _query_is_aggregated(node.this, ctes)
+        return _query_is_aggregated(node.this, ctes, aggregated_re)
     if not isinstance(node, exp.Select):
         return False
     if node.args.get("group") is not None or _has_aggregate_projection(node):
@@ -157,7 +172,7 @@ def _query_is_aggregated(node: exp.Expr, ctes: dict[str, exp.Expr]) -> bool:
         sources.append(from_.this)
     sources += [join.this for join in node.args.get("joins") or []]
     # A SELECT with no FROM (e.g. SELECT 1) is a constant, not row-level data.
-    return all(_source_is_aggregated(src, ctes) for src in sources)
+    return all(_source_is_aggregated(src, ctes, aggregated_re) for src in sources)
 
 
 def _group_key_expressions(select: exp.Select) -> list[exp.Expr]:
@@ -194,9 +209,9 @@ def _check_row_level_grouping(root: exp.Expr) -> None:
                 )
 
 
-def _check_aggregate_only(root: exp.Expr) -> None:
+def _check_aggregate_only(root: exp.Expr, scope: TableScope = "marts") -> None:
     ctes = {cte.alias_or_name.lower(): cte.this for cte in root.find_all(exp.CTE)}
-    if not _query_is_aggregated(root, ctes):
+    if not _query_is_aggregated(root, ctes, SCOPES[scope][1]):
         raise SqlGuardError(
             "not_aggregate",
             "result_mode is aggregate_only: the query must aggregate (COUNT/SUM/AVG/... or "
@@ -223,7 +238,9 @@ def _apply_limit(root: exp.Expr, max_rows: int) -> tuple[bool, list[str]]:
 # --------------------------------------------------------------------------- entry point
 
 
-def guard_sql(sql: str, *, result_mode: ResultMode, max_rows: int) -> GuardedSql:
+def guard_sql(
+    sql: str, *, result_mode: ResultMode, max_rows: int, tables: TableScope = "marts"
+) -> GuardedSql:
     """Validate ``sql`` and return the rewritten query, or raise :class:`SqlGuardError`."""
     text = sql.strip().rstrip(";").strip()
     if not text:
@@ -244,15 +261,15 @@ def guard_sql(sql: str, *, result_mode: ResultMode, max_rows: int) -> GuardedSql
     if not (isinstance(root, exp.Select) or _is_set_operation(root)):
         raise SqlGuardError("not_select", "only SELECT / WITH queries are allowed")
 
-    tables = _check_tables(root)
+    used_tables = _check_tables(root, tables)
     _check_functions(root)
     if result_mode == "aggregate_only":
-        _check_aggregate_only(root)
+        _check_aggregate_only(root, tables)
 
     limited, notes = _apply_limit(root, max_rows)
     return GuardedSql(
         sql=root.sql(dialect="duckdb"),
-        tables=tuple(tables),
+        tables=tuple(used_tables),
         limit_applied=limited,
         notes=notes,
     )

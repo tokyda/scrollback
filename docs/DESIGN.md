@@ -529,6 +529,7 @@ Each step is one config. Results go into the README table.
 
 | ID | Change | Hypothesis |
 |---|---|---|
+| E-1 | **warehouse ablation**: the E0 agent and prompt, but only the staging views (`stg_*`) may be queried (`agent.tables: staging`); no sessions, watch-time estimates, flags or zero-filled spine | quantifies what the data modelling alone contributes (E0 − E-1) |
 | E0 | schema only, `run_sql` only | baseline |
 | E1 | + table and column descriptions (`describe_include_descriptions: true`) | fewer hallucinated columns |
 | E2 | + metrics glossary via RAG | fewer wrong metric definitions |
@@ -537,6 +538,8 @@ Each step is one config. Results go into the README table.
 | E5 | + `query_metric` semantic-layer tool | biggest jump on metric questions, fewer tokens |
 | E6 | + "cannot answer" doc + refusal rules (and the estimate-caveat rule) | fewer failed refusals, check over-refusal |
 | E7 | model swap (small vs large) | the cost/accuracy tradeoff |
+
+*(E-1 added, 2026-11-20, after E0 scored ~95%: much of E0's strength appears to come from the marts encoding the definitions as columns (`est_watch_sec`, `is_binge`, `is_late_night`, `is_active`). E-1 measures that directly. The SQL guard, `describe_table` and the prompt's table list all follow `agent.tables`. In the staging scope no table counts as pre-aggregated, so every query must aggregate.)*
 
 *(E4 changed, 2026-11-20: basic self-correction, where the error goes back to the model with up to `sql_max_retries` = 2 retries, is already part of the E0 baseline, so E4 now measures richer error content instead. E0's errors are the guard's rule code plus DuckDB's or the guard's message.)*
 

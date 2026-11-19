@@ -22,13 +22,13 @@ from zoneinfo import ZoneInfo
 from scrollback.agent.llm import LLMClient, LLMError
 from scrollback.agent.pricing import estimate_cost
 from scrollback.agent.tools import (
-    MART_TABLES,
-    TOOL_SCHEMAS,
     FinalAnswer,
     QueryResult,
     ToolContext,
+    agent_tables,
     execute_tool,
     open_readonly,
+    tool_schemas,
 )
 from scrollback.config import Settings
 from scrollback.tracing import LLMCallTrace, ToolCallTrace, Trace, cap, new_trace_id, write_trace
@@ -61,7 +61,7 @@ def load_system_prompt(settings: Settings) -> str:
         raise FileNotFoundError(f"prompt version {version} not found: {path.name}")
     rule = AGGREGATE_RULE if settings.agent.result_mode == "aggregate_only" else ""
     return Template(path.read_text(encoding="utf-8")).substitute(
-        tables="\n".join(f"- {t}" for t in MART_TABLES), result_mode_rule=rule
+        tables="\n".join(f"- {t}" for t in agent_tables(settings)), result_mode_rule=rule
     )
 
 
@@ -112,6 +112,7 @@ def run_agent(
     )
     started = time.perf_counter()
     system = load_system_prompt(settings)
+    tools = tool_schemas(settings)
     messages: list[dict[str, Any]] = [
         {"role": "user", "content": user_message(question, today, tz, want_chart)}
     ]
@@ -124,7 +125,7 @@ def run_agent(
     try:
         for step in range(1, settings.agent.max_steps + 1):
             try:
-                resp = llm.complete(system=system, messages=messages, tools=TOOL_SCHEMAS)
+                resp = llm.complete(system=system, messages=messages, tools=tools)
             except LLMError as exc:
                 status, trace.error = "error", str(exc)
                 break

@@ -23,7 +23,7 @@ import duckdb
 import yaml
 from pydantic import BaseModel, ConfigDict, ValidationError
 
-from scrollback.agent.sql_guard import AGGREGATED_TABLE_RE, SqlGuardError, guard_sql
+from scrollback.agent.sql_guard import SCOPES, SqlGuardError, guard_sql
 from scrollback.config import Settings
 
 MART_TABLES: tuple[str, ...] = (
@@ -34,7 +34,20 @@ MART_TABLES: tuple[str, ...] = (
     "dim_date",
     "agg_daily",
 )
+STAGING_TABLES: tuple[str, ...] = (
+    "stg_watch",
+    "stg_like",
+    "stg_favorite",
+    "stg_search",
+    "stg_share",
+)
+TABLES_BY_SCOPE: dict[str, tuple[str, ...]] = {"marts": MART_TABLES, "staging": STAGING_TABLES}
 MAX_TOOL_OUTPUT_CHARS = 30_000
+
+
+def agent_tables(settings: Settings) -> tuple[str, ...]:
+    """The tables the agent may see and query (marts, or staging for the E-1 ablation)."""
+    return TABLES_BY_SCOPE[settings.agent.tables]
 
 
 # --------------------------------------------------------------------------- schemas
@@ -98,6 +111,13 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
     ),
 ]
 TOOL_NAMES = frozenset(t["name"] for t in TOOL_SCHEMAS)
+
+
+def tool_schemas(settings: Settings) -> list[dict[str, Any]]:
+    """TOOL_SCHEMAS with describe_table's table enum set to the agent's table scope."""
+    schemas: list[dict[str, Any]] = json.loads(json.dumps(TOOL_SCHEMAS))
+    schemas[0]["input_schema"]["properties"]["table"]["enum"] = list(agent_tables(settings))
+    return schemas
 
 
 class _Input(BaseModel):
@@ -205,7 +225,8 @@ def _dumps(payload: dict[str, Any]) -> str:
 
 
 def _mart_descriptions(settings: Settings) -> dict[str, dict[str, Any]]:
-    path = settings.paths.dbt_project_dir / "models" / "marts" / "_marts.yml"
+    layer = "staging/_staging.yml" if settings.agent.tables == "staging" else "marts/_marts.yml"
+    path = settings.paths.dbt_project_dir / "models" / layer
     data = yaml.safe_load(path.read_text(encoding="utf-8"))
     out: dict[str, dict[str, Any]] = {}
     for model in data.get("models", []):
@@ -239,8 +260,9 @@ def _execute(
 
 def describe_table(ctx: ToolContext, args: DescribeTableInput) -> ToolOutcome:
     table = args.table
-    if table not in MART_TABLES:
-        return _error("table_not_allowed", f"unknown table {table!r}; tables: {list(MART_TABLES)}")
+    allowed = agent_tables(ctx.settings)
+    if table not in allowed:
+        return _error("table_not_allowed", f"unknown table {table!r}; tables: {list(allowed)}")
     cols = ctx.con.execute(
         "SELECT column_name, data_type FROM information_schema.columns "
         "WHERE table_name = ? ORDER BY ordinal_position",
@@ -259,7 +281,8 @@ def describe_table(ctx: ToolContext, args: DescribeTableInput) -> ToolOutcome:
         for col in payload["columns"]:
             col["description"] = docs.get("columns", {}).get(col["name"], "")
     n = agent.describe_sample_rows
-    row_level = agent.result_mode == "aggregate_only" and not AGGREGATED_TABLE_RE.match(table)
+    aggregated_re = SCOPES[agent.tables][1]
+    row_level = agent.result_mode == "aggregate_only" and not aggregated_re.match(table)
     if row_level:
         # aggregate_only: no individual records; column statistics instead (DESIGN §4.6).
         stats = []
@@ -303,7 +326,12 @@ def run_sql(ctx: ToolContext, args: RunSqlInput) -> ToolOutcome:
         return _error(code, message, sql=args.sql, failures=ctx.consecutive_sql_failures, **meta)
 
     try:
-        guarded = guard_sql(args.sql, result_mode=agent.result_mode, max_rows=agent.max_result_rows)
+        guarded = guard_sql(
+            args.sql,
+            result_mode=agent.result_mode,
+            max_rows=agent.max_result_rows,
+            tables=agent.tables,
+        )
     except SqlGuardError as exc:
         return failed(exc.rule, exc.message)
 

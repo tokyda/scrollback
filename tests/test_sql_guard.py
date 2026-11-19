@@ -224,3 +224,32 @@ def test_tables_reported() -> None:
         max_rows=200,
     )
     assert result.tables == ("dim_date", "fct_views")
+
+
+# --------------------------------------------------------------------------- E-1 staging scope
+
+
+def test_staging_scope_allows_only_stg_views() -> None:
+    sql = "SELECT count(*) FROM stg_watch"
+    assert guard_sql(sql, result_mode="aggregate_only", max_rows=200, tables="staging").tables == (
+        "stg_watch",
+    )
+    with pytest.raises(SqlGuardError) as err:
+        guard_sql("SELECT count(*) FROM fct_views", result_mode="aggregate_only", max_rows=200,
+                  tables="staging")  # fmt: skip
+    assert err.value.rule == "table_not_allowed" and "stg_*" in err.value.message
+    with pytest.raises(SqlGuardError) as err:
+        guard_sql("SELECT count(*) FROM stg_watch", result_mode="aggregate_only", max_rows=200)
+    assert err.value.rule == "table_not_allowed"  # marts scope rejects staging
+
+
+def test_staging_scope_has_no_preaggregated_tables() -> None:
+    with pytest.raises(SqlGuardError) as err:
+        guard_sql("SELECT local_date, video_id FROM stg_watch", result_mode="aggregate_only",
+                  max_rows=200, tables="staging")  # fmt: skip
+    assert err.value.rule == "not_aggregate"
+    sessionised = (
+        "WITH g AS (SELECT local_date, event_ts_utc - lag(event_ts_utc) OVER (ORDER BY "
+        "event_ts_utc) AS gap FROM stg_watch) SELECT local_date, count(*) FROM g GROUP BY 1"
+    )
+    assert guard_sql(sessionised, result_mode="aggregate_only", max_rows=200, tables="staging")
