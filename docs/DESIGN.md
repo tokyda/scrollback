@@ -236,7 +236,12 @@ Every raw `*` table has an `extras JSON` column (NULL unless the record had unkn
 
 ### 4.6 Privacy
 - `data/raw/`, `data/warehouse/*.duckdb` and `.env` are git-ignored. Only `data/sample/` (synthetic) is committed.
-- **What the LLM sees:** query results are sent to the LLM provider. Config `AGENT_RESULT_MODE=aggregate_only` makes the SQL guard reject queries without GROUP BY or aggregation (on by default for real data).
+- **What the LLM sees:** query results are sent to the LLM provider. Config `AGENT_RESULT_MODE=aggregate_only` (the default, used for synthetic and real data alike so evals measure the same agent) makes the SQL guard reject row-level results:
+  - the outermost query (each branch of a UNION) must aggregate, with an aggregate function outside a window or a `GROUP BY`, **or** read only sources that are already aggregated: `agg_*`/`dim_*` tables, or subqueries and CTEs that aggregate;
+  - `GROUP BY` on a bare row ID or raw timestamp (`view_id`, `like_id`, `search_id`, `share_id`, `favorite_id`, `session_id`, `event_ts_*`, `start_ts_local`, `end_ts_local`) is rejected; grouping by a derived value such as `date_trunc('hour', event_ts_local)` is allowed;
+  - `video_id` and search terms **may** appear in results (owner's decision, 2026-11-20), e.g. "most rewatched video" or "top searches";
+  - `describe_table` shows sample rows only for `agg_*`/`dim_*` and column statistics (min, max, distinct count) for `fct_*`.
+  This guards against accidental row dumps. It isn't a security boundary against a determined model; the execution layer in §6.3 is the second line.
 - The Telegram bot only answers chat IDs listed in `TELEGRAM_ALLOWED_CHAT_IDS`.
 
 ---
@@ -333,6 +338,25 @@ system prompt (role, rules, current date + timezone, table list)
 - Force `LIMIT 200` if none is given, plus a statement timeout.
 - Read-only DuckDB connection (`read_only=True`).
 - Errors are returned to the model as structured text so it can self-correct, with a maximum of 2 retries per query.
+
+Implemented in `src/scrollback/agent/sql_guard.py`. Every rejection has a stable rule code, recorded in traces and covered by a unit test:
+
+| Rule | Rejects |
+|---|---|
+| `parse_error` | SQL that doesn't parse (or is empty) |
+| `multiple_statements` | more than one statement |
+| `not_select` | anything other than SELECT / WITH … SELECT / UNION, INTERSECT, EXCEPT |
+| `write_or_ddl` | a write, DDL, PRAGMA, SET, ATTACH, COPY, INSTALL/LOAD, DESCRIBE/SUMMARIZE or transaction anywhere in the tree |
+| `table_function` | `FROM <function>(…)`, e.g. `read_csv`, `range`, `glob`, `duckdb_settings` |
+| `schema_not_allowed` | a table qualified with a schema other than `main` (e.g. `information_schema`) |
+| `table_not_allowed` | a table outside `fct_*`/`dim_*`/`agg_*` (names defined inside the query are fine), including file paths used as tables |
+| `function_not_allowed` | functions that read files, the environment or settings (`getenv`, `read_*`, `current_setting`, …) |
+| `not_aggregate` | *(aggregate_only)* row-level results, see §4.6 |
+| `row_level_grouping` | *(aggregate_only)* `GROUP BY` on a row ID or raw timestamp column |
+
+- **LIMIT:** `LIMIT max_rows` (200) is added when there's none, and a larger or non-literal LIMIT is reduced to it. *(Clarified: a larger limit used to pass unchanged.)*
+- **Execution layer** (defence in depth behind the guard): a read-only connection opened with `enable_external_access=false` and `lock_configuration=true`, so file reads, `getenv` and `SET` fail even if the guard misses them. The statement timeout interrupts the connection after `statement_timeout_sec`.
+- **Retries:** after `sql_max_retries` (2) consecutive failed `run_sql` calls, `run_sql` stops executing and tells the model to answer with what it has. A success resets the count. In the E0 baseline the error text is the rule code plus DuckDB's or the guard's message; E4 enriches it (§7.5).
 
 ### 6.4 System prompt rules (abridged)
 - Always resolve metric definitions through `search_knowledge` before computing anything.
