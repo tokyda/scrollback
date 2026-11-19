@@ -150,7 +150,14 @@ def test_check_gold_flags_problems() -> None:
     golds["q001"] = QuestionGold(empty)
     golds["q030"] = QuestionGold(GoldAnswer(["a"], [[1.0]]))  # 1 column, 2 units
     golds["q003"] = QuestionGold(GoldAnswer(["n"], [[11885]]))  # equals a wrong_value
-    problems = check_gold(QSET, golds)
+    bad = QSET.model_copy(
+        update={"questions": [
+            q.model_copy(update={"gold_sql": "SELECT local_date FROM fct_views"})
+            if q.id == "q002" else q for q in QSET.questions
+        ]}
+    )  # fmt: skip
+    problems = check_gold(bad, golds)
+    assert any(p.startswith("q002: gold SQL rejected by the agent's guard") for p in problems)
     assert any(p.startswith("q001: gold returned no rows") for p in problems)
     assert any(p.startswith("q030: gold has 1 columns but 2 units") for p in problems)
     assert any(p.startswith("q003: wrong_value 11885") for p in problems)

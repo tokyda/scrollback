@@ -612,7 +612,7 @@ questions:
     tests: sessions ranked by estimated watch time, dated by start date
     answer_type: ordered_table
     gold_sql: |
-      SELECT local_date FROM fct_sessions ORDER BY est_watch_sec DESC LIMIT 3
+      SELECT local_date FROM fct_sessions GROUP BY 1 ORDER BY max(est_watch_sec) DESC LIMIT 3
     units: [date]
     expected_metrics: [avg_session_minutes]
     likely_failure: wrong_metric_definition

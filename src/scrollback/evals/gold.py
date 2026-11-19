@@ -97,9 +97,17 @@ def _shape_problems(q: Question, answer: GoldAnswer, label: str) -> list[str]:
 
 
 def check_gold(qset: QuestionSet, golds: dict[str, QuestionGold]) -> list[str]:
+    from scrollback.agent.sql_guard import SqlGuardError, guard_sql
+
     metric_names = {m.name for m in load_metrics().metrics}
     problems: list[str] = []
     for q in qset.questions:
+        # Every gold must be expressible by the agent under aggregate_only.
+        for sql in ([q.gold_sql] if q.gold_sql else []) + q.alternatives:
+            try:
+                guard_sql(sql, result_mode="aggregate_only", max_rows=200)
+            except SqlGuardError as exc:
+                problems.append(f"{q.id}: gold SQL rejected by the agent's guard ({exc.rule})")
         unknown = sorted(set(q.expected_metrics) - metric_names)
         if unknown:
             problems.append(f"{q.id}: unknown expected_metrics {unknown}")
