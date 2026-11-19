@@ -45,6 +45,7 @@ class DbtResult:
     success: bool
     statuses: Counter[str] = field(default_factory=Counter)  # e.g. {"pass": 40, "warn": 1}
     failures: list[str] = field(default_factory=list)  # node names only, never row data
+    warnings: list[str] = field(default_factory=list)  # node names only
 
     def summary(self) -> str:
         parts = [f"{n} {status}" for status, n in sorted(self.statuses.items())]
@@ -118,4 +119,6 @@ def run_dbt(
         result.statuses[status] += 1
         if status in {"error", "fail"}:
             result.failures.append(str(node.get("unique_id")))
+        elif status == "warn":
+            result.warnings.append(str(node.get("unique_id")))
     return result
