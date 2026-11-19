@@ -80,3 +80,20 @@ def test_invalid_result_mode_rejected(tmp_path: Path) -> None:
 def test_bad_chat_ids_rejected(tmp_path: Path) -> None:
     with pytest.raises(ConfigError, match="comma-separated integers"):
         load_config(tmp_path / "config.yaml", environ={"TELEGRAM_ALLOWED_CHAT_IDS": "abc"})
+
+
+def test_last_view_default_cannot_exceed_cap(tmp_path: Path) -> None:
+    cfg = _write(
+        tmp_path / "config.yaml", "metrics:\n  view_cap_sec: 60\n  default_last_view_sec: 90\n"
+    )
+    with pytest.raises(ConfigError, match="default_last_view_sec must be <= view_cap_sec"):
+        load_config(cfg, environ={})
+
+
+def test_late_night_window_must_be_ordered(tmp_path: Path) -> None:
+    cfg = _write(
+        tmp_path / "config.yaml",
+        "metrics:\n  late_night_start_hour: 5\n  late_night_end_hour: 5\n",
+    )
+    with pytest.raises(ConfigError, match="late_night_start_hour"):
+        load_config(cfg, environ={})

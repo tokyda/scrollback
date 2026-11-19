@@ -164,12 +164,13 @@ None of these have been checked yet; all were built and tested against synthetic
 6. Run `dbt build`. *(Wired in Phase 2. Until then `ingest` prints that the step was skipped.)*
 
 ### 4.3 Core metric problem: there is no watch duration
-The export records **when a view started**, not how long it lasted, so watch time has to be estimated. The method is versioned in `metrics.yml` and parameterised by dbt vars. The parameter values live in `config.yaml` (`metrics:`) as the single source of truth, and `dbt_runner` passes them to dbt as `--vars`; `dbt_project.yml` only holds fallback defaults. *(Clarified: previously both files looked authoritative.)*
+The export records **when a view started**, not how long it lasted, so watch time has to be estimated. The method is versioned in `metrics.yml` and parameterised by dbt vars. The parameter values live in `config.yaml` (`metrics:`) as the single source of truth, and `dbt_runner` passes them (plus `source_tz` and `local_tz`) to dbt as `--vars`. `dbt_project.yml` has **no** var defaults, so running dbt directly without `--vars` fails loudly instead of using stale values. *(Changed: fallback defaults in `dbt_project.yml` were a second source of truth.)* dbt runs in a subprocess, because dbt-duckdb keeps its DuckDB connection open for the life of the process.
 
-- **Session:** an ordered run of views where the gap between consecutive views is ≤ `session_gap_min` (default **30 min**).
+- **Session:** an ordered run of views where the gap between consecutive views is ≤ `session_gap_min` (default **30 min**). A gap exactly equal to the threshold stays in the session. Views are ordered by UTC timestamp (so daylight-saving changes can't distort gaps), with ties in the same second broken by `view_id`.
 - **Per-view estimated watch seconds:**
   - not the last view in its session: `min(gap_to_next_view_sec, view_cap_sec)`, with `view_cap_sec` default **180**
-  - last view in its session: the median of the other estimates in that session, falling back to `default_last_view_sec` (default **20**)
+  - last view in its session: the median of the other estimates in that session, falling back to `default_last_view_sec` (default **20**) for a single-view session. For an even number of other estimates the median is the mean of the middle two, so `est_watch_sec` is a DOUBLE and can end in .5.
+  - config validation requires `default_last_view_sec ≤ view_cap_sec`, so every estimate lies in [0, `view_cap_sec`].
 - **Caveats, which the agent must surface when relevant:** pauses within the cap are counted as watching, long videos are undercounted at the cap, and background play is invisible.
 
 This estimate is the project's main data-definition story. It belongs in the README, and the agent cites it whenever "watch time" appears.
@@ -185,30 +186,33 @@ Every raw `*` table has an `extras JSON` column (NULL unless the record had unkn
 - `raw_rejects(reject_hash PK, dataset, payload JSON, reason, …metadata)`: the payload is the original record with its original keys
 - `ingest_log(ingest_id PK, source_file, file_sha256, variant, started_at, finished_at, rows_read, rows_new, rows_duplicate, rows_rejected, rejects_new, dataset_counts JSON)`: `dataset_counts` maps each dataset to `{present, read, valid, rejected, new, duplicate, unknown_fields}`, where `unknown_fields` holds key names only
 
-**staging** (typed, cleaned, deduped; one model per raw table)
-- `stg_watch(view_id, video_id, event_ts_utc, event_ts_local, local_date, local_hour, dow)`
-- `stg_like(video_id, event_ts_utc, event_ts_local, local_date)`
-- `stg_search(search_term, search_term_norm, event_ts_utc, event_ts_local, local_date)`
+**staging** (typed and timezone-converted views, one model per raw table; raw rows are already unique by `record_hash`, which becomes the row key)
+- `stg_watch(view_id, video_id, event_ts_utc, event_ts_local, local_date, local_hour, dow)`: `dow` is ISO, 1 = Monday … 7 = Sunday
+- `stg_like(like_id, video_id, event_ts_utc, event_ts_local, local_date)`, `stg_favorite(favorite_id, …same)`
+- `stg_search(search_id, search_term, search_term_norm, event_ts_utc, event_ts_local, local_date)`: `search_term_norm` is NFC, lower-case, trimmed, single-spaced
+- `stg_share(share_id, video_id, method, shared_content, event_ts_utc, event_ts_local, local_date)`
+*(Added `stg_favorite` and `stg_share`; they have no marts yet because no metric uses them.)*
 
 **intermediate**
 - `int_view_gaps`: each view joined to the next view's timestamp, plus `gap_sec`
-- `int_sessions`: session assignment via a running sum of "new session" flags
+- `int_sessions`: session assignment via a running sum of "new session" flags. `session_id` is the `view_id` of the session's first view, so it's stable across rebuilds.
 
 **marts** (the only layer the agent may query)
-- `fct_views(view_id, video_id, session_id, event_ts_local, local_date, local_hour, dow, is_weekend, is_late_night, est_watch_sec, is_rewatch)`
-- `fct_sessions(session_id, start_ts_local, end_ts_local, local_date, n_views, est_watch_sec, is_binge)`
-- `fct_likes(video_id, event_ts_local, local_date, liked_after_watch BOOL)`
-- `fct_searches(search_term_norm, event_ts_local, local_date)`
-- `dim_date(local_date, dow, dow_name, is_weekend, iso_week, month, year)`: a spine covering the full data range, so zero-activity days exist
-- `agg_daily(local_date, views, est_watch_min, sessions, longest_session_min, late_night_views, likes, searches)`: built from `dim_date` with left joins, so missing days are 0, not absent
+- `fct_views(view_id, video_id, session_id, event_ts_utc, event_ts_local, local_date, local_hour, dow, is_weekend, is_late_night, gap_to_next_sec, view_seq_in_session, is_last_in_session, est_watch_sec, is_rewatch)`. `is_rewatch` is true when the same video was viewed **earlier in the loaded history**, at any distance; views from before the export window are invisible. *(Resolves the §14 open question.)* `is_late_night` is `local_hour` in [`late_night_start_hour`, `late_night_end_hour`).
+- `fct_sessions(session_id, start_ts_local, end_ts_local, local_date, n_views, est_watch_sec, is_binge)`. `local_date` is the session's **start** date. `end_ts_local` is the **observed** start of the last view, not an estimated end. `is_binge` is `est_watch_sec ≥ binge_threshold_min × 60`.
+- `fct_likes(like_id, video_id, event_ts_local, local_date, liked_after_watch BOOL)`. `liked_after_watch` is true when a view of the same video happened at or before the like and at most `session_gap_min` minutes earlier.
+- `fct_searches(search_id, search_term_norm, event_ts_local, local_date)`
+- `dim_date(local_date, dow, dow_name, is_weekend, iso_week, week_start, month, month_start, year)`: a contiguous spine from the first to the **last date with any event** (views, likes, searches). It doesn't extend to today: days after the latest export are unknown, not zero. `iso_week` is a label like `2026-W47`, and `week_start` is its Monday.
+- `agg_daily(local_date, dow, is_weekend, views, est_watch_min, sessions, longest_session_min, late_night_views, likes, searches, is_active, active_days_7d)`: built from `dim_date` with left joins, so missing days are 0, not absent. View-level columns use each view's own date; `sessions` and `longest_session_min` use the session's start date. `active_days_7d` counts active days in the 7 days ending on that date.
+- The day boundary is **local midnight** in `LOCAL_TZ`.
 - `dim_video(video_id, title, author_name, enriched_at)`: optional, filled by enrichment (Phase 8)
 
 **dbt tests**
 - `unique` / `not_null` on keys
-- `accepted_range`: `est_watch_sec` between 0 and `view_cap_sec`, `local_hour` between 0 and 23
+- `accepted_range` (a generic test in `dbt/macros/`, so there's no `dbt_utils` dependency): `est_watch_sec` between 0 and `view_cap_sec`, `local_hour` between 0 and 23, `active_days_7d` between 0 and 7
 - relationships: `fct_views.session_id → fct_sessions`
-- custom: no `local_date` in the future; `agg_daily` row count equals the `dim_date` span; daily views don't exceed a sanity bound (e.g. 3,000)
-- freshness: warn if the latest event is more than N days old
+- custom: no `local_date` in the future; `agg_daily` row count equals the `dim_date` span; daily views don't exceed `max_daily_views` (3,000); session totals equal the sum of their views
+- freshness: a singular test with `severity: warn` that fires when the latest event is more than `freshness_warn_days` (14) days old. *(Changed from dbt source freshness, which `dbt build` doesn't run.)*
 
 ### 4.5 Synthetic data generator
 `scrollback synth --days 180 --seed 42 --end 2026-11-19 --variant v2_your_activity --out data/sample/user_data_tiktok.json`
@@ -530,5 +534,5 @@ scrollback/
 ## 14. Open questions
 - Is the export timestamp actually UTC? Verify against a real export.
 - Which export variants does the parser need to support? Collect one real export early.
-- Should `is_rewatch` count a video as a rewatch on any repeat, or only after a gap?
+- ~~Should `is_rewatch` count a video as a rewatch on any repeat, or only after a gap?~~ Any repeat (§4.4).
 - What should the default binge threshold and session gap be? Tune them by looking at the distribution of your real gaps.

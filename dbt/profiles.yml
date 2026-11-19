@@ -1,0 +1,8 @@
+# The warehouse path is set by scrollback's dbt runner (src/scrollback/warehouse/dbt_runner.py).
+scrollback:
+  target: local
+  outputs:
+    local:
+      type: duckdb
+      path: "{{ env_var('SCROLLBACK_DUCKDB_PATH') }}"
+      threads: 1

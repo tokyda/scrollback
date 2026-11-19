@@ -1,0 +1,22 @@
+version: 2
+
+models:
+  - name: int_view_gaps
+    description: Each view with the gap to the next view and from the previous one, in seconds.
+    columns:
+      - name: view_id
+        data_tests: [unique, not_null]
+      - name: gap_sec
+        description: Seconds to the next view (null for the very last view).
+        data_tests:
+          - accepted_range: {arguments: {min_value: 0}}
+  - name: int_sessions
+    description: >
+      Views with session assignment. A new session starts when the gap from the previous view
+      exceeds session_gap_min minutes.
+    columns:
+      - name: view_id
+        data_tests: [unique, not_null]
+      - name: session_id
+        description: view_id of the first view in the session.
+        data_tests: [not_null]

@@ -1,0 +1,43 @@
+version: 2
+
+models:
+  - name: stg_watch
+    description: One row per view event from raw_watch, typed and timezone-converted.
+    columns:
+      - name: view_id
+        description: Stable view key (the ingest record_hash).
+        data_tests: [unique, not_null]
+      - name: video_id
+        data_tests: [not_null]
+      - name: event_ts_utc
+        description: View start time in UTC (naive).
+        data_tests: [not_null]
+      - name: event_ts_local
+        description: View start time in local_tz (naive).
+      - name: local_date
+        description: Calendar date of the view in local_tz; days start at local midnight.
+      - name: local_hour
+        data_tests:
+          - accepted_range: {arguments: {min_value: 0, max_value: 23}}
+      - name: dow
+        description: ISO day of week, 1 = Monday ... 7 = Sunday.
+  - name: stg_like
+    columns:
+      - name: like_id
+        data_tests: [unique, not_null]
+  - name: stg_favorite
+    columns:
+      - name: favorite_id
+        data_tests: [unique, not_null]
+  - name: stg_search
+    columns:
+      - name: search_id
+        data_tests: [unique, not_null]
+      - name: search_term_norm
+        description: Lower-cased, trimmed, whitespace-collapsed search term.
+  - name: stg_share
+    columns:
+      - name: share_id
+        data_tests: [unique, not_null]
+      - name: video_id
+        description: Null for non-video shares (e.g. a profile link).
