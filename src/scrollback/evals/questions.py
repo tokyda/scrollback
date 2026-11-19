@@ -23,7 +23,8 @@ Category = Literal[
     "session_derived", "multi_step", "ambiguous", "unanswerable", "trap",
 ]  # fmt: skip
 CATEGORIES: tuple[str, ...] = Category.__args__  # type: ignore[attr-defined]
-AnswerType = Literal["scalar", "table", "ordered_table", "refusal"]
+# no_data: the right answer is "there is no data for that"; any stated amount fails.
+AnswerType = Literal["scalar", "table", "ordered_table", "refusal", "no_data"]
 # Units drive tolerant matching: ratio also matches a percentage, durations match in
 # seconds/minutes/hours, dates/hours/days of week match in several spellings.
 Unit = Literal[
@@ -72,15 +73,17 @@ class Question(_Strict):
 
     @model_validator(mode="after")
     def _consistent(self) -> Question:
-        if self.answer_type == "refusal":
+        if self.answer_type in ("refusal", "no_data"):
             if self.gold_sql or self.alternatives:
-                raise ValueError(f"{self.id}: refusal questions have no gold_sql")
+                raise ValueError(f"{self.id}: {self.answer_type} questions have no gold_sql")
         elif not self.gold_sql:
             raise ValueError(f"{self.id}: gold_sql is required")
         if (self.category == "unanswerable") != (self.answer_type == "refusal"):
             raise ValueError(f"{self.id}: unanswerable <=> answer_type refusal")
         if self.alternatives and self.category != "ambiguous":
             raise ValueError(f"{self.id}: alternatives are only for ambiguous questions")
+        if self.answer_type == "no_data" and self.category != "trap":
+            raise ValueError(f"{self.id}: no_data is only used for trap questions")
         if self.category == "trap" and not self.requires_caveat:
             raise ValueError(f"{self.id}: trap questions require a caveat")
         if self.answer_type == "scalar" and len(self.units) != 1:

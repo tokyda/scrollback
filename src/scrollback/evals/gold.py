@@ -66,7 +66,7 @@ def compute_golds(qset: QuestionSet, warehouses: dict[date, Path]) -> dict[str, 
     cons = {d: duckdb.connect(str(p), read_only=True) for d, p in warehouses.items()}
     try:
         for q in qset.questions:
-            if q.answer_type == "refusal":
+            if q.answer_type in ("refusal", "no_data"):
                 golds[q.id] = QuestionGold(None)
                 continue
             con = cons[q.today]

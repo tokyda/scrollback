@@ -371,7 +371,7 @@ def eval_check_gold(
     if show:
         for q in qset.questions:
             g = golds[q.id]
-            value = "refusal" if g.gold is None else g.gold.rows
+            value = q.answer_type if g.gold is None else g.gold.rows
             typer.echo(f"{q.id} [{q.category}/{q.split}] {value}")
             for i, alt in enumerate(g.alternatives, 1):
                 typer.echo(f"      alt{i}: {alt.rows}")

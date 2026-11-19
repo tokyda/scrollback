@@ -1015,12 +1015,12 @@ questions:
     answer_type: refusal
 
   - id: q064
-    question: "What kind of videos do I watch most: comedy, food or music?"
+    question: How much money have I spent on TikTok coins or gifts?
     category: unanswerable
-    difficulty: medium
+    difficulty: easy
     split: dev
     today: 2026-11-20
-    tests: no video content or categories (search terms are not what was watched)
+    tests: no purchase data and no proxy for it
     answer_type: refusal
 
   - id: q065
@@ -1033,12 +1033,12 @@ questions:
     answer_type: refusal
 
   - id: q066
-    question: How many videos did I skip before they finished yesterday?
+    question: Who sends me the most TikTok videos in direct messages?
     category: unanswerable
-    difficulty: medium
+    difficulty: easy
     split: test
     today: 2026-11-20
-    tests: only view starts are recorded; finished/skipped is unknown
+    tests: direct messages are not modelled; no proxy for senders
     answer_type: refusal
 
   - id: q067
@@ -1108,19 +1108,13 @@ questions:
     difficulty: hard
     split: dev
     today: 2026-11-20
-    tests: the export ends yesterday, so today is unknown (0 in the data) and must be caveated
-    answer_type: scalar
-    gold_sql: |
-      SELECT coalesce(sum(est_watch_sec), 0) / 60.0 FROM fct_views WHERE local_date = DATE '2026-11-20'
-    units: [minutes]
-    tolerance: 0.05
-    expected_metrics: [est_watch_minutes]
+    tests: the export ends yesterday; pass only if it says there is no data for today, and any stated amount (even 0) fails (unknown is not zero)
+    answer_type: no_data
     requires_caveat: true
-    expect_empty: false
-    likely_failure: missing_caveat
+    likely_failure: failed_refusal
 
   - id: q073
-    question: What is the longest time I spent on a single video, in minutes?
+    question: What was my longest single viewing, in minutes?
     category: trap
     difficulty: hard
     split: test
@@ -1168,7 +1162,7 @@ questions:
     likely_failure: missing_caveat
 
   - id: q076
-    question: On average, how long do I watch each video, in seconds?
+    question: What is my average estimated watch time per view, in seconds?
     category: trap
     difficulty: medium
     split: test

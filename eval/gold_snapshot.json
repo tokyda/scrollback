@@ -1024,16 +1024,7 @@
   "alternatives": []
  },
  "q072": {
-  "gold": {
-   "columns": [
-    "(COALESCE(sum(est_watch_sec), 0) / 60.0)"
-   ],
-   "rows": [
-    [
-     0.0
-    ]
-   ]
-  },
+  "gold": null,
   "alternatives": []
  },
  "q073": {

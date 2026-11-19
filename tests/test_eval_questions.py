@@ -75,6 +75,11 @@ def test_params_match_current_defaults() -> None:
         (lambda d: d["questions"].append(dict(d["questions"][0])), "duplicate question ids"),
         (lambda d: d["questions"][0].update(gold_sql=None), "gold_sql is required"),
         (lambda d: d["questions"][62].update(gold_sql="SELECT 1"), "no gold_sql"),
+        (lambda d: d["questions"][71].update(gold_sql="SELECT 1"), "no_data questions have no"),
+        (
+            lambda d: d["questions"][0].update(answer_type="no_data", gold_sql=None),
+            "only used for trap",
+        ),
         (lambda d: d["questions"][0].update(alternatives=["SELECT 1"]), "only for ambiguous"),
         (lambda d: d["questions"][69].update(requires_caveat=False), "require a caveat"),
         (lambda d: d["questions"][0].update(category="unanswerable"), "unanswerable <=>"),

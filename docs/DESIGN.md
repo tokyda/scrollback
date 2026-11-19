@@ -446,6 +446,9 @@ Gold answers are computed by running `gold_sql` against the **synthetic dataset 
   - `requires_caveat` (true for every `trap`);
   - `likely_failure` (a hint for label suggestion);
   - `expect_empty`.
+- **`answer_type: no_data`** *(added)*, `trap` only. The right answer is "there's no data for that" (e.g. "today" when the export ends yesterday). It passes only if the answer says so, and **any** stated amount, including 0, fails, because unknown isn't zero (§4.4 `dim_date` coverage).
+- **Ties:** ranking and top-N golds were checked for ties at their cutoff (none at review, 2026-11-20). Ties below the cutoff don't matter, because a top-N answer is scored on its first N rows only. If a future gold has a tie at the cutoff, every tied answer must be listed as an alternative.
+- **Unanswerable questions have no reasonable proxy in the data.** No search terms or gaps can stand in for the answer, so a refusal is the only right answer.
 - **Writing rules.** Gold SQL follows `knowledge/metrics.yml` and the glossary, and questions were written without running the agent on them.
 - **`scrollback eval check-gold`** (runs in CI) validates the schema and its invariants: unique ids, ≥ 6 per category, both splits in every category, refusal ⇔ `unanswerable`, caveat ⇔ `trap`. It also runs every gold SQL and alternative and checks shapes, that `expected_metrics` exist, and that no wrong value equals its gold. Finally it compares against the committed `eval/gold_snapshot.json`, so any gold change (from models, generator or params) is a deliberate `--update`.
 
