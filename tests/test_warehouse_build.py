@@ -28,7 +28,28 @@ def test_dbt_build_passes_every_test(synthetic_warehouse: BuiltWarehouse) -> Non
     assert result.failures == []
     assert result.statuses["pass"] >= 45  # data tests
     assert result.statuses["success"] == 13  # models
-    assert set(result.statuses) <= {"pass", "success"}  # no warn / error / skip
+    assert set(result.statuses) <= {"pass", "success", "warn"}  # no error / fail / skip
+    # The synthetic data ends 2026-11-19, so the freshness check starts warning (by design)
+    # 14 days later. That is the only test allowed to warn.
+    assert all(w.endswith(".assert_data_freshness") for w in result.warnings), result.warnings
+
+
+def test_freshness_warns_but_does_not_fail(tmp_path: Path) -> None:
+    from datetime import date
+
+    from scrollback.synth.generator import synthesize, write
+
+    export = tmp_path / "old_export.json"
+    write(synthesize(days=14, end=date(2026, 10, 1)), export)
+    db_path = tmp_path / "wh.duckdb"
+    con = connect(db_path)
+    ingest_file(con, export)
+    con.close()
+    # Data ends 2026-10-01, more than 7 days before any date this test runs on.
+    settings = repo_settings(freshness_warn_days=7)
+    result = run_dbt(settings, db_path, quiet=True, target_path=tmp_path / "target")
+    assert result.success
+    assert result.warnings == ["test.scrollback.assert_data_freshness"]
 
 
 def test_vars_come_from_config_only() -> None:
