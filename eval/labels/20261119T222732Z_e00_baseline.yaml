@@ -42,16 +42,6 @@ failures:
   suspect_scoring: 'leads with wrong-definition value 5.241667 but also states the gold value: check that
     the wrong value is the headline, not labelled context'
   label: wrong_metric_definition
-- question: q067
-  repeat: 1
-  category: unanswerable
-  split: dev
-  suggested: failed_refusal
-  reason: answered with numbers [566.0] instead of refusing
-  suspect_scoring: refusal phrase found but numbers [566.0] counted as made up
-  label: null
-  note: 'pending owner decision: refusal leads, but 566 is fct_likes'' row count from describe_table,
-    not a run_sql result, so it is ungrounded under fix D'
 - question: q075
   repeat: 1
   category: trap
@@ -86,6 +76,17 @@ failures:
   suspect_scoring: 'leads with wrong-definition value 17.78 but also states the gold value: check that
     the wrong value is the headline, not labelled context'
   label: wrong_metric_definition
+- question: q034
+  repeat: 2
+  category: comparison
+  split: dev
+  suggested: wrong_time_window
+  reason: date literals ['2026-11-09', '2026-11-20'] vs gold ['2026-11-09', '2026-11-15', '2026-11-16',
+    '2026-11-20']
+  suspect_scoring: text states the gold value but no cited result matched
+  label: null
+  note: 'suspected scoring false negative under the tightened fix B: a correct total summed from per-day
+    rows without itemising the rows; pending owner decision'
 - question: q042
   repeat: 2
   category: session_derived
@@ -138,6 +139,17 @@ failures:
   suspect_scoring: 'leads with wrong-definition value 17.78 but also states the gold value: check that
     the wrong value is the headline, not labelled context'
   label: wrong_metric_definition
+- question: q034
+  repeat: 3
+  category: comparison
+  split: dev
+  suggested: wrong_time_window
+  reason: date literals ['2026-11-09', '2026-11-20'] vs gold ['2026-11-09', '2026-11-15', '2026-11-16',
+    '2026-11-20']
+  suspect_scoring: text states the gold value but no cited result matched
+  label: null
+  note: 'suspected scoring false negative under the tightened fix B: a correct total summed from per-day
+    rows without itemising the rows; pending owner decision'
 - question: q042
   repeat: 3
   category: session_derived
@@ -189,7 +201,17 @@ failures:
   reason: leads with 75.6, a wrong-definition value
   suspect_scoring: null
   label: wrong_metric_definition
+confirmed:
+  by: owner
+  date: '2026-11-20'
+  decision: 15 wrong_metric_definition, 3 missing_caveat, 1 answer_misreport (q060 r3). q067 r1 passes
+    with describe_table grounding. q034 r2/r3 pending (tightened fix B).
 rescored_to_pass:
+- question: q067
+  repeat: 1
+  before: false
+  after: true
+  old_label: failed_refusal
 - question: q096
   repeat: 1
   before: false
@@ -210,10 +232,14 @@ rescored_to_pass:
   before: false
   after: true
   old_label: failed_refusal
-rescored_to_fail: []
-confirmed:
-  by: owner
-  date: '2026-11-20'
-  decision: 'Confirmed: 15 wrong_metric_definition (q023, q042, q062, q084, q087 x3), 3 missing_caveat
-    (q075 x2, q071 x1), 1 answer_misreport (q060 r3: 16.45% reported as 17%). Group D (refusal + context
-    numbers) fixed in the scorer with grounding (fix D); 4 runs re-scored to pass. q067 r1 pending.'
+rescored_to_fail:
+- question: q034
+  repeat: 2
+  before: true
+  after: false
+  old_label: null
+- question: q034
+  repeat: 3
+  before: true
+  after: false
+  old_label: null
