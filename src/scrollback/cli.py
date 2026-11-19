@@ -1,0 +1,126 @@
+"""Scrollback command-line interface (DESIGN §8)."""
+
+from __future__ import annotations
+
+from typing import Annotated
+
+import typer
+
+app = typer.Typer(
+    name="scrollback",
+    help="An LLM data agent over your own TikTok watch history.",
+    no_args_is_help=True,
+    add_completion=False,
+)
+eval_app = typer.Typer(help="Evaluation harness (DESIGN §7).", no_args_is_help=True)
+kb_app = typer.Typer(help="Knowledge base for retrieval (DESIGN §5).", no_args_is_help=True)
+alerts_app = typer.Typer(help="Anomaly alerts (DESIGN §9).", no_args_is_help=True)
+digest_app = typer.Typer(help="Weekly 'Scrollback Wrapped' digest.", no_args_is_help=True)
+serve_app = typer.Typer(help="Run the HTTP API or the Telegram bot.", no_args_is_help=True)
+
+app.add_typer(eval_app, name="eval")
+app.add_typer(kb_app, name="kb")
+app.add_typer(alerts_app, name="alerts")
+app.add_typer(digest_app, name="digest")
+app.add_typer(serve_app, name="serve")
+
+NOT_IMPLEMENTED_EXIT_CODE = 2
+
+
+def _not_implemented(command: str, when: str) -> None:
+    typer.echo(f"`scrollback {command}` is not implemented yet ({when}).", err=True)
+    raise typer.Exit(NOT_IMPLEMENTED_EXIT_CODE)
+
+
+@app.command()
+def ingest() -> None:
+    """Ingest a TikTok data export into the warehouse."""
+    _not_implemented("ingest", "Phase 1")
+
+
+@app.command()
+def synth() -> None:
+    """Generate a synthetic TikTok export."""
+    _not_implemented("synth", "Phase 1")
+
+
+@app.command()
+def build() -> None:
+    """Run `dbt build` on the warehouse."""
+    _not_implemented("build", "Phase 2")
+
+
+@app.command()
+def ask(
+    question: Annotated[str, typer.Argument(help="Question in plain English.")],
+    show_sql: Annotated[bool, typer.Option("--show-sql", help="Print the SQL used.")] = False,
+    chart: Annotated[bool, typer.Option("--chart", help="Render a chart if useful.")] = False,
+) -> None:
+    """Ask the agent a question about your viewing history."""
+    _not_implemented("ask", "Phase 3")
+
+
+@app.command()
+def enrich(
+    limit: Annotated[int, typer.Option(help="Maximum number of videos to enrich.")] = 500,
+) -> None:
+    """Opt-in oEmbed enrichment of video titles and authors."""
+    _not_implemented("enrich", "stretch")
+
+
+@eval_app.command("run")
+def eval_run(
+    config: Annotated[str, typer.Option(help="Experiment config YAML.")],
+    repeat: Annotated[int, typer.Option(help="Number of repeated runs.")] = 3,
+) -> None:
+    """Run the eval set against an experiment config."""
+    _not_implemented("eval run", "Phase 4")
+
+
+@eval_app.command("report")
+def eval_report(
+    run_a: Annotated[str, typer.Argument(help="Baseline run directory.")],
+    run_b: Annotated[str | None, typer.Argument(help="Comparison run directory.")] = None,
+) -> None:
+    """Produce a markdown report for one run or a comparison of two."""
+    _not_implemented("eval report", "Phase 4")
+
+
+@eval_app.command("import-feedback")
+def eval_import_feedback() -> None:
+    """Turn bad bot feedback into candidate eval questions."""
+    _not_implemented("eval import-feedback", "Phase 6")
+
+
+@kb_app.command("index")
+def kb_index() -> None:
+    """Embed metrics, docs, schema and examples into DuckDB."""
+    _not_implemented("kb index", "Phase 5")
+
+
+@alerts_app.command("check")
+def alerts_check() -> None:
+    """Check yesterday's metrics for anomalies."""
+    _not_implemented("alerts check", "stretch")
+
+
+@digest_app.command("send")
+def digest_send() -> None:
+    """Send the weekly digest."""
+    _not_implemented("digest send", "stretch")
+
+
+@serve_app.command("api")
+def serve_api() -> None:
+    """Run the FastAPI service."""
+    _not_implemented("serve api", "stretch")
+
+
+@serve_app.command("bot")
+def serve_bot() -> None:
+    """Run the Telegram bot."""
+    _not_implemented("serve bot", "Phase 6")
+
+
+if __name__ == "__main__":  # pragma: no cover
+    app()
