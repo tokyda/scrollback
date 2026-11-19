@@ -96,10 +96,51 @@ def ingest(
     typer.echo("dbt build: skipped (warehouse models arrive in Phase 2)")
 
 
+SAMPLE_FILE_NAME = "user_data_tiktok.json"
+
+
 @app.command()
-def synth() -> None:
-    """Generate a synthetic TikTok export."""
-    _not_implemented("synth", "Phase 1")
+def synth(
+    days: Annotated[int, typer.Option(min=1, help="Number of days of history.")] = 180,
+    seed: Annotated[int, typer.Option(help="Random seed (same seed = same output).")] = 42,
+    end: Annotated[
+        str, typer.Option(help="Last local date covered, YYYY-MM-DD (fixed for determinism).")
+    ] = "2026-11-19",
+    variant: Annotated[
+        str, typer.Option(help="Export format variant: v1_activity or v2_your_activity.")
+    ] = "v2_your_activity",
+    local_tz: Annotated[
+        str, typer.Option(help="Timezone the synthetic person lives in.")
+    ] = "Asia/Singapore",
+    out: Annotated[
+        Path | None,
+        typer.Option(help=f"Output file (default: <paths.sample_dir>/{SAMPLE_FILE_NAME})."),
+    ] = None,
+    config: ConfigOption = None,
+) -> None:
+    """Generate a synthetic TikTok export (and a manifest of expected counts)."""
+    from datetime import date
+
+    from scrollback.synth.generator import synthesize, write
+
+    try:
+        end_date = date.fromisoformat(end)
+        result = synthesize(days=days, seed=seed, end=end_date, variant=variant, local_tz=local_tz)
+    except ValueError as exc:
+        typer.echo(f"synth failed: {exc}", err=True)
+        raise typer.Exit(1) from None
+    out_path = out or _settings(config).paths.sample_dir / SAMPLE_FILE_NAME
+    manifest_path = write(result, out_path)
+    totals = result.manifest["expected"]["totals"]
+    typer.echo(
+        f"Wrote {out_path} ({variant}, {result.manifest['start']}..{result.manifest['end']}, "
+        f"seed {seed})"
+    )
+    typer.echo(
+        f"records {totals['records']}, expected valid_unique {totals['valid_unique']}, "
+        f"duplicates {totals['duplicates']}, rejected {totals['rejected']}"
+    )
+    typer.echo(f"Manifest: {manifest_path}")
 
 
 @app.command()
