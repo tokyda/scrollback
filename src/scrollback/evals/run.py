@@ -178,6 +178,10 @@ def run_one(
             if rid in result.results:
                 r = result.results[rid]
                 cited[rid] = ResultTable(r.columns, [[_jsonable(v) for v in row] for row in r.rows])
+    all_results = {
+        rid: ResultTable(r.columns, [[_jsonable(v) for v in row] for row in r.rows])
+        for rid, r in result.results.items()
+    }
     out = AgentOutput(
         status=result.status,
         text=answer.text if answer else "",
@@ -185,6 +189,7 @@ def run_one(
         metrics_used=answer.metrics_used if answer else [],
         assumptions=answer.assumptions if answer else [],
         results=cited,
+        all_results=all_results,
     )
     s = score(q, gold, out)
     trace = result.trace
@@ -214,6 +219,10 @@ def run_one(
         "assumptions": out.assumptions,
         "metrics_used": out.metrics_used,
         "sql_used": sql_used,
+        "all_results": {
+            rid: {"columns": r.columns, "rows": r.rows[:RESULT_ROWS_KEPT]}
+            for rid, r in all_results.items()
+        },
         "cited_results": {
             rid: {"columns": r.columns, "rows": r.rows[:RESULT_ROWS_KEPT]}
             for rid, r in cited.items()
@@ -390,6 +399,7 @@ def rescore_run(
                 rid: ResultTable(c["columns"], c["rows"])
                 for rid, c in r.get("cited_results", {}).items()
             },
+            all_results=_all_results(r, traces.get(r.get("trace_id"), {})),
         )
         s = score(q, golds[q.id], out)
         tool_calls = traces.get(r.get("trace_id"), {}).get("tool_calls", [])
@@ -443,3 +453,26 @@ def rescore_run(
         render_report(summary, new_records, qset, load_confirmed(label_path))
     )
     return {"changed": changed, "summary": summary}
+
+
+def _all_results(record: dict[str, Any], trace: dict[str, Any]) -> dict[str, ResultTable]:
+    """Every successful run_sql result of a run: from the record, else rebuilt from its trace."""
+    if record.get("all_results"):
+        return {
+            rid: ResultTable(c["columns"], c["rows"]) for rid, c in record["all_results"].items()
+        }
+    out = {
+        rid: ResultTable(c["columns"], c["rows"])
+        for rid, c in record.get("cited_results", {}).items()
+    }
+    for call in trace.get("tool_calls", []):
+        if call.get("name") != "run_sql" or call.get("is_error"):
+            continue
+        try:
+            payload = json.loads(call.get("output", ""))
+        except json.JSONDecodeError:
+            continue  # output was truncated in the trace
+        rid = payload.get("result_id")
+        if rid and rid not in out:
+            out[rid] = ResultTable(payload.get("columns", []), payload.get("rows", []))
+    return out

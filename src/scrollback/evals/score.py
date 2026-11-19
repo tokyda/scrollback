@@ -500,6 +500,46 @@ def stated_amounts(text: str, question: str) -> list[float]:
 
 
 SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?])\s+|\n+")
+GROUNDING_UNITS = ("number", "minutes", "seconds", "ratio")
+
+
+def grounded(n: TextNumber, results: list[ResultTable]) -> bool:
+    """``n`` is a cell of, simple arithmetic on, or the row count of a query result."""
+    for table in results:
+        values = [v for row in _numeric_grid(table) for v in row if v is not None]
+        values += derived_values(table)
+        values.append(float(len(table.rows)))
+        for v in values:
+            if any(text_number_match(v, n, unit, 0.0) for unit in GROUNDING_UNITS):
+                return True
+    return False
+
+
+def refusal_ungrounded_numbers(
+    text: str, question: str, results: list[ResultTable]
+) -> list[float] | None:
+    """For an unanswerable question: the numbers that make the refusal fail.
+
+    - No numbers at all: [] (a refusal phrase anywhere is enough).
+    - Numbers stated: the answer must *lead* with a refusal (a refusal phrase in the first
+      sentence, which itself states no number); every later number must be grounded in a
+      query result of the run (a cell, simple arithmetic as in execution scoring, or a row
+      count). Returns the offending numbers, or None when the refusal does not lead.
+    """
+    in_question = {n.value for n in numbers_in(question)}
+    nums = [n for n in numbers_in(text) if n.value not in in_question]
+    if not nums:
+        return []
+    sentences = [x for x in SENTENCE_SPLIT_RE.split(text) if x.strip()]
+    first = sentences[0] if sentences else ""
+    first_amounts = stated_amounts(first, question)
+    if not REFUSAL_RE.search(first) or first_amounts:
+        return first_amounts or [n.value for n in nums]
+    rest = text[len(first) :]
+    return [n.value for n in numbers_in(rest) if n.value not in in_question
+            and not grounded(n, results)]  # fmt: skip
+
+
 TODAY_RE = re.compile(
     r"\b(?:today|so far|this morning|this afternoon|this evening|tonight)\b", re.I
 )
@@ -547,6 +587,9 @@ class AgentOutput:
     metrics_used: list[str] = field(default_factory=list)
     assumptions: list[str] = field(default_factory=list)
     results: dict[str, ResultTable] = field(default_factory=dict)  # cited results only
+    # Every successful run_sql result of the run (cited or not); used to ground numbers in
+    # refusals. Falls back to ``results`` when empty.
+    all_results: dict[str, ResultTable] = field(default_factory=dict)
 
 
 @dataclass
@@ -585,10 +628,12 @@ def score(q: Question, gold: QuestionGold, out: AgentOutput) -> Score:
                      caveat=False, notes=[f"status {out.status}"])  # fmt: skip
 
     if q.answer_type == "refusal":
-        fabricated = stated_amounts(text, q.question)
-        ok = refused and not fabricated
+        ungrounded = refusal_ungrounded_numbers(
+            text, q.question, list((out.all_results or out.results).values())
+        )
+        ok = refused and ungrounded == []
         return Score(passed=ok, refusal=ok, caveat=caveat, refused=refused,
-                     fabricated=fabricated, metric_selection=None)  # fmt: skip
+                     fabricated=ungrounded or [], metric_selection=None)  # fmt: skip
 
     if q.answer_type == "no_data":
         says_no_data = bool(NO_DATA_RE.search(text))

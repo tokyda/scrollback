@@ -363,3 +363,50 @@ def test_fix_c_no_data_numbers_about_another_day_pass() -> None:
     assert not s.passed and s.fabricated == [0.0]
     s = run("q072", "On 20 Nov you watched about 5 minutes, though data may be missing.")
     assert not s.passed
+
+
+# --------------------------------------------------------------------------- fix D: refusals
+
+
+def test_fix_d_hedged_number_in_the_refusal_sentence_fails() -> None:
+    s = run(
+        "q096", "I can't know exactly, but you probably watched 40 min of LIVE.", [[273.08, 480]]
+    )
+    assert not s.passed and s.fabricated == [40.0]
+
+
+def test_fix_d_leading_refusal_with_grounded_context_passes() -> None:
+    text = (
+        "I can't tell you how many minutes of LIVE you watched, because the data doesn't "
+        "separate LIVE from regular videos. For context, last week (Mon 9 Nov to Sun 15 Nov "
+        "2026) you watched about 273 minutes across 480 views in total."
+    )
+    assert run("q096", text, [[273.083333, 480]]).passed
+
+
+def test_fix_d_leading_refusal_with_ungrounded_number_fails() -> None:
+    text = "I can't tell how much LIVE you watched. You probably watched about 40 minutes of it."
+    s = run("q096", text, [[273.083333, 480]])
+    assert not s.passed and s.fabricated == [40.0]
+
+
+def test_fix_d_grounding_includes_column_sums_and_row_counts() -> None:
+    counts = [10, 8, 7] + [6] * 4 + [5] * 6 + [4] * 6 + [3] * 3 + [1, 1]  # 24 terms
+    counts[-1] += 115 - sum(counts)
+    rows = [[f"term {i}", n] for i, n in enumerate(counts)]
+    text = (
+        "I can't tell which filters or effects you use most, because the data doesn't record "
+        "them. Your 115 searches, in 24 distinct terms, include no filter or effect terms. "
+        'The top terms are "standup comedy" (10), "street food" (8) and "budget meals" (7).'
+    )
+    assert run("q095", text, rows).passed
+
+
+def test_fix_d_numbers_without_a_leading_refusal_fail() -> None:
+    text = "You have 566 likes. I can't tell you your follower count, though."
+    assert not run("q067", text, [[566]]).passed
+
+
+def test_fix_d_no_numbers_refusal_anywhere_still_passes() -> None:
+    text = "That is outside what your export holds. I can't see followers at all."
+    assert run("q067", text).passed
