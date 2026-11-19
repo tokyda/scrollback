@@ -248,6 +248,15 @@ The single source of truth for metric definitions. It's used in three places:
 2. the `query_metric` tool, which compiles the definition to SQL
 3. the generated docs page
 
+**Schema** (validated by pydantic in `src/scrollback/semantic/metrics.py`) *(changed: adds `type`, `unit`, `params` and a shared caveat vocabulary)*:
+- top level: `version`; `watch_time_method {name, version, doc, summary}`, which versions the §4.3 estimation; `caveats {key: text}`, which defines every caveat key once; and `metrics`.
+- per metric: `name`, `label`, `description`, `type`, `sql`, `table` (marts only), `time_column`, `default_grain` (day/week/month), `unit` (count/minutes/ratio/days), `params` (config parameters the metric depends on), `caveats` (keys from the top-level map), `synonyms`.
+- **`type: simple`**: `sql` is a single aggregate expression over `table`. It's compiled as `SELECT <sql> FROM <table> WHERE <time_column> BETWEEN $start AND $end`, optionally grouped by `time_column` for a per-day series.
+- **`type: query`**: `sql` is a complete query returning one `value`, using the named parameters `$start` and `$end`. This is for metrics that aren't one aggregate over one table (`streak_days`, a gaps-and-islands query). There's no per-day series.
+- Cross-table and windowed metrics are made simple through `agg_daily`: `like_rate` is `SUM(likes) * 1.0 / NULLIF(SUM(views), 0)` on `agg_daily`, and `active_days_7d` is a precomputed `agg_daily` column read with `ARG_MAX(active_days_7d, local_date)`, which gives the value on the last day of the range.
+- Text fields can contain `{param}` placeholders (e.g. `{view_cap_sec}`). They're filled from `config.yaml` at indexing time, so definitions always match the tuned values. A test fails on unknown placeholders, caveats or params.
+- Tests run every metric on the synthetic warehouse (whole range and per day), reconcile each with the marts, and check all 15 against hand-computed values on the §12 fixture.
+
 ```yaml
 metrics:
   - name: est_watch_minutes
@@ -280,15 +289,15 @@ metrics:
 | `rewatch_rate` | views of a video_id seen before ÷ views |
 | `est_watch_minutes` | above |
 | `active_days` | above |
-| `active_days_7d` | active days in a trailing 7-day window (the single-user analogue of DAU/WAU) |
+| `active_days_7d` | active days in the trailing 7-day window ending on the range's last day (the single-user analogue of DAU/WAU) |
 | `sessions` | count of sessions |
 | `avg_session_minutes` | mean session est_watch_sec ÷ 60 |
 | `binge_sessions` | sessions with est watch ≥ `binge_threshold_min` (default 60) |
 | `late_night_share` | views with local_hour in [0, 5) ÷ views |
 | `weekend_share` | weekend views ÷ views |
-| `likes`, `like_rate` | likes; likes ÷ views in the same period |
+| `likes`, `like_rate` | likes; likes ÷ views in the same period (NULL when there are no views) |
 | `searches` | count of searches |
-| `streak_days` | longest run of consecutive active days |
+| `streak_days` | longest run of consecutive active days inside the range (`type: query`) |
 
 **Glossary docs** (`knowledge/docs/*.md`) cover concepts that aren't single metrics: the watch time estimation method, the timezone and day-boundary rule, the definition of a session, what the data **cannot** answer (true durations, creators without enrichment, video content, ads), and table and column descriptions (generated from dbt `schema.yml`).
 
@@ -492,9 +501,9 @@ scrollback/
 │   ├── config.py
 │   ├── ingest/{detect.py, parse.py, load.py}
 │   ├── synth/generator.py
-│   ├── warehouse/{db.py, dbt_runner.py}
+│   ├── warehouse/{db.py, dbt_runner.py, inspect.py}
 │   ├── kb/{index.py, retrieve.py}
-│   ├── semantic/compile.py          # metrics.yml → SQL
+│   ├── semantic/{metrics.py, compile.py}  # metrics.yml schema + loader; → SQL compiler (Phase 5)
 │   ├── agent/{loop.py, tools.py, sql_guard.py, llm.py, prompts/}
 │   ├── charts.py
 │   ├── tracing.py
