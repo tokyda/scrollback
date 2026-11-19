@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Annotated
 
 import typer
+
+from scrollback.config import ConfigError, Settings, load_config
 
 app = typer.Typer(
     name="scrollback",
@@ -32,10 +35,65 @@ def _not_implemented(command: str, when: str) -> None:
     raise typer.Exit(NOT_IMPLEMENTED_EXIT_CODE)
 
 
+ConfigOption = Annotated[
+    Path | None, typer.Option("--config", help="Path to config.yaml (default: ./config.yaml).")
+]
+
+
+def _settings(config: Path | None) -> Settings:
+    try:
+        return load_config(config)
+    except ConfigError as exc:
+        typer.echo(f"Config error: {exc}", err=True)
+        raise typer.Exit(1) from None
+
+
 @app.command()
-def ingest() -> None:
+def ingest(
+    path: Annotated[
+        Path,
+        typer.Argument(exists=True, dir_okay=False, help="Export file (.json, or .zip with one)."),
+    ],
+    db: Annotated[
+        Path | None, typer.Option(help="DuckDB file (default: paths.warehouse in config).")
+    ] = None,
+    config: ConfigOption = None,
+) -> None:
     """Ingest a TikTok data export into the warehouse."""
-    _not_implemented("ingest", "Phase 1")
+    from scrollback.ingest.detect import UnknownExportFormatError
+    from scrollback.ingest.load import ExportReadError, ingest_file
+    from scrollback.warehouse.db import connect
+
+    settings = _settings(config)
+    db_path = db or settings.paths.warehouse
+    con = connect(db_path)
+    try:
+        summary = ingest_file(con, path)
+    except (UnknownExportFormatError, ExportReadError) as exc:
+        typer.echo(f"Ingest failed: {exc}", err=True)
+        raise typer.Exit(1) from None
+    finally:
+        con.close()
+
+    # Counts only: never print record contents (DESIGN §4.6).
+    typer.echo(
+        f"Ingested {summary.source_file} (variant {summary.variant}, id {summary.ingest_id})"
+    )
+    header = f"{'dataset':<10}{'read':>8}{'valid':>8}{'new':>8}{'dup':>8}{'rejected':>10}"
+    typer.echo(header)
+    for name, c in summary.datasets.items():
+        if not c.present:
+            typer.echo(f"{name:<10}{'(absent)':>8}")
+            continue
+        typer.echo(f"{name:<10}{c.read:>8}{c.valid:>8}{c.new:>8}{c.duplicate:>8}{c.rejected:>10}")
+    typer.echo(
+        f"{'total':<10}{summary.rows_read:>8}{'':>8}{summary.rows_new:>8}"
+        f"{summary.rows_duplicate:>8}{summary.rows_rejected:>10}"
+    )
+    typer.echo(f"New rejects stored: {summary.rejects_new}")
+    if summary.ignored_sections:
+        typer.echo(f"Ignored sections: {len(summary.ignored_sections)}")
+    typer.echo("dbt build: skipped (warehouse models arrive in Phase 2)")
 
 
 @app.command()

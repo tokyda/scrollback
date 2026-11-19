@@ -158,9 +158,9 @@ None of these have been checked yet; all were built and tested against synthetic
 1. Detect the format variant, then extract each dataset into a list of normalised dicts.
 2. Validate each record with pydantic: date parses, link present, video ID extractable. Rejected records go to `raw_rejects` with a reason (`missing_date`, `invalid_date`, `missing_link`, `no_video_id`, `missing_search_term`). The link and video ID are required for watch, like and favourite records. For shares they're optional (`video_id` is null for non-video shares).
 3. Compute `record_hash = sha256(dataset|timestamp|key)`. `timestamp` is the parsed export timestamp reformatted as `YYYY-MM-DD HH:MM:SS` (no timezone conversion, so changing `SOURCE_TZ` never changes a hash). `key` is the video ID for watch/like/favourite, the normalised search term (NFKC, case-folded, whitespace collapsed) for searches, and the video ID, else the link, else `SharedContent` for shares. *(Changed from hashing the raw date and link strings: the same event can appear with different link shapes across variants, e.g. `tiktokv.com/share/video/<id>` vs `tiktok.com/@user/video/<id>`, and must deduplicate.)*
-4. Insert into `raw_*` with `ON CONFLICT DO NOTHING` on `record_hash`, so the step is idempotent.
-5. Write one row to `ingest_log`: file hash, variant, rows per dataset, how many were new vs duplicate vs rejected.
-6. Run `dbt build`.
+4. Insert into `raw_*` with `ON CONFLICT DO NOTHING` on `record_hash`, so the step is idempotent. Rejects are keyed by `reject_hash = sha256(dataset|reason|canonical JSON payload)` with the same rule, so re-ingesting a file doesn't duplicate its rejects. *(Added: `raw_rejects` previously had no key.)* Steps 4–5 run in one transaction; shape errors (§4.1) are raised before anything is written.
+5. Write one row to `ingest_log` **on every run**: file hash, variant, rows per dataset, how many were new vs duplicate vs rejected. "Idempotent" means `raw_*` and `raw_rejects` don't change on a re-run; the log still records the attempt, with `rows_new = 0`. *(Clarified: the roadmap's "running it twice changes nothing" refers to the data tables, not the audit log.)* "Duplicate" counts valid records that weren't inserted, either because they repeat within the file or because they're already loaded.
+6. Run `dbt build`. *(Wired in Phase 2. Until then `ingest` prints that the step was skipped.)*
 
 ### 4.3 Core metric problem: there is no watch duration
 The export records **when a view started**, not how long it lasted, so watch time has to be estimated. The method is versioned in `metrics.yml` and parameterised in `dbt_project.yml` vars.
@@ -176,10 +176,13 @@ This estimate is the project's main data-definition story. It belongs in the REA
 ### 4.4 Warehouse models
 
 **raw** (loaded as-is plus load metadata)
-- `raw_watch(record_hash PK, event_ts_raw VARCHAR, link VARCHAR, source_file VARCHAR, loaded_at TIMESTAMP)`
-- `raw_like`, `raw_favorite`, `raw_search`, `raw_share`: same pattern
-- `raw_rejects(dataset, payload JSON, reason, source_file, loaded_at)`
-- `ingest_log(...)`
+Every raw table ends with the load metadata `source_file VARCHAR` (the file's basename, never a full path), `ingest_id BIGINT` (→ `ingest_log`) and `loaded_at TIMESTAMP` (UTC). `video_id` is derived at ingest because the record hash depends on it; everything else is stored as written.
+- `raw_watch(record_hash PK, event_ts_raw VARCHAR, link VARCHAR, video_id VARCHAR, …metadata)`
+- `raw_like`, `raw_favorite`: same columns as `raw_watch`
+- `raw_search(record_hash PK, event_ts_raw VARCHAR, search_term VARCHAR, …metadata)`: the term as written; normalisation happens in staging
+- `raw_share(record_hash PK, event_ts_raw VARCHAR, link VARCHAR, video_id VARCHAR NULL, method VARCHAR, shared_content VARCHAR, …metadata)`
+- `raw_rejects(reject_hash PK, dataset, payload JSON, reason, …metadata)`: the payload is the original record with its original keys
+- `ingest_log(ingest_id PK, source_file, file_sha256, variant, started_at, finished_at, rows_read, rows_new, rows_duplicate, rows_rejected, rejects_new, dataset_counts JSON)`: `dataset_counts` maps each dataset to `{present, read, valid, rejected, new, duplicate}`
 
 **staging** (typed, cleaned, deduped; one model per raw table)
 - `stg_watch(view_id, video_id, event_ts_utc, event_ts_local, local_date, local_hour, dow)`
