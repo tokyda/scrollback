@@ -53,7 +53,7 @@ def test_cli_synth_then_ingest_twice(tmp_path: Path, variant: str) -> None:
     assert synth.exit_code == 0, synth.output
     manifest = json.loads(manifest_path_for(export).read_text())
 
-    first = runner.invoke(app, ["ingest", str(export), "--db", str(db)])
+    first = runner.invoke(app, ["ingest", str(export), "--db", str(db), "--no-build"])
     assert first.exit_code == 0, first.output
     assert f"variant {variant}" in first.output
     con = connect(db)
@@ -62,7 +62,7 @@ def test_cli_synth_then_ingest_twice(tmp_path: Path, variant: str) -> None:
     assert _raw_only(after_first) == _expected_raw_counts(manifest)
     assert after_first["ingest_log"] == 1
 
-    second = runner.invoke(app, ["ingest", str(export), "--db", str(db)])
+    second = runner.invoke(app, ["ingest", str(export), "--db", str(db), "--no-build"])
     assert second.exit_code == 0, second.output
     con = connect(db)
     after_second = table_counts(con)
@@ -125,7 +125,9 @@ def test_sample_rejects_have_expected_reasons(tmp_path: Path) -> None:
 def test_cli_ingest_unknown_format_fails_loudly(tmp_path: Path) -> None:
     bad = tmp_path / "bad.json"
     bad.write_text(json.dumps({"Activities": {"x": 1}, "Profile": {}}))
-    result = runner.invoke(app, ["ingest", str(bad), "--db", str(tmp_path / "wh.duckdb")])
+    result = runner.invoke(
+        app, ["ingest", str(bad), "--db", str(tmp_path / "wh.duckdb"), "--no-build"]
+    )
     assert result.exit_code == 1
     assert "Unrecognised TikTok export" in result.output
     assert "'Activities'" in result.output
@@ -134,7 +136,9 @@ def test_cli_ingest_unknown_format_fails_loudly(tmp_path: Path) -> None:
 def test_cli_ingest_output_has_no_record_values(tmp_path: Path) -> None:
     export = tmp_path / "export.json"
     write(synthesize(days=7), export)
-    result = runner.invoke(app, ["ingest", str(export), "--db", str(tmp_path / "wh.duckdb")])
+    result = runner.invoke(
+        app, ["ingest", str(export), "--db", str(tmp_path / "wh.duckdb"), "--no-build"]
+    )
     assert result.exit_code == 0
     assert "/video/" not in result.output
     assert "2026-11" not in result.output  # no timestamps either
@@ -145,7 +149,7 @@ def test_cli_ingest_uses_configured_warehouse(tmp_path: Path) -> None:
     cfg.write_text("paths:\n  warehouse: wh/custom.duckdb\n")
     export = tmp_path / "export.json"
     write(synthesize(days=3), export)
-    result = runner.invoke(app, ["ingest", str(export), "--config", str(cfg)])
+    result = runner.invoke(app, ["ingest", str(export), "--config", str(cfg), "--no-build"])
     assert result.exit_code == 0, result.output
     assert (tmp_path / "wh" / "custom.duckdb").exists()
     con = duckdb.connect(str(tmp_path / "wh" / "custom.duckdb"), read_only=True)
@@ -161,7 +165,9 @@ def test_cli_warns_on_unknown_fields_with_key_names_only(tmp_path: Path) -> None
         record["WatchDuration"] = "secret-duration-value"
     export = tmp_path / "export.json"
     export.write_text(json.dumps(result.export))
-    out = runner.invoke(app, ["ingest", str(export), "--db", str(tmp_path / "wh.duckdb")])
+    out = runner.invoke(
+        app, ["ingest", str(export), "--db", str(tmp_path / "wh.duckdb"), "--no-build"]
+    )
     assert out.exit_code == 0, out.output
     assert "Warning: watch records have unrecognised fields ['WatchDuration']" in out.output
     assert "secret-duration-value" not in out.output

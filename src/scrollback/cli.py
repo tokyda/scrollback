@@ -40,6 +40,11 @@ ConfigOption = Annotated[
 ]
 
 
+DbOption = Annotated[
+    Path | None, typer.Option(help="DuckDB file (default: paths.warehouse in config).")
+]
+
+
 def _settings(config: Path | None) -> Settings:
     try:
         return load_config(config)
@@ -48,18 +53,42 @@ def _settings(config: Path | None) -> Settings:
         raise typer.Exit(1) from None
 
 
+def _run_build(settings: Settings, db_path: Path, quiet: bool = False) -> None:
+    """Run `dbt build`; exit 1 when there is no data or any model/test fails."""
+    from scrollback.warehouse.db import has_view_data
+    from scrollback.warehouse.dbt_runner import DbtError, run_dbt
+
+    if not has_view_data(db_path):
+        typer.echo(
+            f"No watch history in {db_path.name}: run `scrollback ingest <export>` first.",
+            err=True,
+        )
+        raise typer.Exit(1)
+    try:
+        result = run_dbt(settings, db_path, quiet=quiet)
+    except DbtError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(1) from None
+    typer.echo(result.summary())
+    if not result.success:
+        for name in result.failures:
+            typer.echo(f"  failed: {name}", err=True)
+        raise typer.Exit(1)
+
+
 @app.command()
 def ingest(
     path: Annotated[
         Path,
         typer.Argument(exists=True, dir_okay=False, help="Export file (.json, or .zip with one)."),
     ],
-    db: Annotated[
-        Path | None, typer.Option(help="DuckDB file (default: paths.warehouse in config).")
-    ] = None,
+    db: DbOption = None,
+    build: Annotated[
+        bool, typer.Option("--build/--no-build", help="Run `dbt build` after loading.")
+    ] = True,
     config: ConfigOption = None,
 ) -> None:
-    """Ingest a TikTok data export into the warehouse."""
+    """Ingest a TikTok data export into the warehouse, then run `dbt build`."""
     from scrollback.ingest.detect import UnknownExportFormatError
     from scrollback.ingest.load import ExportReadError, ingest_file
     from scrollback.warehouse.db import connect
@@ -100,7 +129,15 @@ def ingest(
             )
     if summary.ignored_sections:
         typer.echo(f"Ignored sections: {len(summary.ignored_sections)}")
-    typer.echo("dbt build: skipped (warehouse models arrive in Phase 2)")
+    if not build:
+        typer.echo("dbt build: skipped (--no-build)")
+        return
+    try:
+        _run_build(settings, db_path)
+    except typer.Exit as exc:
+        if exc.exit_code:
+            typer.echo("Raw data was loaded; fix the problem above and run `scrollback build`.")
+        raise
 
 
 SAMPLE_FILE_NAME = "user_data_tiktok.json"
@@ -151,9 +188,14 @@ def synth(
 
 
 @app.command()
-def build() -> None:
-    """Run `dbt build` on the warehouse."""
-    _not_implemented("build", "Phase 2")
+def build(
+    db: DbOption = None,
+    quiet: Annotated[bool, typer.Option("--quiet", "-q", help="Hide dbt's progress log.")] = False,
+    config: ConfigOption = None,
+) -> None:
+    """Run `dbt build` (models + data tests) with parameters from config.yaml."""
+    settings = _settings(config)
+    _run_build(settings, db or settings.paths.warehouse, quiet=quiet)
 
 
 @app.command()
