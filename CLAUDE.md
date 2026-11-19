@@ -11,9 +11,13 @@ If you change a design decision, update `docs/DESIGN.md` in the same commit and 
 
 ## Current state
 
-Phase 0 (foundations) and Phase 1 (synthetic data + ingestion) are in progress or done; see the
-roadmap checkboxes. No real export has been ingested yet; every TikTok-format assumption is listed
-in DESIGN §4.1 "Format assumptions to verify".
+Phases 0 and 1 are done except ingesting a real export; see the roadmap checkboxes. No real
+export has been ingested yet, so every TikTok-format assumption is listed in DESIGN §4.1
+"Format assumptions to verify against a real export". When a real export arrives, put it in
+`data/raw/`, run `scrollback ingest`, and update that list. An unknown structure (or a missing
+required field) fails with the keys it found; extend `VARIANTS` in `ingest/detect.py` and add a
+synthetic variant. Unknown extra fields only warn and land in the `extras` column; map them via
+`FIELD_ALIASES` / `FIELDS` if they matter.
 
 ## Commands
 
@@ -25,7 +29,25 @@ uv run pytest                             # all tests
 uv run ruff check . && uv run ruff format --check .
 uv run mypy                               # type check src/ and tests/
 uv run scrollback --help                  # CLI
+
+# synthetic data -> raw layer
+uv run scrollback synth                   # writes data/sample/user_data_tiktok.json (+ manifest)
+uv run scrollback synth --variant v1_activity --out data/sample/user_data_tiktok_v1.json
+uv run scrollback ingest data/sample/user_data_tiktok.json [--db path.duckdb]
 ```
+
+If you change the generator, regenerate both samples (the two `synth` commands above) and commit
+them; `tests/test_ingest_e2e.py` and CI fail if they drift.
+
+## Code map (built so far)
+
+- `src/scrollback/config.py`: settings loader.
+- `src/scrollback/cli.py`: Typer app; `synth` and `ingest` are real, the rest are stubs.
+- `src/scrollback/ingest/detect.py`: declarative format variants; `UnknownExportFormatError`.
+- `src/scrollback/ingest/parse.py`: pydantic validation, video ID extraction, `record_hash`.
+- `src/scrollback/ingest/load.py`: reads json/zip, idempotent load, `ingest_log`.
+- `src/scrollback/warehouse/db.py`: DuckDB connection and raw-layer DDL.
+- `src/scrollback/synth/generator.py`: deterministic synthetic export + manifest.
 
 ## Conventions
 
