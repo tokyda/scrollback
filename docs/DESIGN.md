@@ -463,16 +463,56 @@ Gold answers are computed by running `gold_sql` against the **synthetic dataset 
 | `caveat_present` | for estimate metrics: the answer mentions it's an estimate |
 | efficiency | steps, tool calls, tokens, latency, cost |
 
-An optional LLM-as-judge scores answer clarity (1–5) as a **secondary** metric only. It never decides correctness.
+An optional LLM-as-judge scores answer clarity (1–5) as a **secondary** metric only. It never decides correctness. *(Not built yet.)*
+
+**As built** (`evals/score.py`):
+- **Which result is scored.** Execution is judged on the results `final_answer` cites; any one match passes.
+  - *Tables:* every gold column must map to a distinct result column (names ignored, extra columns allowed). Rows compare as a set (`table`) or as an ordered prefix (`ordered_table`, so extra rows below a top-N are fine). A one-row gold also matches a result that lists its values in different rows, e.g. a `GROUP BY is_weekend`.
+  - *Scalars:* the gold value must appear in the result's first row.
+- **Text.** Every gold value must be stated, with numbers judged by rounding at their printed precision ("~103" for 102.74).
+  - Dates, years, times and "N tables/queries" are never read as answer numbers.
+  - Dates, hours of day and days of week match in common spellings.
+  - A ratio also matches as a percentage.
+  - Seconds, minutes and hours convert into each other: in SQL results freely, but in text only when a unit word follows the number, and a bare integer never matches a scaled gold.
+  - Stating a `wrong_values` number fails the answer.
+- **Pass rules:**
+  - `unanswerable`: a refusal phrase and no made-up number (any number other than a date, year, time or a number from the question).
+  - `no_data`: says there's no data and states no amount.
+  - `trap`: execution ∧ answer ∧ caveat (estimate or coverage phrases).
+  - `ambiguous`: execution ∧ answer **on the same reading** ∧ non-empty `assumptions`.
+  - everything else: execution ∧ answer.
+
+  `metric_selection` and caveats on non-trap estimate questions are reported, not required.
+- **Checking the scorer.** An oracle mock agent (runs the gold SQL, states the result) must score 100% end to end in the tests.
 
 ### 7.3 Bad-case taxonomy
 Every failed question gets one primary label: auto-suggested from the trace, then confirmed by hand in `eval/labels/<run_id>.yaml`.
+
+**As built** (`evals/labels.py`):
+- **Suggestions,** in order:
+  1. run status (`tool_loop_or_step_limit`, `over_refusal`);
+  2. `failed_refusal` for unanswerable and `no_data` questions;
+  3. no cited result → `hallucinated_table_or_column` if a run_sql error names an unknown column or table, else `sql_error_unrecovered`;
+  4. a stated wrong value → `wrong_metric_definition`;
+  5. right result but wrong text → `answer_misreport`;
+  6. right number but no caveat or no assumptions → `missing_caveat`;
+  7. date literals differing from gold → `wrong_time_window` (or `timezone_or_day_boundary` when the question hints at it);
+  8. otherwise the question's `likely_failure` hint, then `aggregation_error`.
+- **Possible scoring false negatives** are flagged separately in `suspect_scoring` (e.g. a refusal phrase *and* numbers, the right result with a failed text check, only the caveat missing), so they're reviewed apart from genuine agent failures.
+- **The label file** lists one entry per failed (question, repeat), with `suggested`, `reason`, `suspect_scoring` and an empty `label` to confirm. `scrollback eval report <run>` uses confirmed labels when present.
 
 `wrong_metric_definition` · `wrong_time_window` · `timezone_or_day_boundary` · `hallucinated_table_or_column` · `join_or_grain_error` · `aggregation_error` · `sql_error_unrecovered` · `answer_misreport` · `missing_caveat` · `failed_refusal` · `over_refusal` · `tool_loop_or_step_limit`
 
 ### 7.4 Runs and reports
 `scrollback eval run --config experiments/e03_rag.yaml --repeat 3`
 - Writes `eval/runs/<timestamp>_<name>/results.jsonl` and `summary.json`.
+- **As built:** `scrollback eval run --config eval/experiments/<exp>.yaml [--split dev|test|all] [--repeat 3] [--workers 4] [--only q001,…] [--yes]`.
+  - **Cost gate:** without `--yes` it only prints a cost estimate, from past traces of the same model × 1.3 for the harder set, plus a p90-based upper figure. Nothing calls the API until `--yes`. *(Added.)*
+  - **Experiments** override only the `llm` and `agent` config sections, so each one is a config diff. The set's pinned params always apply.
+  - **Run directory:** `config.json` (resolved non-secret config, experiment, question ids, git commit), `results.jsonl`, `traces.jsonl` (eval runs write traces here, not to `agent_traces`), `summary.json` and `report.md`.
+  - **Labels:** a label file is written to `eval/labels/`.
+  - `--app-config` replaces the global `--config` for this command, since `--config` names the experiment.
+- **Report:** accuracy is mean (min–max) over repeats. Per-category accuracy is shown for **dev only**; the held-out **test** split is reported overall only, since it has too few questions per category. The report also covers sub-scores, efficiency, cost, the bad-case distribution, every failure with its label and reason, per-question pass counts and flaky questions.
 - `scrollback eval report <run_a> <run_b>` produces markdown with overall and per-category accuracy, the bad-case distribution, the questions that regressed or improved, and cost and latency.
 - Each config is run with `--repeat 3`, and the mean ± spread is reported, because LLM output varies even at temperature 0.
 

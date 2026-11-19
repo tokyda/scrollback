@@ -12,7 +12,7 @@ Only ``answered`` carries an answer; every other status ends without inventing a
 from __future__ import annotations
 
 import time
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from datetime import UTC, date, datetime
 from pathlib import Path
 from string import Template
@@ -25,6 +25,7 @@ from scrollback.agent.tools import (
     MART_TABLES,
     TOOL_SCHEMAS,
     FinalAnswer,
+    QueryResult,
     ToolContext,
     execute_tool,
     open_readonly,
@@ -50,6 +51,7 @@ class AgentResult:
     trace: Trace
     trace_path: Path | None = None
     trace_db_error: str | None = None
+    results: dict[str, QueryResult] = field(default_factory=dict)  # every successful run_sql
 
 
 def load_system_prompt(settings: Settings) -> str:
@@ -197,7 +199,7 @@ def run_agent(
     trace.status = status
     trace.final_answer = asdict(answer) if answer else None
     trace.latency_ms = round((time.perf_counter() - started) * 1000, 1)
-    result = AgentResult(status=status, answer=answer, trace=trace)
+    result = AgentResult(status=status, answer=answer, trace=trace, results=dict(ctx.results))
     if write_traces:
         result.trace_path, result.trace_db_error = write_trace(
             trace, settings.paths.traces_dir, db_path
