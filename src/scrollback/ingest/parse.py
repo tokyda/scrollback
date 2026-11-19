@@ -77,6 +77,7 @@ class ParsedRecord(BaseModel):
     search_term: str | None = None
     method: str | None = None
     shared_content: str | None = None
+    extras: str | None = None  # JSON object of unknown fields; never part of the hash
 
     @model_validator(mode="before")
     @classmethod
@@ -116,6 +117,7 @@ class ParsedRecord(BaseModel):
             "search_term": search_term,
             "method": _clean_str(data.get("method")),
             "shared_content": _clean_str(data.get("shared_content")),
+            "extras": data.get("extras"),
         }
 
     @property
@@ -154,11 +156,23 @@ class ParseResult:
     records: dict[Dataset, list[ParsedRecord]] = field(default_factory=dict)
     rejects: list[Reject] = field(default_factory=list)
     read_counts: Counter[Dataset] = field(default_factory=Counter)
+    unknown_keys: dict[Dataset, list[str]] = field(default_factory=dict)
 
 
-def parse_record(dataset: Dataset, canonical: dict[str, Any]) -> ParsedRecord | RejectReason:
+def extras_json(extras: dict[str, Any] | None) -> str | None:
+    """Serialise unknown fields deterministically, or ``None`` when there are none."""
+    if not extras:
+        return None
+    return json.dumps(extras, sort_keys=True, ensure_ascii=False, default=str)
+
+
+def parse_record(
+    dataset: Dataset, canonical: dict[str, Any], extras: dict[str, Any] | None = None
+) -> ParsedRecord | RejectReason:
     try:
-        return ParsedRecord.model_validate({"dataset": dataset, **canonical})
+        return ParsedRecord.model_validate(
+            {**canonical, "dataset": dataset, "extras": extras_json(extras)}
+        )
     except ValidationError as exc:
         code = exc.errors()[0]["type"]
         try:
@@ -174,9 +188,11 @@ def parse_export(detected: DetectedExport) -> ParseResult:
         section = detected.sections.get(dataset)
         if section is None:
             continue
+        if section.unknown_keys:
+            result.unknown_keys[dataset] = list(section.unknown_keys)
         for raw in section.records:
             result.read_counts[dataset] += 1
-            parsed = parse_record(dataset, section.canonical(raw))
+            parsed = parse_record(dataset, section.canonical(raw), section.extras(raw))
             if isinstance(parsed, RejectReason):
                 result.rejects.append(Reject(dataset, parsed, dict(raw)))
             else:

@@ -151,3 +151,44 @@ def test_read_export_invalid_json_does_not_echo_content(tmp_path: Path) -> None:
     with pytest.raises(ExportReadError) as err:
         read_export(path)
     assert "secret-value" not in str(err.value)
+
+
+def test_unknown_fields_stored_as_extras(tmp_path: Path, con: duckdb.DuckDBPyConnection) -> None:
+    doc = _doc(
+        [
+            {**_w("2026-03-01 10:00:00", V1), "WatchDuration": 12, "Source": "fyp"},
+            _w("2026-03-01 10:00:20", V2),
+        ]
+    )
+    summary = ingest_file(con, _write(tmp_path / "export.json", doc))
+    assert summary.rows_new == 2
+    assert summary.datasets["watch"].unknown_fields == ["WatchDuration", "Source"]
+
+    rows = con.execute("SELECT video_id, extras FROM raw_watch ORDER BY video_id").fetchall()
+    assert json.loads(rows[0][1]) == {"Source": "fyp", "WatchDuration": 12}
+    assert rows[1][1] is None
+
+    logged = con.execute("SELECT dataset_counts FROM ingest_log").fetchone()
+    assert logged is not None
+    assert json.loads(logged[0])["watch"]["unknown_fields"] == ["WatchDuration", "Source"]
+
+
+def test_extras_do_not_change_record_hash(tmp_path: Path, con: duckdb.DuckDBPyConnection) -> None:
+    plain = _doc([_w("2026-03-01 10:00:00", V1)])
+    extra = _doc([{**_w("2026-03-01 10:00:00", V1), "WatchDuration": 12}])
+    ingest_file(con, _write(tmp_path / "plain.json", plain))
+    second = ingest_file(con, _write(tmp_path / "extra.json", extra))
+    assert (second.rows_new, second.rows_duplicate) == (0, 1)
+
+
+def test_schema_migration_adds_extras_column(tmp_path: Path) -> None:
+    con = connect(tmp_path / "old.duckdb")
+    con.execute(
+        "CREATE TABLE raw_watch (record_hash VARCHAR PRIMARY KEY, event_ts_raw VARCHAR NOT NULL, "
+        "link VARCHAR, video_id VARCHAR, source_file VARCHAR NOT NULL, "
+        "ingest_id BIGINT NOT NULL, loaded_at TIMESTAMP NOT NULL)"
+    )
+    ensure_raw_schema(con)
+    cols = [r[0] for r in con.execute("DESCRIBE raw_watch").fetchall()]
+    con.close()
+    assert "extras" in cols

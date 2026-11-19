@@ -1,13 +1,16 @@
 """Detect which TikTok export format variant a parsed JSON document is (DESIGN §4.1).
 
 The export format is not stable, so each known variant is described declaratively in
-``VARIANTS``. Detection fails loudly with :class:`UnknownExportFormatError` when the shape is
-not recognised. Error messages name **keys only, never values**, so they are safe to print
-for real exports.
+``VARIANTS``. Detection fails loudly with :class:`UnknownExportFormatError` when the structure
+is not recognised or a required field is absent. Unknown *extra* record fields are tolerated:
+they are logged as a warning (key names only) and carried through to an ``extras`` column.
+Error and warning messages name **keys only, never values**, so they are safe to print for
+real exports.
 """
 
 from __future__ import annotations
 
+import logging
 import re
 from collections.abc import Mapping
 from dataclasses import dataclass, field
@@ -15,6 +18,8 @@ from enum import StrEnum
 from typing import Any
 
 MAX_KEYS_IN_ERROR = 40
+
+logger = logging.getLogger(__name__)
 
 
 class Dataset(StrEnum):
@@ -101,10 +106,16 @@ class DatasetSection:
     dataset: Dataset
     path: tuple[str, ...]
     records: list[dict[str, Any]]
-    key_map: dict[str, str]  # record key as found -> canonical field name
+    key_map: dict[str, str]  # known record key as found -> canonical field name
+    unknown_keys: list[str] = field(default_factory=list)  # extra keys, kept as extras
 
     def canonical(self, record: Mapping[str, Any]) -> dict[str, Any]:
-        return {self.key_map[k]: v for k, v in record.items()}
+        """Known fields under their canonical names."""
+        return {self.key_map[k]: v for k, v in record.items() if k in self.key_map}
+
+    def extras(self, record: Mapping[str, Any]) -> dict[str, Any]:
+        """Unknown fields under their original names (empty when there are none)."""
+        return {k: v for k, v in record.items() if k not in self.key_map}
 
 
 @dataclass
@@ -176,10 +187,12 @@ def _extract_section(
         else:
             key_map[key] = canonical
     if unknown:
-        raise UnknownExportFormatError(
-            f"{_path_str(path)}: unrecognised record keys {_fmt_keys(unknown)}. "
-            f"Keys found: {_fmt_keys(found_keys)}. "
-            f"Expected fields (case-insensitive): {list(spec_fields.known)}"
+        logger.warning(
+            "%s: unrecognised record keys %s; stored in the extras column. "
+            "Expected fields (case-insensitive): %s",
+            _path_str(path),
+            _fmt_keys(unknown),
+            list(spec_fields.known),
         )
     if items:
         missing = [f for f in spec_fields.required if f not in key_map.values()]
@@ -188,7 +201,7 @@ def _extract_section(
                 f"{_path_str(path)}: no record has required field(s) {missing}. "
                 f"Keys found: {_fmt_keys(found_keys)}"
             )
-    return DatasetSection(dataset, path, list(items), key_map)
+    return DatasetSection(dataset, path, list(items), key_map, [str(k) for k in unknown])
 
 
 def detect(document: Any) -> DetectedExport:

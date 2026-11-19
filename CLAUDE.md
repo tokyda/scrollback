@@ -14,8 +14,10 @@ If you change a design decision, update `docs/DESIGN.md` in the same commit and 
 Phases 0 and 1 are done except ingesting a real export; see the roadmap checkboxes. No real
 export has been ingested yet, so every TikTok-format assumption is listed in DESIGN §4.1
 "Format assumptions to verify against a real export". When a real export arrives, put it in
-`data/raw/`, run `scrollback ingest`, and update that list. An unknown shape fails with the keys
-it found; extend `VARIANTS` / `FIELD_ALIASES` in `ingest/detect.py` and add a synthetic variant.
+`data/raw/`, run `scrollback ingest`, and update that list. An unknown structure (or a missing
+required field) fails with the keys it found; extend `VARIANTS` in `ingest/detect.py` and add a
+synthetic variant. Unknown extra fields only warn and land in the `extras` column; map them via
+`FIELD_ALIASES` / `FIELDS` if they matter.
 
 ## Commands
 

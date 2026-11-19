@@ -1,3 +1,4 @@
+import logging
 from typing import Any
 
 import pytest
@@ -93,19 +94,47 @@ def test_missing_list_key_names_keys() -> None:
         detect(doc)
 
 
-def test_unknown_record_key_fails_and_names_keys_not_values() -> None:
+def test_unknown_record_key_warns_and_is_kept_as_extra(caplog: pytest.LogCaptureFixture) -> None:
     doc = v1_doc()
     secret_value = "https://www.tiktokv.com/share/video/7399999999999999999/"
+    record = {"Date": "2026-01-01 10:00:00", "Link": secret_value, "WatchDuration": 12}
+    doc["Activity"]["Video Browsing History"]["VideoList"] = [record]
+    with caplog.at_level(logging.WARNING, logger="scrollback.ingest.detect"):
+        detected = detect(doc)
+
+    watch = detected.sections[Dataset.WATCH]
+    assert watch.unknown_keys == ["WatchDuration"]
+    assert watch.canonical(record) == {"date": "2026-01-01 10:00:00", "link": secret_value}
+    assert watch.extras(record) == {"WatchDuration": 12}
+
+    warnings = [r.getMessage() for r in caplog.records if r.levelno == logging.WARNING]
+    assert len(warnings) == 1
+    assert "'WatchDuration'" in warnings[0]
+    assert "extras" in warnings[0]
+    # Key names only: no values from the record leak into the log.
+    assert secret_value not in warnings[0]
+    assert "2026-01-01" not in warnings[0]
+    assert "12" not in warnings[0]
+
+
+def test_no_warning_when_all_keys_known(caplog: pytest.LogCaptureFixture) -> None:
+    with caplog.at_level(logging.WARNING, logger="scrollback.ingest.detect"):
+        detected = detect(v1_doc())
+    assert not caplog.records
+    assert all(not s.unknown_keys for s in detected.sections.values())
+
+
+def test_unknown_keys_still_require_known_fields() -> None:
+    doc = v1_doc()
     doc["Activity"]["Video Browsing History"]["VideoList"] = [
-        {"Date": "2026-01-01 10:00:00", "Link": secret_value, "WatchDuration": 12}
+        {"Timestamp": "2026-01-01 10:00:00", "URL": LINK}
     ]
     with pytest.raises(UnknownExportFormatError) as err:
         detect(doc)
     message = str(err.value)
-    assert "'WatchDuration'" in message
-    assert "'Date'" in message and "'Link'" in message
-    assert secret_value not in message
-    assert "2026-01-01" not in message
+    assert "required field(s) ['date', 'link']" in message
+    assert "'Timestamp'" in message and "'URL'" in message
+    assert LINK not in message
 
 
 def test_required_field_absent_from_every_record() -> None:
@@ -129,13 +158,13 @@ def test_list_not_a_list_fails() -> None:
         detect(doc)
 
 
-def test_field_not_allowed_for_dataset() -> None:
+def test_field_from_another_dataset_is_an_extra() -> None:
     doc = v1_doc()
-    doc["Activity"]["Video Browsing History"]["VideoList"] = [
-        {"Date": "2026-01-01 10:00:00", "Link": LINK, "SearchTerm": "x"}
-    ]
-    with pytest.raises(UnknownExportFormatError, match="'SearchTerm'"):
-        detect(doc)
+    record = {"Date": "2026-01-01 10:00:00", "Link": LINK, "SearchTerm": "x"}
+    doc["Activity"]["Video Browsing History"]["VideoList"] = [record]
+    watch = detect(doc).sections[Dataset.WATCH]
+    assert watch.unknown_keys == ["SearchTerm"]
+    assert watch.extras(record) == {"SearchTerm": "x"}
 
 
 def test_empty_watch_list_is_valid() -> None:
