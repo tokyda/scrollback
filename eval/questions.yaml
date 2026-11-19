@@ -872,22 +872,6 @@ questions:
     tolerance: 0.05
     expected_metrics: [est_watch_minutes]
 
-  - id: q056
-    question: How many times more did I watch on Saturday 24 October 2026 than on an average October day?
-    category: multi_step
-    difficulty: medium
-    split: dev
-    today: 2026-11-20
-    tests: day total / per-calendar-day October average
-    answer_type: scalar
-    gold_sql: |
-      SELECT (SELECT est_watch_min FROM agg_daily WHERE local_date = DATE '2026-10-24')
-             / (SELECT avg(est_watch_min) FROM agg_daily
-                WHERE local_date BETWEEN DATE '2026-10-01' AND DATE '2026-10-31')
-    units: [number]
-    tolerance: 0.05
-    expected_metrics: [est_watch_minutes]
-
   # ------------------------------------------------------------------------- ambiguous
   - id: q057
     question: How much did I watch recently?
@@ -1001,8 +985,29 @@ questions:
     units: [minutes]
     tolerance: 0.05
     expected_metrics: [avg_session_minutes]
-    wrong_values: [13.59]
+    wrong_values: [13.59, 5.241667]  # mean and median of first-to-last-view span
     likely_failure: wrong_metric_definition
+
+  - id: q056
+    question: How many times more did I watch on Saturday 24 October 2026 than on an average October day?
+    category: ambiguous
+    difficulty: medium
+    split: dev
+    today: 2026-11-20
+    tests: "'watch more' by watch time (6.09x, gold) or by videos watched (5.73x); per-calendar-day October average"
+    answer_type: scalar
+    gold_sql: |
+      SELECT (SELECT est_watch_min FROM agg_daily WHERE local_date = DATE '2026-10-24')
+             / (SELECT avg(est_watch_min) FROM agg_daily
+                WHERE local_date BETWEEN DATE '2026-10-01' AND DATE '2026-10-31')
+    alternatives:
+      - |
+        SELECT (SELECT views FROM agg_daily WHERE local_date = DATE '2026-10-24') * 1.0
+               / (SELECT avg(views) FROM agg_daily
+                  WHERE local_date BETWEEN DATE '2026-10-01' AND DATE '2026-10-31')
+    units: [number]
+    tolerance: 0.05
+    expected_metrics: [est_watch_minutes]
 
   # ------------------------------------------------------------------------- unanswerable
   - id: q063

@@ -474,10 +474,11 @@ An optional LLM-as-judge scores answer clarity (1–5) as a **secondary** metric
   - Dates, hours of day and days of week match in common spellings.
   - A ratio also matches as a percentage.
   - Seconds, minutes and hours convert into each other: in SQL results freely, but in text only when a unit word follows the number, and a bare integer never matches a scaled gold.
-  - Stating a `wrong_values` number fails the answer.
+  - A `wrong_values` number fails the answer only if the answer **leads with it**, i.e. states it before the first unambiguous mention of the gold value it competes with (same column unit), or never states the gold. A number matching both is ignored. *(Changed after the E0 review: "11,521 different videos, from 11,885 total views" is labelled context and passes; "the longest ran 62 min… estimated 35 min" leads with the wrong definition and fails.)*
+- **Execution has two levels.** `execution_strict` means the gold value is literally a cell of a cited result. `execution` (used for pass) also accepts a gold value derivable from a cited result by simple arithmetic: a contiguous range sum of a column, +, −, × or ÷ of two cells in the same row, or the difference or ratio of two cells in the same column. Both are reported. *(Changed after the E0 review: per-day rows summed into "last weekend", or 138 sessions ÷ 31 days, are grounded answers.)*
 - **Pass rules:**
   - `unanswerable`: a refusal phrase and no made-up number (any number other than a date, year, time or a number from the question).
-  - `no_data`: says there's no data and states no amount.
+  - `no_data`: says there's no data and states no amount *for that day*. Numbers in a sentence clearly about another day ("yesterday", "that day", "the day before", another date) and not about today don't count. *(Changed after the E0 review: "no data for today; yesterday you watched 103 min" passes; "you watched 0 minutes" fails.)*
   - `trap`: execution ∧ answer ∧ caveat (estimate or coverage phrases).
   - `ambiguous`: execution ∧ answer **on the same reading** ∧ non-empty `assumptions`.
   - everything else: execution ∧ answer.
@@ -498,7 +499,13 @@ Every failed question gets one primary label: auto-suggested from the trace, the
   6. right number but no caveat or no assumptions → `missing_caveat`;
   7. date literals differing from gold → `wrong_time_window` (or `timezone_or_day_boundary` when the question hints at it);
   8. otherwise the question's `likely_failure` hint, then `aggregation_error`.
-- **Possible scoring false negatives** are flagged separately in `suspect_scoring` (e.g. a refusal phrase *and* numbers, the right result with a failed text check, only the caveat missing), so they're reviewed apart from genuine agent failures.
+- **Possible scoring false negatives** are flagged separately in `suspect_scoring`, so they're reviewed apart from genuine agent failures. The cases flagged:
+  - a refusal or "no data" phrase *together with* numbers counted as made up;
+  - a wrong-definition value alongside the gold value;
+  - the right result with a failed text check, or the reverse;
+  - only the caveat missing.
+
+  *(The E0 review showed the first version missed the first two kinds.)*
 - **The label file** lists one entry per failed (question, repeat), with `suggested`, `reason`, `suspect_scoring` and an empty `label` to confirm. `scrollback eval report <run>` uses confirmed labels when present.
 
 `wrong_metric_definition` · `wrong_time_window` · `timezone_or_day_boundary` · `hallucinated_table_or_column` · `join_or_grain_error` · `aggregation_error` · `sql_error_unrecovered` · `answer_misreport` · `missing_caveat` · `failed_refusal` · `over_refusal` · `tool_loop_or_step_limit`
@@ -512,6 +519,7 @@ Every failed question gets one primary label: auto-suggested from the trace, the
   - **Run directory:** `config.json` (resolved non-secret config, experiment, question ids, git commit), `results.jsonl`, `traces.jsonl` (eval runs write traces here, not to `agent_traces`), `summary.json` and `report.md`.
   - **Labels:** a label file is written to `eval/labels/`.
   - `--app-config` replaces the global `--config` for this command, since `--config` names the experiment.
+- **`scrollback eval rescore <run>`** re-scores a finished run from its saved answers and cited results (up to 200 rows each) with the current questions and scorer. It makes no API calls. The first re-score keeps `results.original.jsonl`. Changes are always reported against the original scoring (`rescored_to_pass` / `rescored_to_fail` in the label file), and confirmed labels and notes carry over.
 - **Report:** accuracy is mean (min–max) over repeats. Per-category accuracy is shown for **dev only**; the held-out **test** split is reported overall only, since it has too few questions per category. The report also covers sub-scores, efficiency, cost, the bad-case distribution, every failure with its label and reason, per-question pass counts and flaky questions.
 - `scrollback eval report <run_a> <run_b>` produces markdown with overall and per-category accuracy, the bad-case distribution, the questions that regressed or improved, and cost and latency.
 - Each config is run with `--repeat 3`, and the mean ± spread is reported, because LLM output varies even at temperature 0.

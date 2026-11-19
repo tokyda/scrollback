@@ -108,6 +108,7 @@ class TextNumber:
     decimals: int
     percent: bool
     unit_hint: str | None = None  # "hours" | "minutes" | "seconds" when a unit word follows
+    pos: int = 0  # character offset in the normalised text
 
 
 def _hint(word: str) -> str:
@@ -132,9 +133,10 @@ def normalise_text(text: str) -> str:
 
 
 def strip_dates_and_times(text: str) -> str:
+    """Blank out dates, times, years and "N tables"-style counts (same length: offsets hold)."""
     out = text
     for pattern in [*DATE_RES, TIME_RE, YEAR_RE, NOT_AN_ANSWER_RE]:
-        out = pattern.sub(" ", out)
+        out = pattern.sub(lambda m: " " * len(m.group(0)), out)
     return out
 
 
@@ -148,7 +150,7 @@ def numbers_in(text: str) -> list[TextNumber]:
         decimals = len(digits.split(".")[1]) if "." in digits else 0
         follow = UNIT_HINT_RE.match(clean, m.end())
         hint = _hint(follow.group("u")) if follow and not percent else None
-        found.append(TextNumber(float(digits), decimals, percent, hint))
+        found.append(TextNumber(float(digits), decimals, percent, hint, m.start()))
     return found
 
 
@@ -336,6 +338,77 @@ def _long_format_match(q: Question, gold: GoldAnswer, result: ResultTable) -> bo
     return True
 
 
+DERIVE_MAX_ROWS = 100
+
+
+def _numeric_grid(result: ResultTable) -> list[list[float | None]]:
+    grid: list[list[float | None]] = []
+    for row in result.rows[:DERIVE_MAX_ROWS]:
+        grid.append([None if isinstance(v, bool) else _as_float(v) for v in row])
+    return grid
+
+
+def derived_values(result: ResultTable) -> list[float]:
+    """Simple arithmetic an answer may do on top of a query result.
+
+    Contiguous range sums of a column (e.g. summing per-day rows into a weekend), and +, -,
+    x, / of two cells in the same row or (difference, ratio) in the same column.
+    """
+    grid = _numeric_grid(result)
+    if not grid:
+        return []
+    ncols = max(len(r) for r in grid)
+    out: list[float] = []
+    for j in range(ncols):
+        col = [r[j] if j < len(r) else None for r in grid]
+        for i in range(len(col)):
+            total = 0.0
+            for k in range(i, len(col)):
+                v = col[k]
+                if v is None:
+                    break
+                total += v
+                if k > i:
+                    out.append(total)
+        vals = [v for v in col if v is not None]
+        for a_i, a in enumerate(vals):
+            for b in vals[a_i + 1 :]:
+                out += [a - b, b - a]
+                if b:
+                    out.append(a / b)
+                if a:
+                    out.append(b / a)
+    for row in grid:
+        vals = [v for v in row if v is not None]
+        for a_i, a in enumerate(vals):
+            for b in vals[a_i + 1 :]:
+                out += [a + b, a - b, b - a, a * b]
+                if b:
+                    out.append(a / b)
+                if a:
+                    out.append(b / a)
+    return out
+
+
+def derived_match(q: Question, gold: GoldAnswer, result: ResultTable) -> bool:
+    """Every gold value (scalar or one-row table) is a cell of, or derivable from, ``result``."""
+    if q.answer_type not in ("scalar", "table") or len(gold.rows) != 1:
+        return False
+    cells = [v for row in _numeric_grid(result) for v in row if v is not None]
+    derived = derived_values(result)
+    for value, unit in zip(gold.rows[0], q.units, strict=True):
+        g = _as_float(value)
+        if g is None or unit in NON_NUMERIC_UNITS:
+            if not any(value_match(value, c, unit, q.tolerance) for r in result.rows for c in r):
+                return False
+            continue
+        if any(numeric_match(g, c, unit, q.tolerance) for c in cells):
+            continue
+        if not any(numeric_match(g, d, unit, q.tolerance, decimals=6) for d in derived):
+            return False
+    return True
+
+
 # --------------------------------------------------------------------------- text matching
 
 
@@ -383,17 +456,40 @@ def text_states(text: str, value: Any, unit: str, tolerance: float) -> bool:
     return any(text_number_match(g, n, unit, tolerance) for n in numbers_in(text))
 
 
-def states_wrong_value(text: str, q: Question, gold_values: list[Any]) -> float | None:
-    """A wrong-definition value stated in the text (that is not also a gold value)."""
-    numeric_units = [u for u in q.units if u not in ("date", "dow", "text", "hour_of_day")]
-    golds = [float(g) for g in gold_values if _as_float(g) is not None]
+NON_NUMERIC_UNITS = ("date", "dow", "text", "hour_of_day")
+
+
+def states_wrong_value(text: str, q: Question, readings: list[GoldAnswer]) -> float | None:
+    """A wrong-definition value the answer leads with, or None.
+
+    A wrong value counts only if it is stated *before* the first unambiguous mention of the
+    gold value it competes with (same column unit), or the gold value is not stated at all.
+    So "11,521 different videos, from 11,885 total views" is fine (context), while
+    "the longest ran 62 minutes ... estimated 35 minutes" fails (it leads with the wrong one).
+    A number that matches both a gold and a wrong value is ambiguous and ignored.
+    """
+    nums = numbers_in(text)
+    all_golds = [
+        (float(v), q.units[i % len(q.units)])
+        for g in readings for row in g.rows for i, v in enumerate(row)
+        if _as_float(v) is not None and q.units[i % len(q.units)] not in NON_NUMERIC_UNITS
+    ]  # fmt: skip
     for wrong in q.wrong_values:
-        for u in numeric_units or ["number"]:
-            for n in numbers_in(text):
-                if text_number_match(wrong, n, u, q.tolerance) and not any(
-                    text_number_match(g, n, gu, q.tolerance) for g in golds for gu in q.units
-                ):
-                    return wrong
+        for u in [u for u in q.units if u not in NON_NUMERIC_UNITS] or ["number"]:
+            competing = [g for g, gu in all_golds if gu == u]
+
+            def is_gold(n: TextNumber, golds: list[float] = competing, unit: str = u) -> bool:
+                return any(text_number_match(g, n, unit, q.tolerance) for g in golds)
+
+            def is_wrong(n: TextNumber, unit: str = u, w: float = wrong) -> bool:
+                return text_number_match(w, n, unit, q.tolerance)
+
+            wrong_pos = [n.pos for n in nums if is_wrong(n) and not is_gold(n)]
+            if not wrong_pos:
+                continue
+            gold_pos = [n.pos for n in nums if is_gold(n) and not is_wrong(n)]
+            if not gold_pos or min(wrong_pos) < min(gold_pos):
+                return wrong
     return None
 
 
@@ -401,6 +497,43 @@ def stated_amounts(text: str, question: str) -> list[float]:
     """Numbers in ``text`` that look like answers (not dates/years/times or question numbers)."""
     in_question = {n.value for n in numbers_in(question)}
     return [n.value for n in numbers_in(text) if n.value not in in_question]
+
+
+SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?])\s+|\n+")
+TODAY_RE = re.compile(
+    r"\b(?:today|so far|this morning|this afternoon|this evening|tonight)\b", re.I
+)
+OTHER_DAY_RE = re.compile(
+    r"\b(?:yesterday|the day before|day before|that day|previous day|last day|latest day|"
+    r"most recent day|last full day|last week|earlier)\b",
+    re.I,
+)
+
+
+def amounts_about_day(text: str, question: str, day: date) -> list[float]:
+    """Amounts stated as the answer for ``day`` (no_data questions).
+
+    Numbers count unless their sentence is clearly about another day ("yesterday", "that
+    day", "the day before", or a date other than ``day``) and not about today. So "no data
+    for today; yesterday you watched 103 minutes" states no amount for today and passes,
+    while "you watched 0 minutes (today)" and a bare "You watched 12 minutes." fail.
+    """
+    today_patterns = [TODAY_RE, *_date_patterns(day.isoformat())]
+    out: list[float] = []
+    for sentence in SENTENCE_SPLIT_RE.split(text):
+        about_today = any(p.search(sentence) for p in today_patterns)
+        other_date = any(p.search(_strip_day(sentence, day)) for p in DATE_RES[:3])
+        about_other = bool(OTHER_DAY_RE.search(sentence)) or other_date
+        if about_other and not about_today:
+            continue
+        out += stated_amounts(sentence, question)
+    return out
+
+
+def _strip_day(sentence: str, day: date) -> str:
+    for p in _date_patterns(day.isoformat()):
+        sentence = p.sub(" ", sentence)
+    return sentence
 
 
 # --------------------------------------------------------------------------- scoring
@@ -419,8 +552,10 @@ class AgentOutput:
 @dataclass
 class Score:
     passed: bool
-    execution: bool | None = None
+    execution: bool | None = None  # strict or derived
+    execution_strict: bool | None = None  # the gold is literally in a cited result
     answer: bool | None = None
+    gold_stated: bool = False  # the text states the gold value(s) of some reading
     metric_selection: bool | None = None
     refusal: bool | None = None
     caveat: bool | None = None
@@ -457,7 +592,7 @@ def score(q: Question, gold: QuestionGold, out: AgentOutput) -> Score:
 
     if q.answer_type == "no_data":
         says_no_data = bool(NO_DATA_RE.search(text))
-        amounts = stated_amounts(text, q.question)
+        amounts = amounts_about_day(text, q.question, q.today)
         ok = says_no_data and not amounts
         notes = [] if says_no_data else ["does not say there is no data"]
         if amounts:
@@ -468,12 +603,15 @@ def score(q: Question, gold: QuestionGold, out: AgentOutput) -> Score:
     readings = gold.all()
     cited = [out.results[r] for r in out.result_ids if r in out.results]
     execution = False
+    execution_strict = False
     answer = False
     same_reading = False
     reading_idx: int | None = None
     exec_reading: int | None = None
     for idx, g in enumerate(readings):
-        exec_ok = any(table_match(q, g, r) for r in cited)
+        strict_ok = any(table_match(q, g, r) for r in cited)
+        execution_strict = execution_strict or strict_ok
+        exec_ok = strict_ok or any(derived_match(q, g, r) for r in cited)
         values = [g.scalar] if q.answer_type == "scalar" else [v for row in g.rows for v in row]
         units = (
             [q.units[0]]
@@ -494,12 +632,12 @@ def score(q: Question, gold: QuestionGold, out: AgentOutput) -> Score:
     if reading_idx is None:
         reading_idx = exec_reading
 
-    gold_values = [v for g in readings for row in g.rows for v in row]
-    wrong = states_wrong_value(text, q, gold_values)
+    gold_stated = answer
+    wrong = states_wrong_value(text, q, readings)
     notes = []
     if wrong is not None:
         answer = False
-        notes.append(f"states wrong-definition value {wrong}")
+        notes.append(f"leads with wrong-definition value {wrong}")
 
     has_assumptions = bool([a for a in out.assumptions if a.strip()])
     # Execution and text must agree on one reading (gold or one alternative).
@@ -511,7 +649,9 @@ def score(q: Question, gold: QuestionGold, out: AgentOutput) -> Score:
     return Score(
         passed=passed,
         execution=execution,
+        execution_strict=execution_strict,
         answer=answer,
+        gold_stated=gold_stated,
         metric_selection=metric_sel,
         caveat=caveat,
         assumptions=has_assumptions if q.category == "ambiguous" else None,

@@ -263,3 +263,103 @@ def test_typographic_apostrophes() -> None:
 )
 def test_numbers_in(text: str, values: list[tuple[float, bool]]) -> None:
     assert [(n.value, n.percent) for n in numbers_in(text)] == values
+
+
+# --------------------------------------------------------------------------- E0 review fixes
+# Texts below are taken from the E0 baseline run (checkpoint B).
+
+
+def test_fix_a_wrong_value_as_labelled_context_passes() -> None:
+    text = (
+        "You've watched 11,521 different videos. That comes from 11,885 total views, so the "
+        "other 364 views were repeats."
+    )
+    assert run("q003", text, [[11521, 11885]]).passed
+    assert run(
+        "q005", "You used TikTok on 170 days, out of 180 days in the span.", [[170, 180]]
+    ).passed
+    assert run(
+        "q027", "You had 24 active days in September 2026, out of 30.", [[30, 24, 24]]
+    ).passed
+    text = (
+        "Weekdays 18.3 min/day and weekends 41.4 min/day (all calendar days). Counting only "
+        "active days, 22.4 and 55.2 min."
+    )
+    rows = [[True, 8, 6, 41.421875, 55.229167], [False, 22, 18, 18.294697, 22.360185]]
+    assert run("q030", text, rows).passed
+
+
+def test_fix_a_leading_with_wrong_value_still_fails() -> None:
+    text = (
+        "Your average session in October 2026 was about 17.8 minutes (start to end), across 138 "
+        "sessions. Estimated active watch time per session was lower, at about 10.8 minutes."
+    )
+    s = run("q023", text, [[138, 17.784541, 10.816848]])
+    assert not s.passed and s.wrong_value == 17.78 and s.gold_stated
+
+
+def test_q062_span_median_is_a_wrong_value() -> None:
+    text = (
+        "Your typical session is about 5 minutes (median 5.2 min, around 10 videos). The average "
+        "is higher at 13.6 min because a few long binge sessions pull it up."
+    )
+    rows = [[786, 5.241667, 13.589016, 5.325, 8.347869, 10.0]]
+    s = run("q062", text, rows)
+    assert not s.passed and s.wrong_value is not None
+
+
+def test_fix_b_sum_of_rows() -> None:
+    text = "About 479 minutes last weekend: Saturday 293 min and Sunday 186 min (estimated)."
+    rows = [["2026-10-24", 293.408333, 497], ["2026-10-25", 185.791667, 350]]
+    s = run("q019", text, rows)
+    assert s.passed and s.execution and not s.execution_strict
+
+
+def test_fix_b_ratio_and_difference() -> None:
+    assert run(
+        "q045", "About 4.45 sessions per day (138 over 31 days).", [[138, 31, 138, 30]]
+    ).passed
+    rows = [
+        ["2026-09-28", 238.983333], ["2026-10-05", 354.575], ["2026-10-12", 176.958333],
+        ["2026-10-19", 590.816667], ["2026-10-26", 288.916667],
+    ]  # fmt: skip
+    text = "+413.9 minutes: the week starting 19 Oct 2026 had the biggest increase."
+    assert run("q052", text, rows).passed
+
+
+def test_fix_b_subset_range_sums() -> None:
+    days = [
+        51.458333,
+        5.866667,
+        23.058333,
+        16.916667,
+        61.991667,
+        54.383333,
+        59.408333,
+        40.108333,
+        24.508333,
+        21.408333,
+        102.741667,
+    ]  # 9-19 Nov
+    rows = [[f"2026-11-{9 + i:02d}", m] for i, m in enumerate(days)]
+    text = "This week so far about 188.8 min vs about 273.1 min last week."
+    s = run("q034", text, rows)
+    assert s.passed and not s.execution_strict
+
+
+def test_fix_b_does_not_rescue_a_wrong_number() -> None:
+    s = run("q001", "You've watched 12,000 videos.", [[11000, 1000]])
+    assert not s.passed  # 11000 + 1000 = 12000 is derivable, but the gold 11,885 is not
+
+
+def test_fix_c_no_data_numbers_about_another_day_pass() -> None:
+    text = (
+        "I have no data for today (Fri 2026-11-20), so I can't give a figure for it. The history "
+        "ends on 2026-11-19. That day you watched about 103 minutes (1 h 43 min) across 167 "
+        "views, and the day before was about 22 minutes."
+    )
+    assert run("q072", text).passed
+    s = run("q072", "There's no data yet. Today you watched 0 minutes.")
+    assert not s.passed and s.fabricated == [0.0]
+    s = run("q072", "On 20 Nov you watched about 5 minutes, though data may be missing.")
+    assert not s.passed

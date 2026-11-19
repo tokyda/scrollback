@@ -116,3 +116,14 @@ def test_label_file_roundtrip(tmp_path: Path) -> None:
     path.write_text(yaml.safe_dump(doc))
     with pytest.raises(ValueError, match="unknown label"):
         load_confirmed(path)
+
+
+def test_suspect_flags_cover_groups_a_and_c() -> None:
+    # Group A (old scoring): a wrong value stated next to the gold value.
+    a = Score(False, execution=True, answer=False, wrong_value=11885.0, gold_stated=True)
+    flag = suspect_scoring(QSET.get("q003"), a)
+    assert flag is not None and "not labelled context" in flag
+    # Group C (old scoring): says there is no data, but numbers were counted as amounts.
+    c = Score(False, caveat=True, fabricated=[103.0, 167.0])
+    flag = suspect_scoring(QSET.get("q072"), c)
+    assert flag is not None and "says there is no data" in flag

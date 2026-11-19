@@ -45,7 +45,7 @@ from scrollback.evals.warehouses import build_anchors, eval_settings
 REPO_ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_RUNS_DIR = REPO_ROOT / "eval" / "runs"
 DEFAULT_LABELS_DIR = REPO_ROOT / "eval" / "labels"
-RESULT_ROWS_KEPT = 20
+RESULT_ROWS_KEPT = 200  # = agent.max_result_rows, so re-scoring sees full results
 
 
 class Experiment(BaseModel):
@@ -206,19 +206,7 @@ def run_one(
         "today": q.today.isoformat(),
         "status": result.status,
         "passed": s.passed,
-        "scores": {
-            "execution": s.execution,
-            "answer": s.answer,
-            "metric_selection": s.metric_selection,
-            "refusal": s.refusal,
-            "caveat": s.caveat,
-            "assumptions": s.assumptions,
-            "reading": s.reading,
-            "wrong_value": s.wrong_value,
-            "refused": s.refused,
-            "fabricated": s.fabricated,
-            "notes": s.notes,
-        },
+        "scores": _scores_dict(s),
         "label_suggested": label,
         "label_reason": reason,
         "suspect_scoring": suspect,
@@ -329,6 +317,129 @@ def run_eval(
 
 
 def load_records(run_dir: Path) -> list[dict[str, Any]]:
-    lines = (run_dir / "results.jsonl").read_text(encoding="utf-8").splitlines()
+    return load_records_file(run_dir / "results.jsonl")
+
+
+def load_records_file(path: Path) -> list[dict[str, Any]]:
+    lines = path.read_text(encoding="utf-8").splitlines()
     return sorted((json.loads(x) for x in lines if x.strip()),
                   key=lambda r: (r["repeat"], r["question"]))  # fmt: skip
+
+
+def _scores_dict(s: Any) -> dict[str, Any]:
+    return {
+        "execution": s.execution, "execution_strict": s.execution_strict, "answer": s.answer,
+        "gold_stated": s.gold_stated, "metric_selection": s.metric_selection,
+        "refusal": s.refusal, "caveat": s.caveat, "assumptions": s.assumptions,
+        "reading": s.reading, "wrong_value": s.wrong_value, "refused": s.refused,
+        "fabricated": s.fabricated, "notes": s.notes,
+    }  # fmt: skip
+
+
+def rescore_run(
+    run_dir: Path, qset: QuestionSet, *, base: Settings, labels_dir: Path = DEFAULT_LABELS_DIR
+) -> dict[str, Any]:
+    """Re-score a finished run from its saved answers and results (no API calls).
+
+    Uses the current question set and scorer. The first re-score keeps the original
+    results as ``results.original.jsonl``. Confirmed labels carry over to failures that
+    remain; failures that now pass are listed under ``rescored_to_pass`` in the label file.
+    """
+    from scrollback.evals.labels import load_confirmed
+    from scrollback.evals.report import render_report, summarize
+
+    records = load_records(run_dir)
+    traces = {}
+    traces_path = run_dir / "traces.jsonl"
+    if traces_path.exists():
+        for line in traces_path.read_text(encoding="utf-8").splitlines():
+            if line.strip():
+                t = json.loads(line)
+                traces[t["trace_id"]] = t
+    qids = sorted({r["question"] for r in records})
+    selected = [q for q in qset.questions if q.id in qids]
+    missing = sorted(set(qids) - {q.id for q in selected})
+    if missing:
+        raise ValueError(f"questions no longer in the set: {missing}")
+    warehouses = build_anchors({q.today for q in selected}, base=base, params=qset.params)
+    golds = compute_golds(qset.model_copy(update={"questions": selected}), warehouses)
+
+    label_path = labels_dir / f"{run_dir.name}.yaml"
+    confirmed = load_confirmed(label_path)
+    previous_doc = yaml.safe_load(label_path.read_text()) if label_path.exists() else {}
+    # Changes are always reported against the run as originally scored.
+    original = run_dir / "results.original.jsonl"
+    originally = {
+        (r["question"], r["repeat"]): r
+        for r in (load_records_file(original) if original.exists() else records)
+    }
+    changed: list[dict[str, Any]] = []
+    new_records = []
+    for r in records:
+        if r["status"] == "harness_error":
+            new_records.append(r)
+            continue
+        q = qset.get(r["question"])
+        out = AgentOutput(
+            status=r["status"],
+            text=r.get("answer", ""),
+            result_ids=list(r.get("cited_results", {})),
+            metrics_used=r.get("metrics_used", []),
+            assumptions=r.get("assumptions", []),
+            results={
+                rid: ResultTable(c["columns"], c["rows"])
+                for rid, c in r.get("cited_results", {}).items()
+            },
+        )
+        s = score(q, golds[q.id], out)
+        tool_calls = traces.get(r.get("trace_id"), {}).get("tool_calls", [])
+        label, reason, suspect = None, None, None
+        if not s.passed:
+            label, reason = suggest_label(
+                q, s, status=r["status"], tool_calls=tool_calls, sql_used=r.get("sql_used", [])
+            )
+            suspect = suspect_scoring(q, s)
+        first = originally.get((q.id, r["repeat"]), r)
+        if s.passed != first["passed"]:
+            changed.append({"question": q.id, "repeat": r["repeat"],
+                            "before": first["passed"], "after": s.passed,
+                            "old_label": first.get("label_suggested")})  # fmt: skip
+        new_records.append({
+            **r, "category": q.category, "split": q.split, "passed": s.passed,
+            "scores": _scores_dict(s), "label_suggested": label, "label_reason": reason,
+            "suspect_scoring": suspect,
+        })  # fmt: skip
+
+    if not original.exists():
+        (run_dir / "results.jsonl").rename(original)
+    (run_dir / "results.jsonl").write_text(
+        "".join(json.dumps(r, default=str, ensure_ascii=False) + "\n" for r in new_records)
+    )
+    summary = summarize(new_records, qset)
+    summary["run_id"] = run_dir.name
+    summary["rescored_at"] = datetime.now(UTC).isoformat(timespec="seconds")
+    (run_dir / "summary.json").write_text(json.dumps(summary, indent=1, default=str))
+
+    failures = []
+    for r in new_records:
+        if r["passed"]:
+            continue
+        prev = confirmed.get((r["question"], r["repeat"]), {})
+        failures.append({
+            "question": r["question"], "repeat": r["repeat"], "category": r["category"],
+            "split": r["split"], "suggested": r.get("label_suggested"),
+            "reason": r.get("label_reason"), "suspect_scoring": r.get("suspect_scoring"),
+            "label": prev.get("label"), **({"note": prev["note"]} if prev.get("note") else {}),
+        })  # fmt: skip
+    write_label_file(run_dir.name, failures, label_path)
+    doc = yaml.safe_load(label_path.read_text())
+    for key, value in (previous_doc or {}).items():
+        if key not in doc and key not in ("rescored_to_pass", "rescored_to_fail"):
+            doc[key] = value  # keep e.g. the owner's confirmation note
+    doc["rescored_to_pass"] = [c for c in changed if c["after"]]
+    doc["rescored_to_fail"] = [c for c in changed if not c["after"]]
+    label_path.write_text(yaml.safe_dump(doc, sort_keys=False, allow_unicode=True, width=100))
+    (run_dir / "report.md").write_text(
+        render_report(summary, new_records, qset, load_confirmed(label_path))
+    )
+    return {"changed": changed, "summary": summary}

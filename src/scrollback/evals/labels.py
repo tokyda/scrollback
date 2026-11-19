@@ -69,7 +69,7 @@ def suggest_label(
         return "answer_misreport", "answer cites no query result"
 
     if s.wrong_value is not None:
-        return "wrong_metric_definition", f"states {s.wrong_value}, a wrong-definition value"
+        return "wrong_metric_definition", f"leads with {s.wrong_value}, a wrong-definition value"
     if s.execution and not s.answer:
         return "answer_misreport", "the cited result matches gold but the text does not state it"
     if s.execution and s.answer:
@@ -108,7 +108,14 @@ def suspect_scoring(q: Question, s: Score) -> str | None:
     if q.answer_type == "no_data":
         if not s.fabricated and not s.caveat:
             return "no amount stated but no 'no data' phrase matched"
+        if s.fabricated and s.caveat:
+            return f"says there is no data but numbers {s.fabricated} counted as today's amount"
         return None
+    if s.wrong_value is not None and s.gold_stated:
+        return (
+            f"leads with wrong-definition value {s.wrong_value} but also states the gold "
+            "value: check that the wrong value is the headline, not labelled context"
+        )
     if s.execution and not s.answer and s.wrong_value is None:
         return "result matches gold but the text check failed"
     if s.answer and not s.execution:

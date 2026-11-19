@@ -204,3 +204,28 @@ def test_cli_run_without_yes_only_estimates(
     assert "51 questions (dev) x 3 repeats = 153 agent runs on claude-sonnet-5-5" in result.output
     assert "Estimated cost: $" in result.output
     assert "Not running. Re-run with --yes" in result.output
+
+
+def test_rescore_is_stable_and_keeps_labels(tmp_path: Path) -> None:
+    from scrollback.evals.run import rescore_run
+
+    labels_dir = tmp_path / "labels"
+    run_dir = run_eval(
+        E0, QSET, base=repo_settings(), llm_factory=lambda s: WrongLLM(), split="all",
+        repeat=1, workers=1, only=["q001", "q063"], runs_dir=tmp_path / "runs",
+        labels_dir=labels_dir,
+    )  # fmt: skip
+    label_path = labels_dir / f"{run_dir.name}.yaml"
+    doc = yaml.safe_load(label_path.read_text())
+    doc["failures"][0]["label"] = "aggregation_error"
+    doc["confirmed"] = {"by": "owner"}
+    label_path.write_text(yaml.safe_dump(doc))
+
+    for _ in range(2):  # re-scoring twice changes nothing and loses nothing
+        result = rescore_run(run_dir, QSET, base=repo_settings(), labels_dir=labels_dir)
+        assert result["changed"] == []
+    doc = yaml.safe_load(label_path.read_text())
+    assert doc["confirmed"] == {"by": "owner"}
+    assert doc["failures"][0]["label"] == "aggregation_error"
+    assert (run_dir / "results.original.jsonl").exists()
+    assert len(load_records(run_dir)) == 2

@@ -773,7 +773,18 @@
     ]
    ]
   },
-  "alternatives": []
+  "alternatives": [
+   {
+    "columns": [
+     "(((SELECT \"views\" FROM agg_daily WHERE (local_date = CAST('2026-10-24' AS DATE))) * 1.0) / (SELECT avg(\"views\") FROM agg_daily WHERE (local_date BETWEEN CAST('2026-10-01' AS DATE) AND CAST('2026-10-31' AS DATE))))"
+    ],
+    "rows": [
+     [
+      5.733904
+     ]
+    ]
+   }
+  ]
  },
  "q057": {
   "gold": {

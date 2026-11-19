@@ -477,6 +477,26 @@ def eval_report(
     typer.echo(report)
 
 
+@eval_app.command("rescore")
+def eval_rescore(
+    run: Annotated[Path, typer.Argument(exists=True, file_okay=False, help="Run directory.")],
+    config: ConfigOption = None,
+) -> None:
+    """Re-score a finished run with the current questions and scorer (no API calls)."""
+    from scrollback.evals.questions import load_questions
+    from scrollback.evals.run import rescore_run
+
+    result = rescore_run(run, load_questions(), base=_settings(config))
+    for c in result["changed"]:
+        arrow = "pass" if c["after"] else "FAIL"
+        typer.echo(f"  {c['question']} r{c['repeat']}: -> {arrow} (was {c['old_label']})")
+    acc = result["summary"]["accuracy"]
+    typer.echo(
+        f"{len(result['changed'])} runs changed. Overall {acc['overall']['mean']:.1%}, "
+        f"dev {acc['dev']['mean']:.1%}, test {acc['test']['mean']:.1%}"
+    )
+
+
 @eval_app.command("import-feedback")
 def eval_import_feedback() -> None:
     """Turn bad bot feedback into candidate eval questions."""
