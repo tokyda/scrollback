@@ -11,7 +11,7 @@ If you change a design decision, update `docs/DESIGN.md` in the same commit and 
 
 ## Current state
 
-Phases 0-3 are done except ingesting a real export; see the roadmap checkboxes. No real
+Phases 0-4 are done except ingesting a real export; see the roadmap checkboxes. No real
 export has been ingested yet, so every TikTok-format assumption is listed in DESIGN §4.1
 "Format assumptions to verify against a real export". When a real export arrives, put it in
 `data/raw/`, run `scrollback ingest`, and update that list. An unknown structure (or a missing
@@ -41,6 +41,13 @@ uv run scrollback inspect gaps [--db path.duckdb] # gap distribution, aggregates
 
 # agent (needs ANTHROPIC_API_KEY in .env; costs money: ~$0.01-0.02 per question on Sonnet 5.5)
 uv run scrollback ask "how many minutes did I watch yesterday" [--show-sql] [--chart] [--today YYYY-MM-DD]
+
+# evals (DESIGN §7): gold check runs in CI; runs cost money and need --yes
+uv run scrollback eval check-gold [--update] [--show]
+uv run scrollback eval run --config eval/experiments/e00_baseline.yaml [--split dev|test|all] [--repeat 3]   # estimate only
+uv run scrollback eval run ... --yes                 # actually runs (E0 96x3 ~ $2.80)
+uv run scrollback eval rescore eval/runs/<run>       # re-score saved answers, no API calls
+uv run scrollback eval report eval/runs/<run> [eval/runs/<other>]
 ```
 
 Never run `dbt` directly: `dbt_project.yml` has no var defaults on purpose, and
@@ -71,6 +78,20 @@ them; `tests/test_ingest_e2e.py` and CI fail if they drift.
 - `src/scrollback/agent/tools.py`: describe_table, run_sql, make_chart, final_answer + schemas.
 - `src/scrollback/agent/loop.py`: `run_agent()`; prompts in `agent/prompts/system_v{N}.md`.
 - `src/scrollback/agent/pricing.py`: dated per-model prices; `tracing.py`: JSONL + `agent_traces`.
+- `src/scrollback/evals/`: `questions.py` (schema), `warehouses.py` (per-anchor warehouses),
+  `gold.py` (gold + snapshot), `score.py` (deterministic scoring), `labels.py`, `run.py`
+  (runner, rescore), `report.py`. Data in `eval/` (questions, experiments, labels, reports).
+
+## Eval conventions
+
+- `eval/questions.yaml` pins its own params; gold changes must be deliberate
+  (`check-gold --update` + review the snapshot diff). Write questions and gold SQL from the
+  definitions, never by running the agent on them first.
+- The test split is held out: run it only for baselines and final results, never to iterate.
+- Every real-API eval run prints a cost estimate first and needs the owner's OK (`--yes`).
+- Scoring changes need tests with real answer texts, then `eval rescore` on existing runs;
+  report any runs that flip. Review failures by hand: separate genuine agent failures from
+  suspected scoring false negatives.
 
 ## Warehouse and metrics conventions
 
