@@ -9,7 +9,7 @@ layer, data-quality tests and an eval harness for the agent.
 
 If you change a design decision, update `docs/DESIGN.md` in the same commit and say why.
 
-## Current status (2026-11-20)
+## Current status (2026-11-21)
 
 **Phases.** Phases 0-4 are done, except the Phase 1 item "ingest one real export": no real
 export yet, so every TikTok-format assumption is listed in DESIGN §4.1. When one arrives, put
@@ -89,22 +89,30 @@ The scoring false negatives found in review are listed in the label files.
 - *Reporting:* test accuracy is reported overall only, never per category. The test split is
   only for baselines and final runs.
 
-**Phase 5 should start with:**
-1. Branch `phase-5` off `main`. The baseline to compare against is the E0 run above (dev split).
-2. Remember the headroom is small: about 5 failing dev runs per repeat. Accuracy deltas will be
-   small, so compare repeats with `eval report <a> <b>` and also track tokens and steps.
-3. Run the cheap config switch first: **E1** (`describe_include_descriptions: true`) on dev only.
-   Then build the knowledge indexer (fastembed, `bge-small-en-v1.5`) and `search_knowledge`.
-   **E2a** = the tool only (prompt v1, tool list extended, no new rule); **E2b** = E2a + the
-   "look up definitions before computing" rule as `system_v2.md`. E2 targets E0's main
-   failure, session length by span (`knowledge/docs/sessions.md`).
-4. Do **E6** caveat and refusal rules as a new `system_v3.md`; never edit `system_v1.md`.
-   **E4 is cut** (no SQL-error failures to fix; DESIGN §7.5). E7: Haiku required, Opus optional
-   (ask the owner after E6). The ladder is cumulative; see DESIGN §7.5 for the rules and the
-   Phase 5 done-when.
-5. Before E3, write `knowledge/examples.yml` and its overlap check against `eval/questions.yaml`.
-6. Every real-API run needs a printed cost estimate and the owner's OK first. Phase 4 cost
-   about $7.70 in total; each 96 x 3 run costs about $2.80.
+**Phase 5 (branch `phase-5`, in progress; ladder rules in DESIGN §7.5):**
+1. **Done:** E1 on Sonnet (`describe_include_descriptions: true`), dev 99.5% vs E0 91.7%; one
+   failing run (q087 r3). Report: `eval/reports/e01_descriptions.md`. **E1 is Sonnet's final
+   config**; re-run Sonnet with a later step only if Haiku results suggest it would help.
+2. **Next: the model swap at the base of the ladder.** Run E0-haiku and E1-haiku
+   (`eval/experiments/e00_haiku.yaml`, `e01_haiku.yaml`) on dev; report both against Sonnet
+   E0/E1 with `eval report <a> <b> --split dev`.
+3. If E1-haiku is below ~93% on dev, run **E2a → E6 on Haiku**, one config change each,
+   cumulative; accuracy first, plus tokens, steps and recall@k. Stop for review after each.
+   - Knowledge indexer: fastembed, `bge-small-en-v1.5`, in a separate git-ignored DuckDB
+     file; `{param}` placeholders are filled at retrieval time from the run's settings.
+   - **E2a** = `search_knowledge` only, prompt `system_v1_search.md` (v1 + one tool line, no
+     new rule). **E2b** = + the "look up definitions before computing" rule (`system_v2.md`).
+     One prompt version = one exact text: `prompt_version` becomes a string, and every trace
+     records `system_prompt_sha256` of the rendered prompt.
+   - Before E3, write `knowledge/examples.yml` and its overlap check (token Jaccard >= 0.6 or
+     embedding cosine >= 0.85 fails; matching gold SQL skeleton warns; confirm with the owner).
+   - **E4 is cut** (no SQL-error failures; DESIGN §7.5). **E6** = caveat/refusal rules,
+     `system_v3.md`. Never edit `system_v1.md`. Opus is off the ladder.
+   - Recall@k needs `expected_knowledge` on each question; show the owner 15 for review first.
+4. **Final:** the best Haiku config and Sonnet E1, once each, on the test split.
+5. The strong-caveat sub-score (estimate + reason) is reported only; it never affects pass.
+6. Every real-API run needs a printed cost estimate and the owner's OK first. A Sonnet dev
+   run (64 x 3) costs about $2; Haiku is priced at about 1/20 of Sonnet.
 
 ## Commands
 
@@ -134,7 +142,7 @@ uv run scrollback eval check-gold [--update] [--show]
 uv run scrollback eval run --config eval/experiments/e00_baseline.yaml [--split dev|test|all] [--repeat 3]   # estimate only
 uv run scrollback eval run ... --yes                 # actually runs (E0 96x3 ~ $2.80)
 uv run scrollback eval rescore eval/runs/<run>       # re-score saved answers, no API calls
-uv run scrollback eval report eval/runs/<run> [eval/runs/<other>]
+uv run scrollback eval report eval/runs/<run> [eval/runs/<other> --split dev]
 ```
 
 Never run `dbt` directly: `dbt_project.yml` has no var defaults on purpose, and

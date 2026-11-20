@@ -68,11 +68,15 @@ Build scope by phase. Each phase ends with a "Done when" check. See `docs/DESIGN
 - [x] SQL error self-correction (max 2 retries) *(already part of the E0 baseline, DESIGN §6.3)*
 - [ ] Semantic compiler `metrics.yml → SQL` + `query_metric` tool
 - [ ] Refusal and caveat rules in the prompt
-- [ ] Run experiments **E1, E2a, E2b, E3, E5, E6, E7** (§7.5; E4 cut); compare reports after each
+- [x] **E1** on Sonnet (dev 99.5% vs E0 91.7%; `eval/reports/e01_descriptions.md`); E1 is Sonnet's final config
+- [ ] **E0-haiku** and **E1-haiku** on dev (model swap moved to the base of the ladder, §7.5)
+- [ ] If E1-haiku is below ~93% on dev: **E2a, E2b, E3, E5, E6** on Haiku (§7.5; E4 cut); compare reports after each
+- [ ] Final: best Haiku config and Sonnet E1 on the test split
+- [x] *(added)* Strong-caveat sub-score (estimate + reason; reported only, §7.2) and `eval report a b --split`
 - [ ] Retrieval eval: for each question, is the right metric or doc in the top k (recall@k)
 - [ ] README results table: accuracy, bad-case mix, tokens and latency per experiment
 
-**Done when:** the best config's mean dev pass rate is above E0's best dev repeat and its worst dev repeat is at least E0's dev mean; the dev session-length cluster (q023, q042, q084, q087) passes at least 10 of 12 runs; the final test pass rate is at least E0's 96.9%; tokens per question are reported; and every gain is linked to a run report (DESIGN §7.5).
+**Done when:** for Sonnet, the best config's mean dev pass rate is above E0's best dev repeat and its worst dev repeat is at least E0's dev mean; the dev session-length cluster (q023, q042, q084, q087) passes at least 10 of 12 runs; the final test pass rate is at least E0's 96.9%; tokens per question are reported; and every gain is linked to a run report (DESIGN §7.5).
 
 ## Phase 6: Telegram bot
 - [ ] Telegram bot: free-text questions, chart as photo, "Show SQL" button, allowed chat IDs only

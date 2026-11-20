@@ -546,7 +546,7 @@ Each step is one config. Results go into the README table.
 | ~~E4~~ | ~~+ richer structured SQL errors~~ *(cut, see below)* | — |
 | E5 | + `query_metric` semantic-layer tool | biggest jump on metric questions, fewer tokens |
 | E6 | + "cannot answer" doc + refusal rules (and the estimate-caveat rule), as `system_v3.md` | fewer failed refusals and missing caveats, check over-refusal |
-| E7 | model swap: `claude-haiku-5-5` (required), `claude-opus-5-5` (optional, owner decides after E6) | the cost/accuracy tradeoff |
+| ~~E7~~ | ~~model swap at the end~~ *(moved to the base of the ladder, see below)* | — |
 
 *(E-1 added, 2026-11-20, after E0 scored ~95%: much of E0's strength appears to come from the marts encoding the definitions as columns (`est_watch_sec`, `is_binge`, `is_late_night`, `is_active`). E-1 measures that directly. The SQL guard, `describe_table` and the prompt's table list all follow `agent.tables`. In the staging scope no table counts as pre-aggregated, so every query must aggregate.)*
 
@@ -554,12 +554,20 @@ Each step is one config. Results go into the README table.
 
 *(E4 cut, 2026-11-20, owner decision at the start of Phase 5: E0 has no `sql_error_unrecovered` and no `hallucinated_table_or_column` failures in 288 runs, so richer error messages have nothing to fix and could only move tokens and steps. The ladder spends its runs on the failures that exist. E4 can come back if a later config produces SQL-error failures.)*
 
-**Ladder rules (Phase 5, owner decisions 2026-11-20):**
+**Model swap at the base (owner decision 2026-11-21).** E1 on Sonnet scored 99.5% on dev (one failing run in 192; `eval/reports/e01_descriptions.md`), so later steps can't show accuracy gains on Sonnet. The model swap therefore moves from the end of the ladder to its base:
+1. **E0-haiku** and **E1-haiku**: the E0 and E1 configs with `model: claude-haiku-5-5`, dev split, reported against Sonnet E0 and E1.
+2. If E1-haiku has real headroom (dev below about 93%), E2a → E6 run **on Haiku**, under the ladder rules below. Accuracy is the primary measure, with tokens, steps and recall@k alongside.
+3. **Sonnet's final config is E1.** Sonnet is re-run with a later step only if the Haiku results suggest that step would help it.
+4. **Final:** the best Haiku config and Sonnet E1 each run once on the test split.
+
+Opus is no longer on the ladder.
+
+**Ladder rules (Phase 5, owner decisions 2026-11-20, 2026-11-21):**
 - **One experiment, one change.** Each config differs from the previous one by a single change. E2 is split into E2a (tool available) and E2b (plus the lookup rule), so the rule's effect is measured apart from the tool's.
 - **Cumulative.** Each step builds on the previous config. A step is dropped from later configs only if its dev pass rate is worse than the previous config's beyond repeat variance (its best repeat below the previous config's worst).
 - **Dev only while iterating.** The test split runs once, on the final config.
 - **Prompt versions:** `system_v1.md` is never edited; E2b adds `system_v2.md`, E6 adds `system_v3.md`.
-- **Done when** (replaces "beats E0 on execution accuracy", since E0's execution score is already 99.2% and its failures are in the answer text):
+- **Done when** (for Sonnet; replaces "beats E0 on execution accuracy", since E0's execution score is already 99.2% and its failures are in the answer text):
   - the best config's mean dev pass rate is above E0's best dev repeat, and its worst dev repeat is at least E0's dev mean;
   - the session-length cluster (dev: q023, q042, q084, q087) passes at least 10 of its 12 dev runs;
   - tokens per question are reported next to accuracy;
