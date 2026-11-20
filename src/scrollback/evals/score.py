@@ -404,20 +404,123 @@ def derived_values(result: ResultTable) -> list[float]:
     return [v for v, _ in derivations(result)]
 
 
+_MON = r"(?P<{name}>" + "|".join(m[:3] + "(?:" + m[3:] + r")?\.?" for m in MONTHS) + ")"
+_WD = r"(?:(?:mon|tue|tues|wed|thu|thur|thurs|fri|sat|sun)(?:day|nesday|sday|urday)?,?\s+)?"
+_SEP = r"\s*(?:-|to|through|until|thru)\s*"
+RANGE_RES = [
+    # 2026-11-09 to (Sun) 2026-11-15
+    re.compile(rf"(?P<a>\d{{4}}-\d{{2}}-\d{{2}}){_SEP}{_WD}(?P<b>\d{{4}}-\d{{2}}-\d{{2}})", re.I),
+    # (Mon) 9 Nov (2026) to (Sun) 15 Nov (2026)
+    re.compile(
+        rf"{_WD}(?P<d1>\d{{1,2}})\s+{_MON.format(name='m1')}(?:\s+(?P<y1>\d{{4}}))?{_SEP}"
+        rf"{_WD}(?P<d2>\d{{1,2}})\s+{_MON.format(name='m2')}(?:\s+(?P<y2>\d{{4}}))?",
+        re.I,
+    ),
+    # 10-16 Nov (2026)
+    re.compile(
+        rf"\b(?P<d1>\d{{1,2}})\s*-\s*(?P<d2>\d{{1,2}})\s+{_MON.format(name='m2')}"
+        rf"(?:\s+(?P<y2>\d{{4}}))?",
+        re.I,
+    ),
+    # Nov 10-16 (2026)
+    re.compile(
+        rf"{_MON.format(name='m2')}\s+(?P<d1>\d{{1,2}})\s*-\s*(?P<d2>\d{{1,2}})"
+        rf"(?:,?\s+(?P<y2>\d{{4}}))?",
+        re.I,
+    ),
+]
+
+
+def _month_number(token: str) -> int:
+    return [m[:3] for m in MONTHS].index(token.lower()[:3]) + 1
+
+
+def stated_date_ranges(text: str, today: date) -> list[tuple[date, date]]:
+    """Explicit date ranges an answer states ("2026-11-09 to 2026-11-15", "10-16 Nov 2026",
+    "Mon 9 Nov to Sun 15 Nov", "Nov 10-16"). Missing years default to ``today``'s year."""
+    found: list[tuple[date, date]] = []
+    for pattern in RANGE_RES:
+        for m in pattern.finditer(text):
+            g = m.groupdict()
+            try:
+                if g.get("a"):
+                    start, end = date.fromisoformat(g["a"]), date.fromisoformat(g["b"])
+                else:
+                    m2 = _month_number(g["m2"])
+                    m1 = _month_number(g["m1"]) if g.get("m1") else m2
+                    y2 = int(g["y2"]) if g.get("y2") else today.year
+                    y1 = int(g["y1"]) if g.get("y1") else y2
+                    start, end = date(y1, m1, int(g["d1"])), date(y2, m2, int(g["d2"]))
+            except (ValueError, KeyError):
+                continue
+            if start <= end and (start, end) not in found:
+                found.append((start, end))
+    return found
+
+
+def range_sum_match(
+    g: float,
+    unit: str,
+    tolerance: float,
+    result: ResultTable,
+    ranges: list[tuple[date, date]],
+    text_nums: list[TextNumber],
+) -> bool:
+    """A gold total equals the sum of the cited rows inside a date range the answer states.
+
+    Safeguard: only rows whose date (a date column of the result) falls inside the stated
+    range are summed, and that sum must match both a total the text states and the gold.
+    """
+    if not ranges or not result.rows:
+        return False
+    date_cols = [
+        j for j in range(len(result.columns))
+        if all(_to_date_str(row[j]) for row in result.rows if j < len(row))
+    ]  # fmt: skip
+    if not date_cols:
+        return False
+    dj = date_cols[0]
+    grid = _numeric_grid(result)
+    for start, end in ranges:
+        inside = [
+            i for i, row in enumerate(result.rows[:DERIVE_MAX_ROWS])
+            if start <= date.fromisoformat(str(_to_date_str(row[dj]))) <= end
+        ]  # fmt: skip
+        if not inside:
+            continue
+        for j in range(len(result.columns)):
+            if j == dj:
+                continue
+            values = [grid[i][j] if j < len(grid[i]) else None for i in inside]
+            if any(v is None for v in values):
+                continue
+            total = float(sum(v for v in values if v is not None))
+            if numeric_match(g, total, unit, tolerance, decimals=6) and _stated(
+                total, text_nums, unit, tolerance
+            ):
+                return True
+    return False
+
+
 def _stated(value: float, text_nums: list[TextNumber], unit: str, tolerance: float) -> bool:
     units = (unit, "number") if unit != "number" else ("number",)
     return any(text_number_match(value, n, u, tolerance) for n in text_nums for u in units)
 
 
 def derived_match(
-    q: Question, gold: GoldAnswer, result: ResultTable, text_nums: list[TextNumber]
+    q: Question,
+    gold: GoldAnswer,
+    result: ResultTable,
+    text_nums: list[TextNumber],
+    ranges: list[tuple[date, date]] | None = None,
 ) -> bool:
     """Every gold value (scalar or one-row table) is a cell of, or derived from, ``result``.
 
     A derived value counts only when the answer shows the arithmetic: the text states the
     derived value *and* every cell it was computed from. So "Saturday 293 + Sunday 186 =
     about 479 min" counts, while two unrelated cells whose difference happens to equal the
-    gold (8.1 - 3.9 = 4.2 vs 4.18) do not.
+    gold (8.1 - 3.9 = 4.2 vs 4.18) do not. A sum over many dated rows also counts when the
+    answer states the total and its date range (``range_sum_match``).
     """
     if q.answer_type not in ("scalar", "table") or len(gold.rows) != 1:
         return False
@@ -431,13 +534,16 @@ def derived_match(
             continue
         if any(numeric_match(g, c, unit, q.tolerance) for c in cells):
             continue
-        if not any(
+        if any(
             numeric_match(g, d, unit, q.tolerance, decimals=6)
             and _stated(d, text_nums, unit, q.tolerance)
             and all(_stated(o, text_nums, "number", 0.0) for o in operands)
             for d, operands in derived
         ):
-            return False
+            continue
+        if range_sum_match(g, unit, q.tolerance, result, ranges or [], text_nums):
+            continue
+        return False
     return True
 
 
@@ -711,6 +817,8 @@ def score(q: Question, gold: QuestionGold, out: AgentOutput) -> Score:
 
     readings = gold.all()
     text_nums = numbers_in(text)
+    # Date ranges may be stated in the text or the assumptions (both are part of the answer).
+    ranges = stated_date_ranges(normalise_text(" ".join([text, *out.assumptions])), q.today)
     cited = [out.results[r] for r in out.result_ids if r in out.results]
     execution = False
     execution_strict = False
@@ -721,7 +829,7 @@ def score(q: Question, gold: QuestionGold, out: AgentOutput) -> Score:
     for idx, g in enumerate(readings):
         strict_ok = any(table_match(q, g, r) for r in cited)
         execution_strict = execution_strict or strict_ok
-        exec_ok = strict_ok or any(derived_match(q, g, r, text_nums) for r in cited)
+        exec_ok = strict_ok or any(derived_match(q, g, r, text_nums, ranges) for r in cited)
         values = [g.scalar] if q.answer_type == "scalar" else [v for row in g.rows for v in row]
         units = (
             [q.units[0]]

@@ -466,3 +466,75 @@ def test_widened_no_data_pattern() -> None:
     zero = "There are 0 watch events for today (2026-11-20), so I can't report any watch time."
     s = run("q072", zero)
     assert not s.passed and s.fabricated == [0.0]
+
+
+# --------------------------------------------------------------------------- range sums
+
+Q034_ROWS = [
+    ["2026-11-09", 1, 51.458333, 78], ["2026-11-10", 2, 5.866667, 11],
+    ["2026-11-11", 3, 23.058333, 38], ["2026-11-12", 4, 16.916667, 32],
+    ["2026-11-13", 5, 53.858333, 104], ["2026-11-14", 6, 61.7, 115],
+    ["2026-11-15", 7, 60.225, 102], ["2026-11-16", 1, 33.15, 59],
+    ["2026-11-17", 2, 30.408333, 52], ["2026-11-18", 3, 22.466667, 36],
+    ["2026-11-19", 4, 102.741667, 167],
+]  # fmt: skip
+Q034_COLS = ["local_date", "dow", "est_watch_min", "views"]
+Q034_R2_TEXT = (
+    "So far this week you've watched about 189 min (3.1 h), which is 69% of last week's full "
+    "total of about 273 min (4.6 h). Compared with the same days last week (Mon-Thu, about 97 "
+    "min), you're up about 94%. Most of that comes from Thursday, with 103 min, your biggest "
+    "day in this window."
+)
+
+
+def test_range_sum_q034_r2_passes() -> None:
+    # E0 q034 r2: the ranges are stated in the answer's assumptions.
+    assumptions = [
+        "This week = Mon 2026-11-16 to Fri 2026-11-20, but data only runs through Thu "
+        "2026-11-19, so Friday has no data yet.",
+        "Last week = Mon 2026-11-09 to Sun 2026-11-15.",
+    ]
+    s = run("q034", Q034_R2_TEXT, Q034_ROWS, Q034_COLS, assumptions=assumptions)
+    assert s.passed and s.execution and not s.execution_strict
+
+
+def test_range_sum_total_matching_gold_but_not_its_stated_range_fails() -> None:
+    # Same totals (189, 273 = gold), but the stated ranges sum to 97.3 and 364.6, not to them.
+    assumptions = ["This week = 2026-11-09 to 2026-11-12", "Last week = 2026-11-13 to 2026-11-19"]
+    s = run("q034", Q034_R2_TEXT, Q034_ROWS, Q034_COLS, assumptions=assumptions)
+    assert s.answer and not s.execution and not s.passed
+
+
+def test_range_sum_needs_the_total_in_the_text() -> None:
+    assumptions = ["This week = 2026-11-16 to 2026-11-20", "Last week = 2026-11-09 to 2026-11-15"]
+    s = run("q034", "This week is well ahead of last week.", Q034_ROWS, Q034_COLS,
+            assumptions=assumptions)  # fmt: skip
+    assert not s.execution
+
+
+def test_range_sum_e1_q059_r2_passes() -> None:
+    days = [78, 11, 38, 32, 104, 115, 102, 59]  # 9-16 Nov
+    rows = [[f"2026-11-{9 + i:02d}", n] for i, n in enumerate(days)]
+    text = "You watched 461 videos in the last 7 days (10\u201316 Nov 2026, today included)."
+    s = run("q059", text, rows, ["local_date", "c"], assumptions=["today included"])
+    assert s.passed and s.reading == 1
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("Last week = Mon 2026-11-09 to Sun 2026-11-15.", [("2026-11-09", "2026-11-15")]),
+        ("in the last 7 days (10-16 Nov 2026)", [("2026-11-10", "2026-11-16")]),
+        ("from Mon 9 Nov to Sun 15 Nov", [("2026-11-09", "2026-11-15")]),
+        ("Nov 2-8, 2026", [("2026-11-02", "2026-11-08")]),
+        ("28 Oct to 3 Nov", [("2026-10-28", "2026-11-03")]),
+        ("on 2026-11-09 only", []),
+    ],
+)
+def test_stated_date_ranges(text: str, expected: list[tuple[str, str]]) -> None:
+    from datetime import date
+
+    from scrollback.evals.score import stated_date_ranges
+
+    got = stated_date_ranges(text, date(2026, 11, 20))
+    assert [(a.isoformat(), b.isoformat()) for a, b in got] == expected
