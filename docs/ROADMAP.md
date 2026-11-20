@@ -76,7 +76,7 @@ Build scope by phase. Each phase ends with a "Done when" check. See `docs/DESIGN
 - [ ] Retrieval eval: for each question, is the right metric or doc in the top k (recall@k)
 - [ ] README results table: accuracy, bad-case mix, tokens and latency per experiment
 
-**Done when:** for Sonnet, the best config's mean dev pass rate is above E0's best dev repeat and its worst dev repeat is at least E0's dev mean; the dev session-length cluster (q023, q042, q084, q087) passes at least 10 of 12 runs; the final test pass rate is at least E0's 96.9%; tokens per question are reported; and every gain is linked to a run report (DESIGN §7.5).
+**Done when:** for Haiku, the best Haiku config beats E1-haiku beyond repeat variance on dev and is within ~2 points of Sonnet E1, with cost per question side by side; for Sonnet, the best config's mean dev pass rate is above E0's best dev repeat and its worst dev repeat is at least E0's dev mean; the dev session-length cluster (q023, q042, q084, q087) passes at least 10 of 12 runs; the final test pass rate is at least E0's 96.9%; tokens per question are reported; and every gain is linked to a run report (DESIGN §7.5).
 
 ## Phase 6: Telegram bot
 - [ ] Telegram bot: free-text questions, chart as photo, "Show SQL" button, allowed chat IDs only

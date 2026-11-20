@@ -562,6 +562,10 @@ Each step is one config. Results go into the README table.
 
 Opus is no longer on the ladder.
 
+**Done when, for Haiku** (owner decision 2026-11-21):
+1. the best Haiku config beats E1-haiku beyond repeat variance on dev (its worst repeat above E1-haiku's best); and
+2. target: its mean dev pass rate is within about 2 points of Sonnet E1 (99.5%), with cost per question reported next to Sonnet's.
+
 **Ladder rules (Phase 5, owner decisions 2026-11-20, 2026-11-21):**
 - **One experiment, one change.** Each config differs from the previous one by a single change. E2 is split into E2a (tool available) and E2b (plus the lookup rule), so the rule's effect is measured apart from the tool's.
 - **Cumulative.** Each step builds on the previous config. A step is dropped from later configs only if its dev pass rate is worse than the previous config's beyond repeat variance (its best repeat below the previous config's worst).
