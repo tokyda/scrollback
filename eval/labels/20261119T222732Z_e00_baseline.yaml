@@ -76,17 +76,6 @@ failures:
   suspect_scoring: 'leads with wrong-definition value 17.78 but also states the gold value: check that
     the wrong value is the headline, not labelled context'
   label: wrong_metric_definition
-- question: q034
-  repeat: 2
-  category: comparison
-  split: dev
-  suggested: wrong_time_window
-  reason: date literals ['2026-11-09', '2026-11-20'] vs gold ['2026-11-09', '2026-11-15', '2026-11-16',
-    '2026-11-20']
-  suspect_scoring: text states the gold value but no cited result matched
-  label: null
-  note: 'suspected scoring false negative under the tightened fix B: a correct total summed from per-day
-    rows without itemising the rows; pending owner decision'
 - question: q042
   repeat: 2
   category: session_derived
@@ -139,17 +128,6 @@ failures:
   suspect_scoring: 'leads with wrong-definition value 17.78 but also states the gold value: check that
     the wrong value is the headline, not labelled context'
   label: wrong_metric_definition
-- question: q034
-  repeat: 3
-  category: comparison
-  split: dev
-  suggested: wrong_time_window
-  reason: date literals ['2026-11-09', '2026-11-20'] vs gold ['2026-11-09', '2026-11-15', '2026-11-16',
-    '2026-11-20']
-  suspect_scoring: text states the gold value but no cited result matched
-  label: null
-  note: 'suspected scoring false negative under the tightened fix B: a correct total summed from per-day
-    rows without itemising the rows; pending owner decision'
 - question: q042
   repeat: 3
   category: session_derived
@@ -205,7 +183,8 @@ confirmed:
   by: owner
   date: '2026-11-20'
   decision: 15 wrong_metric_definition, 3 missing_caveat, 1 answer_misreport (q060 r3). q067 r1 passes
-    with describe_table grounding. q034 r2/r3 pending (tightened fix B).
+    with describe_table grounding. q034 r2/r3 confirmed scoring false negatives, resolved by the range-sum
+    rule.
 rescored_to_pass:
 - question: q067
   repeat: 1
@@ -232,14 +211,13 @@ rescored_to_pass:
   before: false
   after: true
   old_label: failed_refusal
-rescored_to_fail:
+rescored_to_fail: []
+scoring_false_negatives:
 - question: q034
   repeat: 2
-  before: true
-  after: false
-  old_label: null
+  note: correct sum over the cited per-day rows inside the date range the answer states; scored as a pass
+    by the range-sum rule (owner decision 2026-11-20)
 - question: q034
   repeat: 3
-  before: true
-  after: false
-  old_label: null
+  note: correct sum over the cited per-day rows inside the date range the answer states; scored as a pass
+    by the range-sum rule (owner decision 2026-11-20)

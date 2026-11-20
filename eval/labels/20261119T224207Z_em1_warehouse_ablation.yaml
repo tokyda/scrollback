@@ -577,17 +577,6 @@ failures:
     '2026-11-09', '2026-11-13', '2026-11-14', '2026-11-15', '2026-11-16', '2026-11-19', '2026-11-20']
   suspect_scoring: null
   label: wrong_metric_definition
-- question: q059
-  repeat: 2
-  category: ambiguous
-  split: test
-  suggested: wrong_time_window
-  reason: date literals ['2026-11-09', '2026-11-16'] vs gold ['2026-11-09', '2026-11-10', '2026-11-15',
-    '2026-11-16']
-  suspect_scoring: text states the gold value but no cited result matched
-  label: null
-  note: 'suspected scoring false negative under the tightened fix B: a correct total summed from per-day
-    rows without itemising the rows; pending owner decision'
 - question: q061
   repeat: 2
   category: ambiguous
@@ -1110,6 +1099,12 @@ failures:
   reason: 'result does not match gold (question hint: missing_caveat)'
   suspect_scoring: null
   label: wrong_metric_definition
+confirmed:
+  by: owner
+  date: '2026-11-20'
+  decision: 'Relabelled from the answers: 53 over_refusal, 65 wrong_metric_definition, 12 timezone_or_day_boundary,
+    1 answer_misreport; q072 r2/r3 failed_refusal. q060 x3, q063 r2 and q072 r1 pass after the scorer/question
+    fixes. q059 r2 confirmed scoring false negative, resolved by the range-sum rule.'
 rescored_to_pass:
 - question: q060
   repeat: 1
@@ -1156,15 +1151,9 @@ rescored_to_pass:
   before: false
   after: true
   old_label: failed_refusal
-rescored_to_fail:
+rescored_to_fail: []
+scoring_false_negatives:
 - question: q059
   repeat: 2
-  before: true
-  after: false
-  old_label: null
-confirmed:
-  by: owner
-  date: '2026-11-20'
-  decision: 'Relabelled from the answers: 53 over_refusal, 65 wrong_metric_definition, 12 timezone_or_day_boundary,
-    1 answer_misreport; q072 r2/r3 failed_refusal. q060 x3, q063 r2 and q072 r1 pass after the scorer/question
-    fixes. q059 r2 pending (tightened fix B).'
+  note: correct sum over the cited per-day rows inside the date range the answer states; scored as a pass
+    by the range-sum rule (owner decision 2026-11-20)

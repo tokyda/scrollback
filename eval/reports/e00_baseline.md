@@ -22,11 +22,11 @@ overall only, because it has too few questions per category to read into.
 
 | Slice | E0 (marts) | E-1 (staging only) | Δ |
 |---|---|---|---|
-| **Overall** | **92.7%** (91.7–93.8) | **53.5%** (52.1–54.2) | **−39.2** |
-| Dev | 90.6% (89.1–92.2) | 51.0% (50.0–51.6) | −39.6 |
-| Test (held out) | 96.9% (96.9–96.9) | 58.3% (56.2–59.4) | −38.6 |
+| **Overall** | **93.4%** (92.7–93.8) | **53.8%** (53.1–54.2) | **−39.6** |
+| Dev | 91.7% (90.6–92.2) | 51.0% (50.0–51.6) | −40.7 |
+| Test (held out) | 96.9% (96.9–96.9) | 59.4% (59.4–59.4) | −37.5 |
 
-**The data modelling alone is worth about 39 points of accuracy.** The agent, prompt and model are identical; only the tables it can see differ.
+**The data modelling alone is worth about 40 points of accuracy.** The agent, prompt and model are identical; only the tables it can see differ.
 
 ## Per category (dev)
 
@@ -36,7 +36,7 @@ overall only, because it has too few questions per category to read into.
 | time_window | 100.0 | 60.0 | −40.0 |
 | relative_date | 100.0 | 33.3 | −66.7 |
 | metric_definition | 83.3 | 66.7 | −16.7 |
-| comparison | 83.3 | 0.0 | −83.3 |
+| comparison | 100.0 | 0.0 | −100.0 |
 | ranking | 100.0 | 100.0 | 0.0 |
 | session_derived | 62.5 | 20.8 | −41.7 |
 | multi_step | 100.0 | 60.0 | −40.0 |
@@ -51,7 +51,7 @@ watch time, sessions or calendar days does.
 
 | Score | E0 | E-1 |
 |---|---|---|
-| execution (gold in a cited result, or shown arithmetic on one) | 98.4% | 49.2% |
+| execution (gold in a cited result, or shown arithmetic on one) | 99.2% | 49.6% |
 | answer (text states the gold, doesn't lead with a wrong value) | 93.8% | 50.8% |
 | refusal correct (unanswerable) | 100.0% | 100.0% |
 | caveat present (traps) | 88.9% | 88.9% |
@@ -64,14 +64,13 @@ E-1 3.01 steps, 3.22 tool calls, 7.3k tokens, 7.0 s, $0.0097.
 
 ## Bad cases (labels confirmed by the owner)
 
-**E0: 21 failed runs.** 19 have confirmed labels; 2 are pending (see "Open scoring question").
+**E0: 19 failed runs**, all with confirmed labels.
 
 | Label | Runs | Questions |
 |---|---|---|
 | wrong_metric_definition | 15 | q023, q042, q062, q084, q087 (3/3 each) |
 | missing_caveat | 3 | q075 (2/3), q071 (1/3) |
 | answer_misreport | 1 | q060 r3 (16.45% reported as "about 17%") |
-| pending (suspected scoring FN) | 2 | q034 r2, r3 |
 
 Every E0 definition failure has the same cause: **session length measured as wall-clock span
 (first to last view) instead of estimated watch time**. Examples: "the longest session ran
@@ -79,7 +78,7 @@ about 62 minutes from start to end" against 34.7 min estimated, or "median sessi
 against 6.4. The agent finds `est_watch_sec`, but without a definition it leads with the span.
 This is the main target for E2 (metrics glossary).
 
-**E-1: 134 failed runs.** 133 have confirmed labels; 1 is pending.
+**E-1: 133 failed runs**, all with confirmed labels.
 
 | Label | Runs | What happens |
 |---|---|---|
@@ -88,7 +87,6 @@ This is the main target for E2 (metrics glossary).
 | timezone_or_day_boundary | 12 | Rebuilds sessions within each calendar day, so sessions are cut at midnight (q043, q044, q047, q048) |
 | failed_refusal | 2 | q072: "0 watch events for today": unknown is reported as zero |
 | answer_misreport | 1 | q001: correct text, no cited result |
-| pending (suspected scoring FN) | 1 | q059 r2 |
 
 ## Insight: the marts encode a human decision
 
@@ -116,7 +114,7 @@ column: session length (span vs estimated watch time) and when to caveat an esti
 
 ## Implications for Phase 5
 
-- **Dev headroom over E0 is small:** about 6 failing runs per repeat out of 64 dev
+- **Dev headroom over E0 is small:** about 5 failing runs per repeat out of 64 dev
   questions, concentrated in session length (4 dev questions, plus q062 in test) and caveats
   (2 questions).
   E2 (glossary) and E6 (caveat/refusal rules) target exactly these. E1, E3 and E4 have
@@ -135,6 +133,7 @@ approved by the owner and applied to both runs by re-scoring the saved answers (
 |---|---|---|
 | A | A wrong-definition value fails only if the answer leads with it | "11,521 different videos, from 11,885 total views" passes as context |
 | B | Execution also accepts simple arithmetic on cited cells, **only when the answer shows it** (states the result and every cell used) | "Sat 293 + Sun 186 ≈ 479 min" passes; the q044 coincidence (8.1 − 3.9 = 4.2 vs gold 4.18) doesn't |
+| B, range sums | A sum over many dated rows also counts when the answer **states the total and its date range**: the scorer parses the range (text or assumptions), sums only the cited rows inside it, and the sum must match both the stated total and the gold | "this week 189 min vs last week 273 min" with "This week = 2026-11-16 to 2026-11-20" passes; the same totals with a range that doesn't produce them fail |
 | C | `no_data`: only amounts stated *for that day* count | "no data for today; yesterday 103 min" passes; "0 minutes today" fails |
 | D | Unanswerable: after a leading refusal, numbers must be grounded in the run's query results or describe_table output | real context numbers pass; "I can't know exactly, but probably 40 min" fails |
 
@@ -142,14 +141,13 @@ The question set also changed after the first E0 run: q056, q060 and q082 accept
 readings, q062 lists the span-based median as a wrong value, and round 2 added 20 harder
 questions (q077–q096). Gold answers are pinned by `eval/gold_snapshot.json`, and CI checks them.
 
-### Open scoring question
+### Scoring false negatives found in review
 
-Fix B as tightened requires the answer to show **every** summed cell. For sums over many rows
-this rejects 3 correct answers that state the total but not each day: E0 q034 r2/r3 (this week
-vs last week, from 11 daily rows) and E-1 q059 r2 (last 7 days, from 7 daily rows). They are
-left unlabelled pending a decision. One option: accept a range sum when the answer states the
-total and the date range it covers. If they counted as passes, E0 would be 93.4% overall and
-E-1 53.8%.
+All suspected scoring false negatives were confirmed by the owner, fixed in the scorer or the
+question set, and re-scored. The last three were correct sums over many daily rows that didn't
+itemise each day (E0 q034 r2/r3: "this week 189 min vs last week 273 min"; E-1 q059 r2: "461
+videos in the last 7 days, 10–16 Nov"). The range-sum rule above resolves them. They are
+recorded under `scoring_false_negatives` in the label files.
 
 ## Reproduce
 

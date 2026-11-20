@@ -17,19 +17,20 @@ it in `data/raw/`, run `scrollback ingest` and update that list. An unknown stru
 with the keys it found (extend `VARIANTS` in `ingest/detect.py` and add a synthetic variant);
 unknown extra fields only warn and land in `extras`.
 
-**Open PR.** Phase 4 is PR #5 (branch `phase-4`), not merged; merge only when the owner says.
-PRs #1-#3 (Phases 0-2) and #4 (Phase 3) are merged.
+**PRs.** Everything through Phase 4 is merged into `main`: #1 (Phases 0-1), #3 (Phase 2), #4
+(Phase 3) and #5 (Phase 4). #2 was superseded by #3. No PR is open.
 
 **Headline numbers** (96 questions x 3 repeats, `claude-sonnet-5-5`, effort medium; full write-up
 in `eval/reports/e00_baseline.md`):
 
 | Run | Overall | Dev | Test (held out) | Cost |
 |---|---|---|---|---|
-| E0 baseline (marts) `20261119T222732Z_e00_baseline` | **92.7%** | 90.6% | 96.9% | $2.79 |
-| E-1 warehouse ablation (staging only) `20261119T224207Z_em1_warehouse_ablation` | **53.5%** | 51.0% | 58.3% | $2.78 |
+| E0 baseline (marts) `20261119T222732Z_e00_baseline` | **93.4%** | 91.7% | 96.9% | $2.79 |
+| E-1 warehouse ablation (staging only) `20261119T224207Z_em1_warehouse_ablation` | **53.8%** | 51.0% | 59.4% | $2.78 |
 
 Same agent, prompt and model; only the queryable tables differ, so the data modelling is worth
-about 39 points.
+about 40 points. Every failure in both runs has an owner-confirmed label; nothing is pending.
+The scoring false negatives found in review are listed in the label files.
 
 **Confirmed bad-case clusters** (owner-confirmed labels in `eval/labels/`):
 - E0, 19 runs:
@@ -47,11 +48,6 @@ about 39 points.
 - Insight: the marts encode a human decision to estimate watch time that the agent can't make
   alone. E0's remaining failures are exactly the definitions that are not a column.
 
-**Pending:** 3 runs (E0 q034 r2/r3, E-1 q059 r2) are correct sums over many daily rows that the
-tightened fix B rejects, because the answer doesn't itemise each row. Their labels are `null`
-with a note. Proposed resolution, awaiting the owner: accept a range sum when the answer states
-the total and the date range. If accepted, E0 would be 93.4% and E-1 53.8%.
-
 **Scoring rules and decisions from Phase 4** (all in DESIGN §7; code in `src/scrollback/evals/`):
 - *Pass rules:*
   - normal questions: execution and answer;
@@ -67,6 +63,10 @@ the total and the date range. If accepted, E0 would be 93.4% and E-1 53.8%.
 - *Fix B (tightened):* a derived value (range sum; +, -, x, / in a row; difference or ratio in
   a column) counts only if the text states it **and every cell used**. That blocks
   coincidences like E-1 q044 (8.1 - 3.9 = 4.2 vs 4.18).
+- *Range-sum rule:* a total over many dated rows also counts when the answer states the total
+  **and a date range** (in text or assumptions). The scorer parses the range, sums only the
+  cited rows inside it, and the sum must match both the stated total and the gold. This
+  resolved E0 q034 r2/r3 and E-1 q059 r2 (confirmed scoring false negatives).
 - *Fix C / unknown is not zero:* for `no_data` questions (q072), only amounts stated for that
   day count. "No data for today; yesterday 103 min" passes; "0 minutes" or "0 watch events
   for today" fails. The no-data phrases include "no watch events for" and "data ends on".
@@ -90,9 +90,8 @@ the total and the date range. If accepted, E0 would be 93.4% and E-1 53.8%.
   only for baselines and final runs.
 
 **Phase 5 should start with:**
-1. Get the owner's decision on the pending range-sum rule. Re-score both runs, and merge PR #5
-   once approved.
-2. Remember the headroom is small: about 6 failing dev runs per repeat. Accuracy deltas will be
+1. Branch `phase-5` off `main`. The baseline to compare against is the E0 run above (dev split).
+2. Remember the headroom is small: about 5 failing dev runs per repeat. Accuracy deltas will be
    small, so compare repeats with `eval report <a> <b>` and also track tokens and steps.
 3. Run the cheap config switch first: **E1** (`describe_include_descriptions: true`) on dev only.
    Then build the knowledge indexer and `search_knowledge` for **E2**. E2 targets E0's main
