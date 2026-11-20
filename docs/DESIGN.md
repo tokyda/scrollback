@@ -539,16 +539,30 @@ Each step is one config. Results go into the README table.
 | E-1 | **warehouse ablation**: the E0 agent and prompt, but only the staging views (`stg_*`) may be queried (`agent.tables: staging`); no sessions, watch-time estimates, flags or zero-filled spine | quantifies what the data modelling alone contributes (E0 − E-1) |
 | E0 | schema only, `run_sql` only | baseline |
 | E1 | + table and column descriptions (`describe_include_descriptions: true`) | fewer hallucinated columns |
-| E2 | + metrics glossary via RAG | fewer wrong metric definitions |
+| E2a | + `search_knowledge` tool over the metrics, glossary and table descriptions (hybrid retrieval); prompt v1 with only its tool list extended by the new tool, no new rule | does the agent look definitions up unprompted, and do fewer definitions go wrong |
+| E2b | + the rule "look up the definition of any metric before computing it" (`system_v2.md`) | fewer wrong metric definitions than E2a |
 | E3 | + few-shot examples via RAG | better time-window and session SQL |
-| E4 | + richer structured SQL errors: the valid tables and columns, did-you-mean suggestions for unknown names, and a short fix hint per guard rule | fewer unrecovered SQL errors |
+| ~~E4~~ | ~~+ richer structured SQL errors~~ *(cut, see below)* | — |
 | E5 | + `query_metric` semantic-layer tool | biggest jump on metric questions, fewer tokens |
-| E6 | + "cannot answer" doc + refusal rules (and the estimate-caveat rule) | fewer failed refusals, check over-refusal |
-| E7 | model swap (small vs large) | the cost/accuracy tradeoff |
+| E6 | + "cannot answer" doc + refusal rules (and the estimate-caveat rule), as `system_v3.md` | fewer failed refusals and missing caveats, check over-refusal |
+| E7 | model swap: `claude-haiku-5-5` (required), `claude-opus-5-5` (optional, owner decides after E6) | the cost/accuracy tradeoff |
 
 *(E-1 added, 2026-11-20, after E0 scored ~95%: much of E0's strength appears to come from the marts encoding the definitions as columns (`est_watch_sec`, `is_binge`, `is_late_night`, `is_active`). E-1 measures that directly. The SQL guard, `describe_table` and the prompt's table list all follow `agent.tables`. In the staging scope no table counts as pre-aggregated, so every query must aggregate.)*
 
 *(E4 changed, 2026-11-20: basic self-correction, where the error goes back to the model with up to `sql_max_retries` = 2 retries, is already part of the E0 baseline, so E4 now measures richer error content instead. E0's errors are the guard's rule code plus DuckDB's or the guard's message.)*
+
+*(E4 cut, 2026-11-20, owner decision at the start of Phase 5: E0 has no `sql_error_unrecovered` and no `hallucinated_table_or_column` failures in 288 runs, so richer error messages have nothing to fix and could only move tokens and steps. The ladder spends its runs on the failures that exist. E4 can come back if a later config produces SQL-error failures.)*
+
+**Ladder rules (Phase 5, owner decisions 2026-11-20):**
+- **One experiment, one change.** Each config differs from the previous one by a single change. E2 is split into E2a (tool available) and E2b (plus the lookup rule), so the rule's effect is measured apart from the tool's.
+- **Cumulative.** Each step builds on the previous config. A step is dropped from later configs only if its dev pass rate is worse than the previous config's beyond repeat variance (its best repeat below the previous config's worst).
+- **Dev only while iterating.** The test split runs once, on the final config.
+- **Prompt versions:** `system_v1.md` is never edited; E2b adds `system_v2.md`, E6 adds `system_v3.md`.
+- **Done when** (replaces "beats E0 on execution accuracy", since E0's execution score is already 99.2% and its failures are in the answer text):
+  - the best config's mean dev pass rate is above E0's best dev repeat, and its worst dev repeat is at least E0's dev mean;
+  - the session-length cluster (dev: q023, q042, q084, q087) passes at least 10 of its 12 dev runs;
+  - tokens per question are reported next to accuracy;
+  - the final test pass rate is at least E0's 96.9% (E0's only test failures are q062 × 3, so test can gain at most 3.1 points).
 
 ---
 

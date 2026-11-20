@@ -94,9 +94,14 @@ The scoring false negatives found in review are listed in the label files.
 2. Remember the headroom is small: about 5 failing dev runs per repeat. Accuracy deltas will be
    small, so compare repeats with `eval report <a> <b>` and also track tokens and steps.
 3. Run the cheap config switch first: **E1** (`describe_include_descriptions: true`) on dev only.
-   Then build the knowledge indexer and `search_knowledge` for **E2**. E2 targets E0's main
-   failure, session length by span; the glossary already defines it (`knowledge/docs/sessions.md`).
-4. Do **E6** caveat and refusal rules as a new `system_v2.md`; never edit `system_v1.md`.
+   Then build the knowledge indexer (fastembed, `bge-small-en-v1.5`) and `search_knowledge`.
+   **E2a** = the tool only (prompt v1, tool list extended, no new rule); **E2b** = E2a + the
+   "look up definitions before computing" rule as `system_v2.md`. E2 targets E0's main
+   failure, session length by span (`knowledge/docs/sessions.md`).
+4. Do **E6** caveat and refusal rules as a new `system_v3.md`; never edit `system_v1.md`.
+   **E4 is cut** (no SQL-error failures to fix; DESIGN §7.5). E7: Haiku required, Opus optional
+   (ask the owner after E6). The ladder is cumulative; see DESIGN §7.5 for the rules and the
+   Phase 5 done-when.
 5. Before E3, write `knowledge/examples.yml` and its overlap check against `eval/questions.yaml`.
 6. Every real-API run needs a printed cost estimate and the owner's OK first. Phase 4 cost
    about $7.70 in total; each 96 x 3 run costs about $2.80.

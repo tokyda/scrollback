@@ -65,14 +65,14 @@ Build scope by phase. Each phase ends with a "Done when" check. See `docs/DESIGN
 - [ ] Knowledge indexer: chunks `metrics.yml`, docs, `schema.yml` and examples → embeddings in DuckDB
 - [ ] `search_knowledge` with hybrid retrieval (embeddings + synonym/keyword match)
 - [ ] `knowledge/examples.yml` few-shot pairs + overlap check against the eval set
-- [ ] SQL error self-correction (max 2 retries)
+- [x] SQL error self-correction (max 2 retries) *(already part of the E0 baseline, DESIGN §6.3)*
 - [ ] Semantic compiler `metrics.yml → SQL` + `query_metric` tool
 - [ ] Refusal and caveat rules in the prompt
-- [ ] Run experiments **E1–E7** (§7.5); compare reports after each
+- [ ] Run experiments **E1, E2a, E2b, E3, E5, E6, E7** (§7.5; E4 cut); compare reports after each
 - [ ] Retrieval eval: for each question, is the right metric or doc in the top k (recall@k)
 - [ ] README results table: accuracy, bad-case mix, tokens and latency per experiment
 
-**Done when:** the best config beats E0 by a clear margin on execution accuracy, and every gain is linked to a run report.
+**Done when:** the best config's mean dev pass rate is above E0's best dev repeat and its worst dev repeat is at least E0's dev mean; the dev session-length cluster (q023, q042, q084, q087) passes at least 10 of 12 runs; the final test pass rate is at least E0's 96.9%; tokens per question are reported; and every gain is linked to a run report (DESIGN §7.5).
 
 ## Phase 6: Telegram bot
 - [ ] Telegram bot: free-text questions, chart as photo, "Show SQL" button, allowed chat IDs only
