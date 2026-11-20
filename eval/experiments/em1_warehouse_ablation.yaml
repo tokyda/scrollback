@@ -1,0 +1,17 @@
+# E-1 warehouse ablation (DESIGN §7.5): the E0 agent and prompt, but the agent may only query
+# the staging views (stg_*), not the marts. Sessions, watch-time estimates, flags such as
+# is_binge / is_late_night and the zero-filled daily spine all have to be rebuilt in SQL, if
+# at all. The difference to E0 quantifies how much the data modelling alone contributes.
+name: em1_warehouse_ablation
+description: "E-1 warehouse ablation: E0 agent and prompt, staging views only (no marts)"
+overrides:
+  llm:
+    model: claude-sonnet-5-5
+    effort: medium
+  agent:
+    prompt_version: 1
+    result_mode: aggregate_only
+    describe_include_descriptions: false
+    sql_max_retries: 2
+    max_steps: 8
+    tables: staging

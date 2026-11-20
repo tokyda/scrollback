@@ -341,22 +341,160 @@ def enrich(
     _not_implemented("enrich", "stretch")
 
 
+@eval_app.command("check-gold")
+def eval_check_gold(
+    update: Annotated[
+        bool, typer.Option("--update", help="Rewrite eval/gold_snapshot.json from current golds.")
+    ] = False,
+    show: Annotated[bool, typer.Option("--show", help="Print every gold answer.")] = False,
+    config: ConfigOption = None,
+) -> None:
+    """Validate eval/questions.yaml and every gold SQL (runs in CI)."""
+    from pydantic import ValidationError
+
+    from scrollback.evals.gold import check_gold, compute_golds, snapshot_drift, write_snapshot
+    from scrollback.evals.questions import load_questions
+    from scrollback.evals.warehouses import build_anchors
+
+    try:
+        qset = load_questions()
+    except ValidationError as exc:
+        typer.echo(f"questions.yaml is invalid:\n{exc}", err=True)
+        raise typer.Exit(1) from None
+    warehouses = build_anchors(qset.anchors, base=_settings(config), params=qset.params)
+    try:
+        golds = compute_golds(qset, warehouses)
+    except Exception as exc:  # a gold SQL failed to run
+        typer.echo(f"gold SQL failed: {type(exc).__name__}: {exc}", err=True)
+        raise typer.Exit(1) from None
+    problems = check_gold(qset, golds)
+    if show:
+        for q in qset.questions:
+            g = golds[q.id]
+            value = q.answer_type if g.gold is None else g.gold.rows
+            typer.echo(f"{q.id} [{q.category}/{q.split}] {value}")
+            for i, alt in enumerate(g.alternatives, 1):
+                typer.echo(f"      alt{i}: {alt.rows}")
+    if update and not problems:
+        write_snapshot(golds)
+        typer.echo("gold snapshot updated")
+    else:
+        problems += snapshot_drift(golds)
+    n_dev = len(qset.by_split("dev"))
+    typer.echo(
+        f"{len(qset.questions)} questions ({n_dev} dev / {len(qset.questions) - n_dev} test), "
+        f"{len(qset.anchors)} anchors"
+    )
+    if problems:
+        for problem in problems:
+            typer.echo(f"  PROBLEM {problem}", err=True)
+        raise typer.Exit(1)
+    typer.echo("gold check: ok")
+
+
 @eval_app.command("run")
 def eval_run(
-    config: Annotated[str, typer.Option(help="Experiment config YAML.")],
-    repeat: Annotated[int, typer.Option(help="Number of repeated runs.")] = 3,
+    config: Annotated[Path, typer.Option(exists=True, help="Experiment YAML.")],
+    split: Annotated[str, typer.Option(help="dev | test | all")] = "all",
+    repeat: Annotated[int, typer.Option(min=1, help="Repeats of the whole set.")] = 3,
+    workers: Annotated[int, typer.Option(min=1, help="Parallel agent runs.")] = 4,
+    only: Annotated[str | None, typer.Option(help="Comma-separated question ids.")] = None,
+    yes: Annotated[
+        bool, typer.Option("--yes", help="Actually run (costs money). Without it: estimate only.")
+    ] = False,
+    app_config: Annotated[
+        Path | None, typer.Option("--app-config", help="Path to config.yaml.")
+    ] = None,
 ) -> None:
-    """Run the eval set against an experiment config."""
-    _not_implemented("eval run", "Phase 4")
+    """Run an experiment over the eval set; without --yes, only print the cost estimate."""
+    from scrollback.agent import llm as llm_module
+    from scrollback.evals.questions import load_questions
+    from scrollback.evals.run import (
+        DEFAULT_RUNS_DIR,
+        estimate_cost,
+        experiment_settings,
+        load_experiment,
+        run_eval,
+    )
+
+    if split not in ("dev", "test", "all"):
+        typer.echo("--split must be dev, test or all", err=True)
+        raise typer.Exit(2)
+    base = _settings(app_config)
+    exp = load_experiment(config)
+    qset = load_questions()
+    ids = [x.strip() for x in only.split(",")] if only else None
+    questions = [q for q in qset.by_split(split) if not ids or q.id in ids]
+    settings = experiment_settings(base, exp, qset)
+    history = [*base.paths.traces_dir.glob("*.jsonl"), *DEFAULT_RUNS_DIR.glob("*/traces.jsonl")]
+    est = estimate_cost(len(questions) * repeat, settings.llm.model, history)
+    typer.echo(
+        f"Experiment {exp.name}: {len(questions)} questions ({split}) x {repeat} repeats = "
+        f"{est.runs} agent runs on {settings.llm.model} (effort {settings.llm.effort})"
+    )
+    typer.echo(
+        f"Estimated cost: ${est.total_usd:.2f} (about ${est.per_run_usd:.4f} per run; "
+        f"up to ~${est.high_usd:.2f} if runs are p90-expensive). Basis: {est.basis}."
+    )
+    if not yes:
+        typer.echo("Not running. Re-run with --yes to start (this calls the API and costs money).")
+        return
+    run_dir = run_eval(
+        exp, qset, base=base, llm_factory=llm_module.create_llm_client, split=split,
+        repeat=repeat, workers=workers, only=ids, progress=typer.echo,
+    )  # fmt: skip
+    typer.echo(f"Run written to {run_dir}")
+    typer.echo((run_dir / "report.md").read_text().split("## Sub-scores")[0])
 
 
 @eval_app.command("report")
 def eval_report(
-    run_a: Annotated[str, typer.Argument(help="Baseline run directory.")],
-    run_b: Annotated[str | None, typer.Argument(help="Comparison run directory.")] = None,
+    run_a: Annotated[Path, typer.Argument(exists=True, file_okay=False, help="Run directory.")],
+    run_b: Annotated[
+        Path | None, typer.Argument(exists=True, file_okay=False, help="Run to compare with.")
+    ] = None,
 ) -> None:
-    """Produce a markdown report for one run or a comparison of two."""
-    _not_implemented("eval report", "Phase 4")
+    """Re-render a run's report (using confirmed labels if any), or compare two runs."""
+    import json
+
+    from scrollback.evals.labels import load_confirmed
+    from scrollback.evals.questions import load_questions
+    from scrollback.evals.report import compare, render_report, summarize
+    from scrollback.evals.run import DEFAULT_LABELS_DIR, load_records
+
+    qset = load_questions()
+    if run_b is not None:
+        a = json.loads((run_a / "summary.json").read_text())
+        b = json.loads((run_b / "summary.json").read_text())
+        typer.echo(compare(a, b))
+        return
+    records = load_records(run_a)
+    summary = summarize(records, qset)
+    summary["run_id"] = run_a.name
+    confirmed = load_confirmed(DEFAULT_LABELS_DIR / f"{run_a.name}.yaml")
+    report = render_report(summary, records, qset, confirmed)
+    (run_a / "report.md").write_text(report)
+    typer.echo(report)
+
+
+@eval_app.command("rescore")
+def eval_rescore(
+    run: Annotated[Path, typer.Argument(exists=True, file_okay=False, help="Run directory.")],
+    config: ConfigOption = None,
+) -> None:
+    """Re-score a finished run with the current questions and scorer (no API calls)."""
+    from scrollback.evals.questions import load_questions
+    from scrollback.evals.run import rescore_run
+
+    result = rescore_run(run, load_questions(), base=_settings(config))
+    for c in result["changed"]:
+        arrow = "pass" if c["after"] else "FAIL"
+        typer.echo(f"  {c['question']} r{c['repeat']}: -> {arrow} (was {c['old_label']})")
+    acc = result["summary"]["accuracy"]
+    typer.echo(
+        f"{len(result['changed'])} runs changed. Overall {acc['overall']['mean']:.1%}, "
+        f"dev {acc['dev']['mean']:.1%}, test {acc['test']['mean']:.1%}"
+    )
 
 
 @eval_app.command("import-feedback")

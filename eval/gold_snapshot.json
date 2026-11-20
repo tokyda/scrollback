@@ -1,0 +1,1385 @@
+{
+ "q001": {
+  "gold": {
+   "columns": [
+    "count_star()"
+   ],
+   "rows": [
+    [
+     11885
+    ]
+   ]
+  },
+  "alternatives": []
+ },
+ "q002": {
+  "gold": {
+   "columns": [
+    "count_star()"
+   ],
+   "rows": [
+    [
+     566
+    ]
+   ]
+  },
+  "alternatives": []
+ },
+ "q003": {
+  "gold": {
+   "columns": [
+    "count(DISTINCT video_id)"
+   ],
+   "rows": [
+    [
+     11521
+    ]
+   ]
+  },
+  "alternatives": []
+ },
+ "q004": {
+  "gold": {
+   "columns": [
+    "count_star()"
+   ],
+   "rows": [
+    [
+     115
+    ]
+   ]
+  },
+  "alternatives": []
+ },
+ "q005": {
+  "gold": {
+   "columns": [
+    "count(DISTINCT local_date)"
+   ],
+   "rows": [
+    [
+     170
+    ]
+   ]
+  },
+  "alternatives": []
+ },
+ "q006": {
+  "gold": {
+   "columns": [
+    "count_star()"
+   ],
+   "rows": [
+    [
+     786
+    ]
+   ]
+  },
+  "alternatives": []
+ },
+ "q007": {
+  "gold": {
+   "columns": [
+    "(sum(est_watch_sec) / 60.0)"
+   ],
+   "rows": [
+    [
+     1492.725
+    ]
+   ]
+  },
+  "alternatives": []
+ },
+ "q008": {
+  "gold": {
+   "columns": [
+    "count_star()"
+   ],
+   "rows": [
+    [
+     1390
+    ]
+   ]
+  },
+  "alternatives": []
+ },
+ "q009": {
+  "gold": {
+   "columns": [
+    "count_star()"
+   ],
+   "rows": [
+    [
+     70
+    ]
+   ]
+  },
+  "alternatives": []
+ },
+ "q010": {
+  "gold": {
+   "columns": [
+    "(sum(est_watch_sec) / 60.0)"
+   ],
+   "rows": [
+    [
+     293.408333
+    ]
+   ]
+  },
+  "alternatives": []
+ },
+ "q011": {
+  "gold": {
+   "columns": [
+    "count_star()"
+   ],
+   "rows": [
+    [
+     5
+    ]
+   ]
+  },
+  "alternatives": []
+ },
+ "q012": {
+  "gold": {
+   "columns": [
+    "count_star()"
+   ],
+   "rows": [
+    [
+     1793
+    ]
+   ]
+  },
+  "alternatives": []
+ },
+ "q013": {
+  "gold": {
+   "columns": [
+    "(sum(est_watch_sec) / 60.0)"
+   ],
+   "rows": [
+    [
+     273.083333
+    ]
+   ]
+  },
+  "alternatives": []
+ },
+ "q014": {
+  "gold": {
+   "columns": [
+    "count_star()"
+   ],
+   "rows": [
+    [
+     102
+    ]
+   ]
+  },
+  "alternatives": []
+ },
+ "q015": {
+  "gold": {
+   "columns": [
+    "count_star()"
+   ],
+   "rows": [
+    [
+     59
+    ]
+   ]
+  },
+  "alternatives": []
+ },
+ "q016": {
+  "gold": {
+   "columns": [
+    "(sum(est_watch_sec) / 60.0)"
+   ],
+   "rows": [
+    [
+     40.108333
+    ]
+   ]
+  },
+  "alternatives": []
+ },
+ "q017": {
+  "gold": {
+   "columns": [
+    "(sum(est_watch_sec) / 60.0)"
+   ],
+   "rows": [
+    [
+     1492.725
+    ]
+   ]
+  },
+  "alternatives": []
+ },
+ "q018": {
+  "gold": {
+   "columns": [
+    "count_star()"
+   ],
+   "rows": [
+    [
+     32
+    ]
+   ]
+  },
+  "alternatives": []
+ },
+ "q019": {
+  "gold": {
+   "columns": [
+    "(sum(est_watch_sec) / 60.0)"
+   ],
+   "rows": [
+    [
+     479.2
+    ]
+   ]
+  },
+  "alternatives": []
+ },
+ "q020": {
+  "gold": {
+   "columns": [
+    "count_star()"
+   ],
+   "rows": [
+    [
+     1362
+    ]
+   ]
+  },
+  "alternatives": []
+ },
+ "q021": {
+  "gold": {
+   "columns": [
+    "(sum(est_watch_sec) / 60.0)"
+   ],
+   "rows": [
+    [
+     154.008333
+    ]
+   ]
+  },
+  "alternatives": []
+ },
+ "q022": {
+  "gold": {
+   "columns": [
+    "avg(CASE  WHEN (is_late_night) THEN (1.0) ELSE 0.0 END)"
+   ],
+   "rows": [
+    [
+     0.164868
+    ]
+   ]
+  },
+  "alternatives": []
+ },
+ "q023": {
+  "gold": {
+   "columns": [
+    "(avg(est_watch_sec) / 60.0)"
+   ],
+   "rows": [
+    [
+     10.816848
+    ]
+   ]
+  },
+  "alternatives": []
+ },
+ "q024": {
+  "gold": {
+   "columns": [
+    "count_star()"
+   ],
+   "rows": [
+    [
+     4
+    ]
+   ]
+  },
+  "alternatives": []
+ },
+ "q025": {
+  "gold": {
+   "columns": [
+    "avg(CASE  WHEN (is_rewatch) THEN (1.0) ELSE 0.0 END)"
+   ],
+   "rows": [
+    [
+     0.028973
+    ]
+   ]
+  },
+  "alternatives": []
+ },
+ "q026": {
+  "gold": {
+   "columns": [
+    "((sum(likes) * 1.0) / sum(\"views\"))"
+   ],
+   "rows": [
+    [
+     0.049125
+    ]
+   ]
+  },
+  "alternatives": []
+ },
+ "q027": {
+  "gold": {
+   "columns": [
+    "count(DISTINCT local_date)"
+   ],
+   "rows": [
+    [
+     24
+    ]
+   ]
+  },
+  "alternatives": []
+ },
+ "q028": {
+  "gold": {
+   "columns": [
+    "avg(CASE  WHEN (is_weekend) THEN (1.0) ELSE 0.0 END)"
+   ],
+   "rows": [
+    [
+     0.522516
+    ]
+   ]
+  },
+  "alternatives": []
+ },
+ "q029": {
+  "gold": {
+   "columns": [
+    "max(n)"
+   ],
+   "rows": [
+    [
+     44
+    ]
+   ]
+  },
+  "alternatives": []
+ },
+ "q030": {
+  "gold": {
+   "columns": [
+    "weekday_min",
+    "weekend_min"
+   ],
+   "rows": [
+    [
+     18.294697,
+     41.421875
+    ]
+   ]
+  },
+  "alternatives": []
+ },
+ "q031": {
+  "gold": {
+   "columns": [
+    "oct_min",
+    "sep_min"
+   ],
+   "rows": [
+    [
+     1492.725,
+     733.858333
+    ]
+   ]
+  },
+  "alternatives": []
+ },
+ "q032": {
+  "gold": {
+   "columns": [
+    "wk_19oct",
+    "wk_12oct"
+   ],
+   "rows": [
+    [
+     590.816667,
+     176.958333
+    ]
+   ]
+  },
+  "alternatives": []
+ },
+ "q033": {
+  "gold": {
+   "columns": [
+    "morning",
+    "evening"
+   ],
+   "rows": [
+    [
+     1799,
+     5090
+    ]
+   ]
+  },
+  "alternatives": []
+ },
+ "q034": {
+  "gold": {
+   "columns": [
+    "this_week",
+    "last_week"
+   ],
+   "rows": [
+    [
+     188.766667,
+     273.083333
+    ]
+   ]
+  },
+  "alternatives": []
+ },
+ "q035": {
+  "gold": {
+   "columns": [
+    "oct_avg",
+    "nov_avg"
+   ],
+   "rows": [
+    [
+     10.816848,
+     7.840244
+    ]
+   ]
+  },
+  "alternatives": []
+ },
+ "q036": {
+  "gold": {
+   "columns": [
+    "search_term_norm"
+   ],
+   "rows": [
+    [
+     "standup comedy"
+    ],
+    [
+     "street food"
+    ],
+    [
+     "budget meals"
+    ]
+   ]
+  },
+  "alternatives": []
+ },
+ "q037": {
+  "gold": {
+   "columns": [
+    "local_date"
+   ],
+   "rows": [
+    [
+     "2026-10-24"
+    ]
+   ]
+  },
+  "alternatives": []
+ },
+ "q038": {
+  "gold": {
+   "columns": [
+    "dayname(local_date)"
+   ],
+   "rows": [
+    [
+     "Sunday"
+    ]
+   ]
+  },
+  "alternatives": []
+ },
+ "q039": {
+  "gold": {
+   "columns": [
+    "local_date"
+   ],
+   "rows": [
+    [
+     "2026-10-11"
+    ],
+    [
+     "2026-10-24"
+    ],
+    [
+     "2026-10-26"
+    ]
+   ]
+  },
+  "alternatives": []
+ },
+ "q040": {
+  "gold": {
+   "columns": [
+    "video_id"
+   ],
+   "rows": [
+    [
+     "7217869940643289390"
+    ]
+   ]
+  },
+  "alternatives": []
+ },
+ "q041": {
+  "gold": {
+   "columns": [
+    "dayname(local_date)"
+   ],
+   "rows": [
+    [
+     "Sunday"
+    ],
+    [
+     "Saturday"
+    ],
+    [
+     "Monday"
+    ],
+    [
+     "Wednesday"
+    ],
+    [
+     "Friday"
+    ],
+    [
+     "Tuesday"
+    ],
+    [
+     "Thursday"
+    ]
+   ]
+  },
+  "alternatives": []
+ },
+ "q042": {
+  "gold": {
+   "columns": [
+    "sessions",
+    "longest_min"
+   ],
+   "rows": [
+    [
+     33,
+     34.708333
+    ]
+   ]
+  },
+  "alternatives": []
+ },
+ "q043": {
+  "gold": {
+   "columns": [
+    "count_star()"
+   ],
+   "rows": [
+    [
+     8
+    ]
+   ]
+  },
+  "alternatives": []
+ },
+ "q044": {
+  "gold": {
+   "columns": [
+    "(max(est_watch_sec) / 60.0)"
+   ],
+   "rows": [
+    [
+     4.183333
+    ]
+   ]
+  },
+  "alternatives": []
+ },
+ "q045": {
+  "gold": {
+   "columns": [
+    "(count_star() / 31.0)"
+   ],
+   "rows": [
+    [
+     4.451613
+    ]
+   ]
+  },
+  "alternatives": []
+ },
+ "q046": {
+  "gold": {
+   "columns": [
+    "count_star()"
+   ],
+   "rows": [
+    [
+     10
+    ]
+   ]
+  },
+  "alternatives": []
+ },
+ "q047": {
+  "gold": {
+   "columns": [
+    "minutes",
+    "sessions"
+   ],
+   "rows": [
+    [
+     99.65,
+     2
+    ]
+   ]
+  },
+  "alternatives": []
+ },
+ "q048": {
+  "gold": {
+   "columns": [
+    "(max(est_watch_sec) / 60.0)"
+   ],
+   "rows": [
+    [
+     7.9
+    ]
+   ]
+  },
+  "alternatives": []
+ },
+ "q049": {
+  "gold": {
+   "columns": [
+    "count_star()"
+   ],
+   "rows": [
+    [
+     115
+    ]
+   ]
+  },
+  "alternatives": []
+ },
+ "q050": {
+  "gold": {
+   "columns": [
+    "count_star()"
+   ],
+   "rows": [
+    [
+     9
+    ]
+   ]
+  },
+  "alternatives": []
+ },
+ "q051": {
+  "gold": {
+   "columns": [
+    "(sum(est_watch_sec) FILTER (WHERE is_binge) / sum(est_watch_sec))"
+   ],
+   "rows": [
+    [
+     0.195169
+    ]
+   ]
+  },
+  "alternatives": []
+ },
+ "q052": {
+  "gold": {
+   "columns": [
+    "week_start",
+    "increase"
+   ],
+   "rows": [
+    [
+     "2026-10-19",
+     413.858333
+    ]
+   ]
+  },
+  "alternatives": []
+ },
+ "q053": {
+  "gold": {
+   "columns": [
+    "count_star()"
+   ],
+   "rows": [
+    [
+     7
+    ]
+   ]
+  },
+  "alternatives": []
+ },
+ "q054": {
+  "gold": {
+   "columns": [
+    "avg(CASE  WHEN (liked_after_watch) THEN (1.0) ELSE 0.0 END)"
+   ],
+   "rows": [
+    [
+     0.984848
+    ]
+   ]
+  },
+  "alternatives": []
+ },
+ "q055": {
+  "gold": {
+   "columns": [
+    "(sum(a.est_watch_min) / 7.0)"
+   ],
+   "rows": [
+    [
+     84.402381
+    ]
+   ]
+  },
+  "alternatives": []
+ },
+ "q056": {
+  "gold": {
+   "columns": [
+    "((SELECT est_watch_min FROM agg_daily WHERE (local_date = CAST('2026-10-24' AS DATE))) / (SELECT avg(est_watch_min) FROM agg_daily WHERE (local_date BETWEEN CAST('2026-10-01' AS DATE) AND CAST('2026-10-31' AS DATE))))"
+   ],
+   "rows": [
+    [
+     6.093325
+    ]
+   ]
+  },
+  "alternatives": [
+   {
+    "columns": [
+     "(((SELECT \"views\" FROM agg_daily WHERE (local_date = CAST('2026-10-24' AS DATE))) * 1.0) / (SELECT avg(\"views\") FROM agg_daily WHERE (local_date BETWEEN CAST('2026-10-01' AS DATE) AND CAST('2026-10-31' AS DATE))))"
+    ],
+    "rows": [
+     [
+      5.733904
+     ]
+    ]
+   }
+  ]
+ },
+ "q057": {
+  "gold": {
+   "columns": [
+    "(sum(est_watch_sec) / 60.0)"
+   ],
+   "rows": [
+    [
+     364.55
+    ]
+   ]
+  },
+  "alternatives": [
+   {
+    "columns": [
+     "(sum(est_watch_sec) / 60.0)"
+    ],
+    "rows": [
+     [
+      188.766667
+     ]
+    ]
+   },
+   {
+    "columns": [
+     "(sum(est_watch_sec) / 60.0)"
+    ],
+    "rows": [
+     [
+      273.083333
+     ]
+    ]
+   },
+   {
+    "columns": [
+     "(sum(est_watch_sec) / 60.0)"
+    ],
+    "rows": [
+     [
+      310.691667
+     ]
+    ]
+   },
+   {
+    "columns": [
+     "(sum(est_watch_sec) / 60.0)"
+    ],
+    "rows": [
+     [
+      1450.85
+     ]
+    ]
+   },
+   {
+    "columns": [
+     "(sum(est_watch_sec) / 60.0)"
+    ],
+    "rows": [
+     [
+      1415.2
+     ]
+    ]
+   }
+  ]
+ },
+ "q058": {
+  "gold": {
+   "columns": [
+    "local_hour"
+   ],
+   "rows": [
+    [
+     21
+    ]
+   ]
+  },
+  "alternatives": [
+   {
+    "columns": [
+     "local_hour"
+    ],
+    "rows": [
+     [
+      22
+     ]
+    ]
+   }
+  ]
+ },
+ "q059": {
+  "gold": {
+   "columns": [
+    "count_star()"
+   ],
+   "rows": [
+    [
+     480
+    ]
+   ]
+  },
+  "alternatives": [
+   {
+    "columns": [
+     "count_star()"
+    ],
+    "rows": [
+     [
+      461
+     ]
+    ]
+   }
+  ]
+ },
+ "q060": {
+  "gold": {
+   "columns": [
+    "avg(CASE  WHEN (is_late_night) THEN (1.0) ELSE 0.0 END)"
+   ],
+   "rows": [
+    [
+     0.164493
+    ]
+   ]
+  },
+  "alternatives": [
+   {
+    "columns": [
+     "avg(CASE  WHEN (((local_hour >= 22) OR (local_hour < 5))) THEN (1.0) ELSE 0.0 END)"
+    ],
+    "rows": [
+     [
+      0.319058
+     ]
+    ]
+   },
+   {
+    "columns": [
+     "avg(CASE  WHEN ((local_hour < 6)) THEN (1.0) ELSE 0.0 END)"
+    ],
+    "rows": [
+     [
+      0.17602
+     ]
+    ]
+   },
+   {
+    "columns": [
+     "avg(CASE  WHEN (((local_hour >= 22) OR (local_hour < 6))) THEN (1.0) ELSE 0.0 END)"
+    ],
+    "rows": [
+     [
+      0.330585
+     ]
+    ]
+   }
+  ]
+ },
+ "q061": {
+  "gold": {
+   "columns": [
+    "(sum(est_watch_sec) / 60.0)"
+   ],
+   "rows": [
+    [
+     3377.283333
+    ]
+   ]
+  },
+  "alternatives": [
+   {
+    "columns": [
+     "(sum(est_watch_sec) / 60.0)"
+    ],
+    "rows": [
+     [
+      3105.533333
+     ]
+    ]
+   }
+  ]
+ },
+ "q062": {
+  "gold": {
+   "columns": [
+    "(avg(est_watch_sec) / 60.0)"
+   ],
+   "rows": [
+    [
+     8.347869
+    ]
+   ]
+  },
+  "alternatives": [
+   {
+    "columns": [
+     "(median(est_watch_sec) / 60.0)"
+    ],
+    "rows": [
+     [
+      5.325
+     ]
+    ]
+   }
+  ]
+ },
+ "q063": {
+  "gold": null,
+  "alternatives": []
+ },
+ "q064": {
+  "gold": null,
+  "alternatives": []
+ },
+ "q065": {
+  "gold": null,
+  "alternatives": []
+ },
+ "q066": {
+  "gold": null,
+  "alternatives": []
+ },
+ "q067": {
+  "gold": null,
+  "alternatives": []
+ },
+ "q068": {
+  "gold": null,
+  "alternatives": []
+ },
+ "q069": {
+  "gold": null,
+  "alternatives": []
+ },
+ "q070": {
+  "gold": {
+   "columns": [
+    "sum(est_watch_sec)"
+   ],
+   "rows": [
+    [
+     3613.5
+    ]
+   ]
+  },
+  "alternatives": []
+ },
+ "q071": {
+  "gold": {
+   "columns": [
+    "(sum(est_watch_sec) / 60.0)"
+   ],
+   "rows": [
+    [
+     1492.725
+    ]
+   ]
+  },
+  "alternatives": []
+ },
+ "q072": {
+  "gold": null,
+  "alternatives": []
+ },
+ "q073": {
+  "gold": {
+   "columns": [
+    "(max(est_watch_sec) / 60.0)"
+   ],
+   "rows": [
+    [
+     3.0
+    ]
+   ]
+  },
+  "alternatives": []
+ },
+ "q074": {
+  "gold": {
+   "columns": [
+    "(sum(est_watch_sec) / 60.0)"
+   ],
+   "rows": [
+    [
+     314.658333
+    ]
+   ]
+  },
+  "alternatives": []
+ },
+ "q075": {
+  "gold": {
+   "columns": [
+    "(sum(est_watch_sec) / 60.0)"
+   ],
+   "rows": [
+    [
+     60.225
+    ]
+   ]
+  },
+  "alternatives": []
+ },
+ "q076": {
+  "gold": {
+   "columns": [
+    "avg(est_watch_sec)"
+   ],
+   "rows": [
+    [
+     33.124569
+    ]
+   ]
+  },
+  "alternatives": []
+ },
+ "q077": {
+  "gold": {
+   "columns": [
+    "(sum(est_watch_sec) / 60.0)"
+   ],
+   "rows": [
+    [
+     140.941667
+    ]
+   ]
+  },
+  "alternatives": []
+ },
+ "q078": {
+  "gold": {
+   "columns": [
+    "count_star()"
+   ],
+   "rows": [
+    [
+     480
+    ]
+   ]
+  },
+  "alternatives": []
+ },
+ "q079": {
+  "gold": {
+   "columns": [
+    "(sum(est_watch_sec) / 60.0)"
+   ],
+   "rows": [
+    [
+     2135.625
+    ]
+   ]
+  },
+  "alternatives": []
+ },
+ "q080": {
+  "gold": {
+   "columns": [
+    "count_star()"
+   ],
+   "rows": [
+    [
+     43
+    ]
+   ]
+  },
+  "alternatives": []
+ },
+ "q081": {
+  "gold": {
+   "columns": [
+    "(sum(est_watch_sec) / 60.0)"
+   ],
+   "rows": [
+    [
+     53.858333
+    ]
+   ]
+  },
+  "alternatives": []
+ },
+ "q082": {
+  "gold": {
+   "columns": [
+    "last_monday",
+    "monday_before"
+   ],
+   "rows": [
+    [
+     33.15,
+     51.458333
+    ]
+   ]
+  },
+  "alternatives": [
+   {
+    "columns": [
+     "last_monday",
+     "monday_before"
+    ],
+    "rows": [
+     [
+      51.458333,
+      9.166667
+     ]
+    ]
+   }
+  ]
+ },
+ "q083": {
+  "gold": {
+   "columns": [
+    "first_half",
+    "second_half"
+   ],
+   "rows": [
+    [
+     549.966667,
+     942.758333
+    ]
+   ]
+  },
+  "alternatives": []
+ },
+ "q084": {
+  "gold": {
+   "columns": [
+    "(median(est_watch_sec) / 60.0)"
+   ],
+   "rows": [
+    [
+     6.354167
+    ]
+   ]
+  },
+  "alternatives": []
+ },
+ "q085": {
+  "gold": {
+   "columns": [
+    "(sum(est_watch_sec) FILTER (WHERE (\"hour\"(start_ts_local) >= 22)) / sum(est_watch_sec))"
+   ],
+   "rows": [
+    [
+     0.141799
+    ]
+   ]
+  },
+  "alternatives": []
+ },
+ "q086": {
+  "gold": {
+   "columns": [
+    "((count_star() * 1.0) / (SELECT count(DISTINCT local_date) FROM fct_views WHERE (local_date BETWEEN CAST('2026-09-01' AS DATE) AND CAST('2026-09-30' AS DATE))))"
+   ],
+   "rows": [
+    [
+     4.0
+    ]
+   ]
+  },
+  "alternatives": []
+ },
+ "q087": {
+  "gold": {
+   "columns": [
+    "local_date",
+    "(est_watch_sec / 60.0)"
+   ],
+   "rows": [
+    [
+     "2026-09-26",
+     34.783333
+    ]
+   ]
+  },
+  "alternatives": []
+ },
+ "q088": {
+  "gold": {
+   "columns": [
+    "count_star()"
+   ],
+   "rows": [
+    [
+     356
+    ]
+   ]
+  },
+  "alternatives": []
+ },
+ "q089": {
+  "gold": {
+   "columns": [
+    "max(n)"
+   ],
+   "rows": [
+    [
+     3
+    ]
+   ]
+  },
+  "alternatives": []
+ },
+ "q090": {
+  "gold": {
+   "columns": [
+    "(sum(est_watch_sec) / 60.0)"
+   ],
+   "rows": [
+    [
+     64.325
+    ]
+   ]
+  },
+  "alternatives": []
+ },
+ "q091": {
+  "gold": {
+   "columns": [
+    "week_start"
+   ],
+   "rows": [
+    [
+     "2026-10-19"
+    ]
+   ]
+  },
+  "alternatives": []
+ },
+ "q092": {
+  "gold": {
+   "columns": [
+    "count_star()"
+   ],
+   "rows": [
+    [
+     902
+    ]
+   ]
+  },
+  "alternatives": [
+   {
+    "columns": [
+     "count_star()"
+    ],
+    "rows": [
+     [
+      893
+     ]
+    ]
+   },
+   {
+    "columns": [
+     "count_star()"
+    ],
+    "rows": [
+     [
+      748
+     ]
+    ]
+   }
+  ]
+ },
+ "q093": {
+  "gold": {
+   "columns": [
+    "arg_max(est_watch_sec, event_ts_utc)"
+   ],
+   "rows": [
+    [
+     18.5
+    ]
+   ]
+  },
+  "alternatives": []
+ },
+ "q094": {
+  "gold": {
+   "columns": [
+    "(sum(est_watch_sec) / 60.0)"
+   ],
+   "rows": [
+    [
+     291.333333
+    ]
+   ]
+  },
+  "alternatives": []
+ },
+ "q095": {
+  "gold": null,
+  "alternatives": []
+ },
+ "q096": {
+  "gold": null,
+  "alternatives": []
+ }
+}

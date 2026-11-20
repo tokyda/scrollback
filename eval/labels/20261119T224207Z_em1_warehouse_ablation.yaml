@@ -1,0 +1,1159 @@
+run_id: 20261119T224207Z_em1_warehouse_ablation
+instructions: 'Confirm each failure: set `label` to one of the taxonomy labels (the suggestion is a starting
+  point). Optionally set `scoring_false_negative: true` and a `note`.'
+taxonomy:
+- wrong_metric_definition
+- wrong_time_window
+- timezone_or_day_boundary
+- hallucinated_table_or_column
+- join_or_grain_error
+- aggregation_error
+- sql_error_unrecovered
+- answer_misreport
+- missing_caveat
+- failed_refusal
+- over_refusal
+- tool_loop_or_step_limit
+failures:
+- question: q001
+  repeat: 1
+  category: simple_agg
+  split: dev
+  suggested: answer_misreport
+  reason: answer cites no query result
+  suspect_scoring: text states the gold value but no cited result matched
+  label: answer_misreport
+- question: q007
+  repeat: 1
+  category: time_window
+  split: dev
+  suggested: aggregation_error
+  reason: result does not match gold
+  suspect_scoring: null
+  label: over_refusal
+- question: q010
+  repeat: 1
+  category: time_window
+  split: test
+  suggested: aggregation_error
+  reason: result does not match gold
+  suspect_scoring: null
+  label: over_refusal
+- question: q013
+  repeat: 1
+  category: relative_date
+  split: dev
+  suggested: wrong_time_window
+  reason: 'result does not match gold (question hint: wrong_time_window)'
+  suspect_scoring: null
+  label: over_refusal
+- question: q016
+  repeat: 1
+  category: relative_date
+  split: dev
+  suggested: wrong_time_window
+  reason: 'result does not match gold (question hint: wrong_time_window)'
+  suspect_scoring: null
+  label: over_refusal
+- question: q017
+  repeat: 1
+  category: relative_date
+  split: dev
+  suggested: wrong_time_window
+  reason: date literals ['2026-10-01', '2026-11-01'] vs gold ['2026-10-01', '2026-10-31']
+  suspect_scoring: null
+  label: over_refusal
+- question: q019
+  repeat: 1
+  category: relative_date
+  split: dev
+  suggested: wrong_time_window
+  reason: 'result does not match gold (question hint: wrong_time_window)'
+  suspect_scoring: null
+  label: wrong_metric_definition
+- question: q021
+  repeat: 1
+  category: relative_date
+  split: test
+  suggested: wrong_time_window
+  reason: 'result does not match gold (question hint: wrong_time_window)'
+  suspect_scoring: null
+  label: over_refusal
+- question: q023
+  repeat: 1
+  category: metric_definition
+  split: dev
+  suggested: wrong_metric_definition
+  reason: leads with 17.78, a wrong-definition value
+  suspect_scoring: null
+  label: wrong_metric_definition
+- question: q024
+  repeat: 1
+  category: metric_definition
+  split: dev
+  suggested: wrong_metric_definition
+  reason: 'result does not match gold (question hint: wrong_metric_definition)'
+  suspect_scoring: null
+  label: wrong_metric_definition
+- question: q030
+  repeat: 1
+  category: comparison
+  split: dev
+  suggested: aggregation_error
+  reason: 'result does not match gold (question hint: aggregation_error)'
+  suspect_scoring: null
+  label: over_refusal
+- question: q031
+  repeat: 1
+  category: comparison
+  split: dev
+  suggested: wrong_time_window
+  reason: date literals ['2026-09-01', '2026-10-31'] vs gold ['2026-09-01', '2026-09-30', '2026-10-01',
+    '2026-10-31']
+  suspect_scoring: null
+  label: over_refusal
+- question: q032
+  repeat: 1
+  category: comparison
+  split: dev
+  suggested: wrong_time_window
+  reason: date literals ['2026-10-12', '2026-10-19', '2026-10-25'] vs gold ['2026-10-12', '2026-10-18',
+    '2026-10-19', '2026-10-25']
+  suspect_scoring: null
+  label: over_refusal
+- question: q034
+  repeat: 1
+  category: comparison
+  split: dev
+  suggested: wrong_time_window
+  reason: date literals ['2026-11-09', '2026-11-12', '2026-11-15', '2026-11-16', '2026-11-19', '2026-11-20']
+    vs gold ['2026-11-09', '2026-11-15', '2026-11-16', '2026-11-20']
+  suspect_scoring: null
+  label: over_refusal
+- question: q035
+  repeat: 1
+  category: comparison
+  split: test
+  suggested: wrong_time_window
+  reason: date literals ['2026-10-01'] vs gold ['2026-10-01', '2026-10-31', '2026-11-01', '2026-11-30']
+  suspect_scoring: null
+  label: wrong_metric_definition
+- question: q039
+  repeat: 1
+  category: ranking
+  split: test
+  suggested: wrong_metric_definition
+  reason: 'result does not match gold (question hint: wrong_metric_definition)'
+  suspect_scoring: null
+  label: wrong_metric_definition
+- question: q042
+  repeat: 1
+  category: session_derived
+  split: dev
+  suggested: wrong_metric_definition
+  reason: leads with 62.03, a wrong-definition value
+  suspect_scoring: null
+  label: wrong_metric_definition
+- question: q043
+  repeat: 1
+  category: session_derived
+  split: dev
+  suggested: wrong_metric_definition
+  reason: leads with 9.0, a wrong-definition value
+  suspect_scoring: null
+  label: timezone_or_day_boundary
+- question: q044
+  repeat: 1
+  category: session_derived
+  split: dev
+  suggested: timezone_or_day_boundary
+  reason: 'result does not match gold (question hint: timezone_or_day_boundary)'
+  suspect_scoring: null
+  label: timezone_or_day_boundary
+- question: q046
+  repeat: 1
+  category: session_derived
+  split: dev
+  suggested: wrong_metric_definition
+  reason: leads with 20.0, a wrong-definition value
+  suspect_scoring: null
+  label: wrong_metric_definition
+- question: q047
+  repeat: 1
+  category: session_derived
+  split: test
+  suggested: timezone_or_day_boundary
+  reason: 'result does not match gold (question hint: timezone_or_day_boundary)'
+  suspect_scoring: null
+  label: timezone_or_day_boundary
+- question: q048
+  repeat: 1
+  category: session_derived
+  split: test
+  suggested: timezone_or_day_boundary
+  reason: 'result does not match gold (question hint: timezone_or_day_boundary)'
+  suspect_scoring: null
+  label: timezone_or_day_boundary
+- question: q051
+  repeat: 1
+  category: multi_step
+  split: test
+  suggested: wrong_metric_definition
+  reason: 'result does not match gold (question hint: wrong_metric_definition)'
+  suspect_scoring: null
+  label: wrong_metric_definition
+- question: q052
+  repeat: 1
+  category: multi_step
+  split: dev
+  suggested: wrong_time_window
+  reason: date literals ['2026-09-28', '2026-11-01'] vs gold ['2026-09-28', '2026-10-05', '2026-10-26']
+  suspect_scoring: null
+  label: wrong_metric_definition
+- question: q055
+  repeat: 1
+  category: multi_step
+  split: dev
+  suggested: wrong_time_window
+  reason: date literals ['2026-09-28', '2026-11-01'] vs gold ['2026-10-01', '2026-10-31']
+  suspect_scoring: null
+  label: over_refusal
+- question: q057
+  repeat: 1
+  category: ambiguous
+  split: dev
+  suggested: wrong_time_window
+  reason: date literals ['2026-11-06', '2026-11-13', '2026-11-19'] vs gold ['2026-10-21', '2026-10-22',
+    '2026-11-09', '2026-11-13', '2026-11-14', '2026-11-15', '2026-11-16', '2026-11-19', '2026-11-20']
+  suspect_scoring: null
+  label: wrong_metric_definition
+- question: q061
+  repeat: 1
+  category: ambiguous
+  split: dev
+  suggested: wrong_time_window
+  reason: date literals ['2026-06-01', '2026-09-01'] vs gold ['2026-06-01', '2026-06-21', '2026-08-31',
+    '2026-09-22']
+  suspect_scoring: null
+  label: wrong_metric_definition
+- question: q062
+  repeat: 1
+  category: ambiguous
+  split: test
+  suggested: wrong_metric_definition
+  reason: 'result does not match gold (question hint: wrong_metric_definition)'
+  suspect_scoring: text states the gold value but no cited result matched
+  label: wrong_metric_definition
+- question: q070
+  repeat: 1
+  category: trap
+  split: dev
+  suggested: missing_caveat
+  reason: 'result does not match gold (question hint: missing_caveat)'
+  suspect_scoring: null
+  label: over_refusal
+- question: q071
+  repeat: 1
+  category: trap
+  split: dev
+  suggested: wrong_time_window
+  reason: date literals ['2026-10-01', '2026-11-01'] vs gold ['2026-10-01', '2026-10-31']
+  suspect_scoring: null
+  label: wrong_metric_definition
+- question: q073
+  repeat: 1
+  category: trap
+  split: test
+  suggested: missing_caveat
+  reason: 'result does not match gold (question hint: missing_caveat)'
+  suspect_scoring: null
+  label: wrong_metric_definition
+- question: q074
+  repeat: 1
+  category: trap
+  split: dev
+  suggested: missing_caveat
+  reason: 'result does not match gold (question hint: missing_caveat)'
+  suspect_scoring: null
+  label: over_refusal
+- question: q075
+  repeat: 1
+  category: trap
+  split: dev
+  suggested: missing_caveat
+  reason: 'result does not match gold (question hint: missing_caveat)'
+  suspect_scoring: null
+  label: over_refusal
+- question: q076
+  repeat: 1
+  category: trap
+  split: test
+  suggested: missing_caveat
+  reason: 'result does not match gold (question hint: missing_caveat)'
+  suspect_scoring: null
+  label: wrong_metric_definition
+- question: q077
+  repeat: 1
+  category: relative_date
+  split: dev
+  suggested: wrong_time_window
+  reason: 'result does not match gold (question hint: wrong_time_window)'
+  suspect_scoring: null
+  label: over_refusal
+- question: q079
+  repeat: 1
+  category: relative_date
+  split: dev
+  suggested: wrong_time_window
+  reason: 'result does not match gold (question hint: wrong_time_window)'
+  suspect_scoring: null
+  label: over_refusal
+- question: q081
+  repeat: 1
+  category: relative_date
+  split: test
+  suggested: wrong_time_window
+  reason: 'result does not match gold (question hint: wrong_time_window)'
+  suspect_scoring: null
+  label: over_refusal
+- question: q082
+  repeat: 1
+  category: ambiguous
+  split: dev
+  suggested: wrong_time_window
+  reason: date literals ['2026-11-09', '2026-11-16'] vs gold ['2026-11-02', '2026-11-09', '2026-11-16']
+  suspect_scoring: null
+  label: wrong_metric_definition
+- question: q083
+  repeat: 1
+  category: comparison
+  split: test
+  suggested: wrong_time_window
+  reason: date literals ['2026-10-01', '2026-10-15', '2026-10-31'] vs gold ['2026-10-01', '2026-10-15',
+    '2026-10-16', '2026-10-31']
+  suspect_scoring: null
+  label: wrong_metric_definition
+- question: q084
+  repeat: 1
+  category: session_derived
+  split: dev
+  suggested: wrong_metric_definition
+  reason: leads with 6.633333, a wrong-definition value
+  suspect_scoring: null
+  label: wrong_metric_definition
+- question: q087
+  repeat: 1
+  category: session_derived
+  split: dev
+  suggested: wrong_metric_definition
+  reason: leads with 75.6, a wrong-definition value
+  suspect_scoring: null
+  label: wrong_metric_definition
+- question: q090
+  repeat: 1
+  category: time_window
+  split: dev
+  suggested: aggregation_error
+  reason: result does not match gold
+  suspect_scoring: null
+  label: over_refusal
+- question: q093
+  repeat: 1
+  category: trap
+  split: dev
+  suggested: wrong_time_window
+  reason: date literals ['2026-11-15', '2026-11-16'] vs gold ['2026-11-15']
+  suspect_scoring: null
+  label: over_refusal
+- question: q094
+  repeat: 1
+  category: trap
+  split: test
+  suggested: missing_caveat
+  reason: 'result does not match gold (question hint: missing_caveat)'
+  suspect_scoring: null
+  label: wrong_metric_definition
+- question: q007
+  repeat: 2
+  category: time_window
+  split: dev
+  suggested: aggregation_error
+  reason: result does not match gold
+  suspect_scoring: null
+  label: over_refusal
+- question: q010
+  repeat: 2
+  category: time_window
+  split: test
+  suggested: aggregation_error
+  reason: result does not match gold
+  suspect_scoring: null
+  label: over_refusal
+- question: q013
+  repeat: 2
+  category: relative_date
+  split: dev
+  suggested: wrong_time_window
+  reason: 'result does not match gold (question hint: wrong_time_window)'
+  suspect_scoring: null
+  label: wrong_metric_definition
+- question: q016
+  repeat: 2
+  category: relative_date
+  split: dev
+  suggested: wrong_time_window
+  reason: 'result does not match gold (question hint: wrong_time_window)'
+  suspect_scoring: null
+  label: over_refusal
+- question: q017
+  repeat: 2
+  category: relative_date
+  split: dev
+  suggested: wrong_time_window
+  reason: date literals ['2026-10-01', '2026-10-31', '2026-11-01'] vs gold ['2026-10-01', '2026-10-31']
+  suspect_scoring: null
+  label: wrong_metric_definition
+- question: q019
+  repeat: 2
+  category: relative_date
+  split: dev
+  suggested: wrong_time_window
+  reason: 'result does not match gold (question hint: wrong_time_window)'
+  suspect_scoring: null
+  label: over_refusal
+- question: q021
+  repeat: 2
+  category: relative_date
+  split: test
+  suggested: wrong_time_window
+  reason: 'result does not match gold (question hint: wrong_time_window)'
+  suspect_scoring: null
+  label: over_refusal
+- question: q023
+  repeat: 2
+  category: metric_definition
+  split: dev
+  suggested: wrong_metric_definition
+  reason: leads with 17.78, a wrong-definition value
+  suspect_scoring: null
+  label: wrong_metric_definition
+- question: q024
+  repeat: 2
+  category: metric_definition
+  split: dev
+  suggested: wrong_metric_definition
+  reason: 'result does not match gold (question hint: wrong_metric_definition)'
+  suspect_scoring: null
+  label: wrong_metric_definition
+- question: q030
+  repeat: 2
+  category: comparison
+  split: dev
+  suggested: wrong_metric_definition
+  reason: leads with 22.36, a wrong-definition value
+  suspect_scoring: null
+  label: over_refusal
+- question: q031
+  repeat: 2
+  category: comparison
+  split: dev
+  suggested: wrong_time_window
+  reason: date literals ['2026-09-01', '2026-10-31'] vs gold ['2026-09-01', '2026-09-30', '2026-10-01',
+    '2026-10-31']
+  suspect_scoring: null
+  label: over_refusal
+- question: q032
+  repeat: 2
+  category: comparison
+  split: dev
+  suggested: wrong_time_window
+  reason: date literals ['2026-10-12', '2026-10-19', '2026-10-25'] vs gold ['2026-10-12', '2026-10-18',
+    '2026-10-19', '2026-10-25']
+  suspect_scoring: null
+  label: over_refusal
+- question: q034
+  repeat: 2
+  category: comparison
+  split: dev
+  suggested: wrong_time_window
+  reason: date literals ['2026-11-09', '2026-11-12', '2026-11-16', '2026-11-20'] vs gold ['2026-11-09',
+    '2026-11-15', '2026-11-16', '2026-11-20']
+  suspect_scoring: null
+  label: over_refusal
+- question: q035
+  repeat: 2
+  category: comparison
+  split: test
+  suggested: wrong_time_window
+  reason: date literals ['2026-10-01'] vs gold ['2026-10-01', '2026-10-31', '2026-11-01', '2026-11-30']
+  suspect_scoring: null
+  label: wrong_metric_definition
+- question: q039
+  repeat: 2
+  category: ranking
+  split: test
+  suggested: wrong_metric_definition
+  reason: 'result does not match gold (question hint: wrong_metric_definition)'
+  suspect_scoring: null
+  label: wrong_metric_definition
+- question: q042
+  repeat: 2
+  category: session_derived
+  split: dev
+  suggested: wrong_metric_definition
+  reason: leads with 62.03, a wrong-definition value
+  suspect_scoring: null
+  label: wrong_metric_definition
+- question: q043
+  repeat: 2
+  category: session_derived
+  split: dev
+  suggested: wrong_metric_definition
+  reason: leads with 9.0, a wrong-definition value
+  suspect_scoring: null
+  label: timezone_or_day_boundary
+- question: q044
+  repeat: 2
+  category: session_derived
+  split: dev
+  suggested: timezone_or_day_boundary
+  reason: 'result does not match gold (question hint: timezone_or_day_boundary)'
+  suspect_scoring: null
+  label: timezone_or_day_boundary
+- question: q046
+  repeat: 2
+  category: session_derived
+  split: dev
+  suggested: wrong_metric_definition
+  reason: leads with 20.0, a wrong-definition value
+  suspect_scoring: null
+  label: wrong_metric_definition
+- question: q047
+  repeat: 2
+  category: session_derived
+  split: test
+  suggested: timezone_or_day_boundary
+  reason: 'result does not match gold (question hint: timezone_or_day_boundary)'
+  suspect_scoring: null
+  label: timezone_or_day_boundary
+- question: q048
+  repeat: 2
+  category: session_derived
+  split: test
+  suggested: timezone_or_day_boundary
+  reason: 'result does not match gold (question hint: timezone_or_day_boundary)'
+  suspect_scoring: null
+  label: timezone_or_day_boundary
+- question: q051
+  repeat: 2
+  category: multi_step
+  split: test
+  suggested: answer_misreport
+  reason: the cited result matches gold but the text does not state it
+  suspect_scoring: result matches gold but the text check failed
+  label: wrong_metric_definition
+- question: q052
+  repeat: 2
+  category: multi_step
+  split: dev
+  suggested: wrong_time_window
+  reason: date literals ['2026-09-28', '2026-11-01'] vs gold ['2026-09-28', '2026-10-05', '2026-10-26']
+  suspect_scoring: null
+  label: wrong_metric_definition
+- question: q055
+  repeat: 2
+  category: multi_step
+  split: dev
+  suggested: aggregation_error
+  reason: result does not match gold
+  suspect_scoring: null
+  label: over_refusal
+- question: q057
+  repeat: 2
+  category: ambiguous
+  split: dev
+  suggested: wrong_time_window
+  reason: date literals ['2026-11-06', '2026-11-13', '2026-11-19'] vs gold ['2026-10-21', '2026-10-22',
+    '2026-11-09', '2026-11-13', '2026-11-14', '2026-11-15', '2026-11-16', '2026-11-19', '2026-11-20']
+  suspect_scoring: null
+  label: wrong_metric_definition
+- question: q061
+  repeat: 2
+  category: ambiguous
+  split: dev
+  suggested: wrong_time_window
+  reason: date literals ['2026-06-01', '2026-08-31'] vs gold ['2026-06-01', '2026-06-21', '2026-08-31',
+    '2026-09-22']
+  suspect_scoring: null
+  label: over_refusal
+- question: q062
+  repeat: 2
+  category: ambiguous
+  split: test
+  suggested: wrong_metric_definition
+  reason: 'result does not match gold (question hint: wrong_metric_definition)'
+  suspect_scoring: text states the gold value but no cited result matched
+  label: wrong_metric_definition
+- question: q070
+  repeat: 2
+  category: trap
+  split: dev
+  suggested: missing_caveat
+  reason: 'result does not match gold (question hint: missing_caveat)'
+  suspect_scoring: null
+  label: over_refusal
+- question: q071
+  repeat: 2
+  category: trap
+  split: dev
+  suggested: missing_caveat
+  reason: 'result does not match gold (question hint: missing_caveat)'
+  suspect_scoring: null
+  label: over_refusal
+- question: q072
+  repeat: 2
+  category: trap
+  split: dev
+  suggested: failed_refusal
+  reason: stated an amount [0.0] for a day with no data
+  suspect_scoring: says there is no data but numbers [0.0] counted as today's amount
+  label: failed_refusal
+  note: '''0 watch events for today'' stays a failure (unknown is not zero)'
+- question: q073
+  repeat: 2
+  category: trap
+  split: test
+  suggested: missing_caveat
+  reason: 'result does not match gold (question hint: missing_caveat)'
+  suspect_scoring: null
+  label: wrong_metric_definition
+- question: q074
+  repeat: 2
+  category: trap
+  split: dev
+  suggested: missing_caveat
+  reason: 'result does not match gold (question hint: missing_caveat)'
+  suspect_scoring: null
+  label: over_refusal
+- question: q075
+  repeat: 2
+  category: trap
+  split: dev
+  suggested: missing_caveat
+  reason: 'result does not match gold (question hint: missing_caveat)'
+  suspect_scoring: null
+  label: over_refusal
+- question: q076
+  repeat: 2
+  category: trap
+  split: test
+  suggested: missing_caveat
+  reason: 'result does not match gold (question hint: missing_caveat)'
+  suspect_scoring: null
+  label: wrong_metric_definition
+- question: q077
+  repeat: 2
+  category: relative_date
+  split: dev
+  suggested: wrong_time_window
+  reason: 'result does not match gold (question hint: wrong_time_window)'
+  suspect_scoring: null
+  label: over_refusal
+- question: q079
+  repeat: 2
+  category: relative_date
+  split: dev
+  suggested: wrong_time_window
+  reason: 'result does not match gold (question hint: wrong_time_window)'
+  suspect_scoring: null
+  label: over_refusal
+- question: q081
+  repeat: 2
+  category: relative_date
+  split: test
+  suggested: wrong_time_window
+  reason: 'result does not match gold (question hint: wrong_time_window)'
+  suspect_scoring: null
+  label: wrong_metric_definition
+- question: q082
+  repeat: 2
+  category: ambiguous
+  split: dev
+  suggested: wrong_time_window
+  reason: date literals ['2026-11-09', '2026-11-16'] vs gold ['2026-11-02', '2026-11-09', '2026-11-16']
+  suspect_scoring: null
+  label: wrong_metric_definition
+- question: q083
+  repeat: 2
+  category: comparison
+  split: test
+  suggested: wrong_time_window
+  reason: date literals ['2026-10-01', '2026-10-31'] vs gold ['2026-10-01', '2026-10-15', '2026-10-16',
+    '2026-10-31']
+  suspect_scoring: null
+  label: wrong_metric_definition
+- question: q084
+  repeat: 2
+  category: session_derived
+  split: dev
+  suggested: wrong_metric_definition
+  reason: leads with 6.633333, a wrong-definition value
+  suspect_scoring: null
+  label: wrong_metric_definition
+- question: q085
+  repeat: 2
+  category: session_derived
+  split: dev
+  suggested: wrong_metric_definition
+  reason: leads with 0.1335, a wrong-definition value
+  suspect_scoring: null
+  label: wrong_metric_definition
+- question: q087
+  repeat: 2
+  category: session_derived
+  split: dev
+  suggested: wrong_metric_definition
+  reason: leads with 75.6, a wrong-definition value
+  suspect_scoring: null
+  label: wrong_metric_definition
+- question: q090
+  repeat: 2
+  category: time_window
+  split: dev
+  suggested: aggregation_error
+  reason: result does not match gold
+  suspect_scoring: null
+  label: over_refusal
+- question: q093
+  repeat: 2
+  category: trap
+  split: dev
+  suggested: missing_caveat
+  reason: 'result does not match gold (question hint: missing_caveat)'
+  suspect_scoring: null
+  label: over_refusal
+- question: q094
+  repeat: 2
+  category: trap
+  split: test
+  suggested: wrong_time_window
+  reason: date literals ['2026-10-01', '2026-11-01'] vs gold ['2026-10-01', '2026-10-31']
+  suspect_scoring: null
+  label: wrong_metric_definition
+- question: q007
+  repeat: 3
+  category: time_window
+  split: dev
+  suggested: aggregation_error
+  reason: result does not match gold
+  suspect_scoring: null
+  label: over_refusal
+- question: q010
+  repeat: 3
+  category: time_window
+  split: test
+  suggested: aggregation_error
+  reason: result does not match gold
+  suspect_scoring: null
+  label: over_refusal
+- question: q013
+  repeat: 3
+  category: relative_date
+  split: dev
+  suggested: wrong_time_window
+  reason: date literals ['2026-11-09', '2026-11-16'] vs gold ['2026-11-09', '2026-11-15']
+  suspect_scoring: null
+  label: wrong_metric_definition
+- question: q016
+  repeat: 3
+  category: relative_date
+  split: dev
+  suggested: wrong_time_window
+  reason: 'result does not match gold (question hint: wrong_time_window)'
+  suspect_scoring: null
+  label: over_refusal
+- question: q017
+  repeat: 3
+  category: relative_date
+  split: dev
+  suggested: wrong_time_window
+  reason: 'result does not match gold (question hint: wrong_time_window)'
+  suspect_scoring: null
+  label: wrong_metric_definition
+- question: q019
+  repeat: 3
+  category: relative_date
+  split: dev
+  suggested: wrong_time_window
+  reason: 'result does not match gold (question hint: wrong_time_window)'
+  suspect_scoring: null
+  label: wrong_metric_definition
+- question: q021
+  repeat: 3
+  category: relative_date
+  split: test
+  suggested: wrong_time_window
+  reason: 'result does not match gold (question hint: wrong_time_window)'
+  suspect_scoring: null
+  label: wrong_metric_definition
+- question: q023
+  repeat: 3
+  category: metric_definition
+  split: dev
+  suggested: wrong_metric_definition
+  reason: leads with 17.78, a wrong-definition value
+  suspect_scoring: null
+  label: wrong_metric_definition
+- question: q024
+  repeat: 3
+  category: metric_definition
+  split: dev
+  suggested: wrong_metric_definition
+  reason: 'result does not match gold (question hint: wrong_metric_definition)'
+  suspect_scoring: null
+  label: wrong_metric_definition
+- question: q030
+  repeat: 3
+  category: comparison
+  split: dev
+  suggested: wrong_metric_definition
+  reason: leads with 22.36, a wrong-definition value
+  suspect_scoring: null
+  label: wrong_metric_definition
+- question: q031
+  repeat: 3
+  category: comparison
+  split: dev
+  suggested: wrong_time_window
+  reason: date literals ['2026-09-01', '2026-11-01'] vs gold ['2026-09-01', '2026-09-30', '2026-10-01',
+    '2026-10-31']
+  suspect_scoring: null
+  label: over_refusal
+- question: q032
+  repeat: 3
+  category: comparison
+  split: dev
+  suggested: wrong_time_window
+  reason: date literals ['2026-10-12', '2026-10-19', '2026-10-25'] vs gold ['2026-10-12', '2026-10-18',
+    '2026-10-19', '2026-10-25']
+  suspect_scoring: null
+  label: over_refusal
+- question: q034
+  repeat: 3
+  category: comparison
+  split: dev
+  suggested: wrong_time_window
+  reason: date literals ['2026-11-09', '2026-11-12', '2026-11-16', '2026-11-20'] vs gold ['2026-11-09',
+    '2026-11-15', '2026-11-16', '2026-11-20']
+  suspect_scoring: null
+  label: wrong_metric_definition
+- question: q035
+  repeat: 3
+  category: comparison
+  split: test
+  suggested: wrong_time_window
+  reason: date literals ['2026-10-01'] vs gold ['2026-10-01', '2026-10-31', '2026-11-01', '2026-11-30']
+  suspect_scoring: null
+  label: wrong_metric_definition
+- question: q039
+  repeat: 3
+  category: ranking
+  split: test
+  suggested: wrong_metric_definition
+  reason: 'result does not match gold (question hint: wrong_metric_definition)'
+  suspect_scoring: null
+  label: wrong_metric_definition
+- question: q042
+  repeat: 3
+  category: session_derived
+  split: dev
+  suggested: wrong_metric_definition
+  reason: leads with 62.03, a wrong-definition value
+  suspect_scoring: null
+  label: wrong_metric_definition
+- question: q043
+  repeat: 3
+  category: session_derived
+  split: dev
+  suggested: wrong_metric_definition
+  reason: leads with 9.0, a wrong-definition value
+  suspect_scoring: null
+  label: timezone_or_day_boundary
+- question: q044
+  repeat: 3
+  category: session_derived
+  split: dev
+  suggested: timezone_or_day_boundary
+  reason: 'result does not match gold (question hint: timezone_or_day_boundary)'
+  suspect_scoring: null
+  label: timezone_or_day_boundary
+- question: q046
+  repeat: 3
+  category: session_derived
+  split: dev
+  suggested: wrong_metric_definition
+  reason: leads with 20.0, a wrong-definition value
+  suspect_scoring: null
+  label: wrong_metric_definition
+- question: q047
+  repeat: 3
+  category: session_derived
+  split: test
+  suggested: timezone_or_day_boundary
+  reason: 'result does not match gold (question hint: timezone_or_day_boundary)'
+  suspect_scoring: null
+  label: timezone_or_day_boundary
+- question: q048
+  repeat: 3
+  category: session_derived
+  split: test
+  suggested: timezone_or_day_boundary
+  reason: 'result does not match gold (question hint: timezone_or_day_boundary)'
+  suspect_scoring: null
+  label: timezone_or_day_boundary
+- question: q051
+  repeat: 3
+  category: multi_step
+  split: test
+  suggested: wrong_metric_definition
+  reason: 'result does not match gold (question hint: wrong_metric_definition)'
+  suspect_scoring: null
+  label: wrong_metric_definition
+- question: q052
+  repeat: 3
+  category: multi_step
+  split: dev
+  suggested: wrong_time_window
+  reason: date literals ['2026-09-28', '2026-10-26'] vs gold ['2026-09-28', '2026-10-05', '2026-10-26']
+  suspect_scoring: null
+  label: wrong_metric_definition
+- question: q055
+  repeat: 3
+  category: multi_step
+  split: dev
+  suggested: aggregation_error
+  reason: result does not match gold
+  suspect_scoring: null
+  label: over_refusal
+- question: q057
+  repeat: 3
+  category: ambiguous
+  split: dev
+  suggested: wrong_time_window
+  reason: date literals ['2026-11-06', '2026-11-13', '2026-11-19'] vs gold ['2026-10-21', '2026-10-22',
+    '2026-11-09', '2026-11-13', '2026-11-14', '2026-11-15', '2026-11-16', '2026-11-19', '2026-11-20']
+  suspect_scoring: null
+  label: wrong_metric_definition
+- question: q061
+  repeat: 3
+  category: ambiguous
+  split: dev
+  suggested: wrong_time_window
+  reason: date literals ['2026-06-01', '2026-08-31'] vs gold ['2026-06-01', '2026-06-21', '2026-08-31',
+    '2026-09-22']
+  suspect_scoring: null
+  label: over_refusal
+- question: q062
+  repeat: 3
+  category: ambiguous
+  split: test
+  suggested: wrong_metric_definition
+  reason: 'result does not match gold (question hint: wrong_metric_definition)'
+  suspect_scoring: text states the gold value but no cited result matched
+  label: wrong_metric_definition
+- question: q070
+  repeat: 3
+  category: trap
+  split: dev
+  suggested: missing_caveat
+  reason: 'result does not match gold (question hint: missing_caveat)'
+  suspect_scoring: null
+  label: over_refusal
+- question: q071
+  repeat: 3
+  category: trap
+  split: dev
+  suggested: wrong_time_window
+  reason: date literals ['2026-10-01', '2026-11-01'] vs gold ['2026-10-01', '2026-10-31']
+  suspect_scoring: null
+  label: wrong_metric_definition
+- question: q072
+  repeat: 3
+  category: trap
+  split: dev
+  suggested: failed_refusal
+  reason: stated an amount [0.0] for a day with no data
+  suspect_scoring: says there is no data but numbers [0.0] counted as today's amount
+  label: failed_refusal
+  note: '''0 watch events for today'' stays a failure (unknown is not zero)'
+- question: q073
+  repeat: 3
+  category: trap
+  split: test
+  suggested: over_refusal
+  reason: refused an answerable question
+  suspect_scoring: null
+  label: over_refusal
+- question: q074
+  repeat: 3
+  category: trap
+  split: dev
+  suggested: missing_caveat
+  reason: 'result does not match gold (question hint: missing_caveat)'
+  suspect_scoring: null
+  label: over_refusal
+- question: q075
+  repeat: 3
+  category: trap
+  split: dev
+  suggested: missing_caveat
+  reason: 'result does not match gold (question hint: missing_caveat)'
+  suspect_scoring: null
+  label: over_refusal
+- question: q076
+  repeat: 3
+  category: trap
+  split: test
+  suggested: missing_caveat
+  reason: 'result does not match gold (question hint: missing_caveat)'
+  suspect_scoring: null
+  label: wrong_metric_definition
+- question: q077
+  repeat: 3
+  category: relative_date
+  split: dev
+  suggested: wrong_time_window
+  reason: date literals ['2026-11-02', '2026-11-09'] vs gold ['2026-11-02', '2026-11-08']
+  suspect_scoring: null
+  label: wrong_metric_definition
+- question: q079
+  repeat: 3
+  category: relative_date
+  split: dev
+  suggested: wrong_time_window
+  reason: 'result does not match gold (question hint: wrong_time_window)'
+  suspect_scoring: null
+  label: over_refusal
+- question: q081
+  repeat: 3
+  category: relative_date
+  split: test
+  suggested: wrong_time_window
+  reason: 'result does not match gold (question hint: wrong_time_window)'
+  suspect_scoring: null
+  label: over_refusal
+- question: q082
+  repeat: 3
+  category: ambiguous
+  split: dev
+  suggested: wrong_time_window
+  reason: date literals ['2026-11-09', '2026-11-16'] vs gold ['2026-11-02', '2026-11-09', '2026-11-16']
+  suspect_scoring: null
+  label: wrong_metric_definition
+- question: q083
+  repeat: 3
+  category: comparison
+  split: test
+  suggested: wrong_time_window
+  reason: date literals ['2026-10-01', '2026-10-31'] vs gold ['2026-10-01', '2026-10-15', '2026-10-16',
+    '2026-10-31']
+  suspect_scoring: null
+  label: wrong_metric_definition
+- question: q084
+  repeat: 3
+  category: session_derived
+  split: dev
+  suggested: wrong_metric_definition
+  reason: leads with 6.633333, a wrong-definition value
+  suspect_scoring: null
+  label: wrong_metric_definition
+- question: q087
+  repeat: 3
+  category: session_derived
+  split: dev
+  suggested: wrong_metric_definition
+  reason: leads with 75.6, a wrong-definition value
+  suspect_scoring: null
+  label: wrong_metric_definition
+- question: q090
+  repeat: 3
+  category: time_window
+  split: dev
+  suggested: aggregation_error
+  reason: result does not match gold
+  suspect_scoring: null
+  label: over_refusal
+- question: q093
+  repeat: 3
+  category: trap
+  split: dev
+  suggested: missing_caveat
+  reason: 'result does not match gold (question hint: missing_caveat)'
+  suspect_scoring: null
+  label: over_refusal
+- question: q094
+  repeat: 3
+  category: trap
+  split: test
+  suggested: missing_caveat
+  reason: 'result does not match gold (question hint: missing_caveat)'
+  suspect_scoring: null
+  label: wrong_metric_definition
+confirmed:
+  by: owner
+  date: '2026-11-20'
+  decision: 'Relabelled from the answers: 53 over_refusal, 65 wrong_metric_definition, 12 timezone_or_day_boundary,
+    1 answer_misreport; q072 r2/r3 failed_refusal. q060 x3, q063 r2 and q072 r1 pass after the scorer/question
+    fixes. q059 r2 confirmed scoring false negative, resolved by the range-sum rule.'
+rescored_to_pass:
+- question: q060
+  repeat: 1
+  before: false
+  after: true
+  old_label: answer_misreport
+- question: q066
+  repeat: 1
+  before: false
+  after: true
+  old_label: failed_refusal
+- question: q072
+  repeat: 1
+  before: false
+  after: true
+  old_label: missing_caveat
+- question: q060
+  repeat: 2
+  before: false
+  after: true
+  old_label: answer_misreport
+- question: q063
+  repeat: 2
+  before: false
+  after: true
+  old_label: failed_refusal
+- question: q066
+  repeat: 2
+  before: false
+  after: true
+  old_label: failed_refusal
+- question: q060
+  repeat: 3
+  before: false
+  after: true
+  old_label: answer_misreport
+- question: q066
+  repeat: 3
+  before: false
+  after: true
+  old_label: failed_refusal
+- question: q095
+  repeat: 3
+  before: false
+  after: true
+  old_label: failed_refusal
+rescored_to_fail: []
+scoring_false_negatives:
+- question: q059
+  repeat: 2
+  note: correct sum over the cited per-day rows inside the date range the answer states; scored as a pass
+    by the range-sum rule (owner decision 2026-11-20)

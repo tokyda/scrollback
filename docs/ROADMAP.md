@@ -51,12 +51,13 @@ Build scope by phase. Each phase ends with a "Done when" check. See `docs/DESIGN
 **Done when:** `scrollback ask "how many minutes did I watch yesterday"` returns a correct answer with SQL and a chart, and writes a trace.
 
 ## Phase 4: Eval harness and baseline
-- [ ] `eval/questions.yaml`: 60+ questions across all categories (§7.1), with fixed `today` anchors
-- [ ] Gold-SQL validity check (runs in CI)
-- [ ] Scorers: execution accuracy, answer accuracy, metric selection, refusal, caveat, efficiency (§7.2)
-- [ ] Run, repeat and report commands; run artifacts layout (§7.4)
-- [ ] Auto-suggested bad-case labels from traces + manual label file (§7.3)
-- [ ] Run **E0 baseline** ×3; label every failure
+- [x] `eval/questions.yaml`: 60+ questions across all categories (§7.1), with fixed `today` anchors
+- [x] Gold-SQL validity check (runs in CI)
+- [x] Scorers: execution accuracy, answer accuracy, metric selection, refusal, caveat, efficiency (§7.2)
+- [x] Run, repeat and report commands; run artifacts layout (§7.4)
+- [x] Auto-suggested bad-case labels from traces + manual label file (§7.3)
+- [x] Run **E0 baseline** ×3; label every failure
+- [x] *(added)* Round-2 harder questions (96 total), `eval rescore`, and the **E-1 warehouse ablation** (staging only) as a lower bound; report in `eval/reports/e00_baseline.md`
 
 **Done when:** there's a baseline report with per-category accuracy and a labelled bad-case distribution.
 

@@ -1,0 +1,223 @@
+run_id: 20261119T222732Z_e00_baseline
+instructions: 'Confirm each failure: set `label` to one of the taxonomy labels (the suggestion is a starting
+  point). Optionally set `scoring_false_negative: true` and a `note`.'
+taxonomy:
+- wrong_metric_definition
+- wrong_time_window
+- timezone_or_day_boundary
+- hallucinated_table_or_column
+- join_or_grain_error
+- aggregation_error
+- sql_error_unrecovered
+- answer_misreport
+- missing_caveat
+- failed_refusal
+- over_refusal
+- tool_loop_or_step_limit
+failures:
+- question: q023
+  repeat: 1
+  category: metric_definition
+  split: dev
+  suggested: wrong_metric_definition
+  reason: leads with 17.78, a wrong-definition value
+  suspect_scoring: 'leads with wrong-definition value 17.78 but also states the gold value: check that
+    the wrong value is the headline, not labelled context'
+  label: wrong_metric_definition
+- question: q042
+  repeat: 1
+  category: session_derived
+  split: dev
+  suggested: wrong_metric_definition
+  reason: leads with 62.03, a wrong-definition value
+  suspect_scoring: 'leads with wrong-definition value 62.03 but also states the gold value: check that
+    the wrong value is the headline, not labelled context'
+  label: wrong_metric_definition
+- question: q062
+  repeat: 1
+  category: ambiguous
+  split: test
+  suggested: wrong_metric_definition
+  reason: leads with 5.241667, a wrong-definition value
+  suspect_scoring: 'leads with wrong-definition value 5.241667 but also states the gold value: check that
+    the wrong value is the headline, not labelled context'
+  label: wrong_metric_definition
+- question: q075
+  repeat: 1
+  category: trap
+  split: dev
+  suggested: missing_caveat
+  reason: right number but no estimate/coverage caveat
+  suspect_scoring: only the caveat check failed
+  label: missing_caveat
+- question: q084
+  repeat: 1
+  category: session_derived
+  split: dev
+  suggested: wrong_metric_definition
+  reason: leads with 6.633333, a wrong-definition value
+  suspect_scoring: 'leads with wrong-definition value 6.633333 but also states the gold value: check that
+    the wrong value is the headline, not labelled context'
+  label: wrong_metric_definition
+- question: q087
+  repeat: 1
+  category: session_derived
+  split: dev
+  suggested: wrong_metric_definition
+  reason: leads with 75.6, a wrong-definition value
+  suspect_scoring: null
+  label: wrong_metric_definition
+- question: q023
+  repeat: 2
+  category: metric_definition
+  split: dev
+  suggested: wrong_metric_definition
+  reason: leads with 17.78, a wrong-definition value
+  suspect_scoring: 'leads with wrong-definition value 17.78 but also states the gold value: check that
+    the wrong value is the headline, not labelled context'
+  label: wrong_metric_definition
+- question: q042
+  repeat: 2
+  category: session_derived
+  split: dev
+  suggested: wrong_metric_definition
+  reason: leads with 62.03, a wrong-definition value
+  suspect_scoring: 'leads with wrong-definition value 62.03 but also states the gold value: check that
+    the wrong value is the headline, not labelled context'
+  label: wrong_metric_definition
+- question: q062
+  repeat: 2
+  category: ambiguous
+  split: test
+  suggested: wrong_metric_definition
+  reason: leads with 5.241667, a wrong-definition value
+  suspect_scoring: 'leads with wrong-definition value 5.241667 but also states the gold value: check that
+    the wrong value is the headline, not labelled context'
+  label: wrong_metric_definition
+- question: q071
+  repeat: 2
+  category: trap
+  split: dev
+  suggested: missing_caveat
+  reason: right number but no estimate/coverage caveat
+  suspect_scoring: only the caveat check failed
+  label: missing_caveat
+- question: q084
+  repeat: 2
+  category: session_derived
+  split: dev
+  suggested: wrong_metric_definition
+  reason: leads with 6.633333, a wrong-definition value
+  suspect_scoring: 'leads with wrong-definition value 6.633333 but also states the gold value: check that
+    the wrong value is the headline, not labelled context'
+  label: wrong_metric_definition
+- question: q087
+  repeat: 2
+  category: session_derived
+  split: dev
+  suggested: wrong_metric_definition
+  reason: leads with 75.6, a wrong-definition value
+  suspect_scoring: null
+  label: wrong_metric_definition
+- question: q023
+  repeat: 3
+  category: metric_definition
+  split: dev
+  suggested: wrong_metric_definition
+  reason: leads with 17.78, a wrong-definition value
+  suspect_scoring: 'leads with wrong-definition value 17.78 but also states the gold value: check that
+    the wrong value is the headline, not labelled context'
+  label: wrong_metric_definition
+- question: q042
+  repeat: 3
+  category: session_derived
+  split: dev
+  suggested: wrong_metric_definition
+  reason: leads with 62.03, a wrong-definition value
+  suspect_scoring: 'leads with wrong-definition value 62.03 but also states the gold value: check that
+    the wrong value is the headline, not labelled context'
+  label: wrong_metric_definition
+- question: q060
+  repeat: 3
+  category: ambiguous
+  split: dev
+  suggested: answer_misreport
+  reason: the cited result matches gold but the text does not state it
+  suspect_scoring: result matches gold but the text check failed
+  label: answer_misreport
+- question: q062
+  repeat: 3
+  category: ambiguous
+  split: test
+  suggested: wrong_metric_definition
+  reason: leads with 5.241667, a wrong-definition value
+  suspect_scoring: 'leads with wrong-definition value 5.241667 but also states the gold value: check that
+    the wrong value is the headline, not labelled context'
+  label: wrong_metric_definition
+- question: q075
+  repeat: 3
+  category: trap
+  split: dev
+  suggested: missing_caveat
+  reason: right number but no estimate/coverage caveat
+  suspect_scoring: only the caveat check failed
+  label: missing_caveat
+- question: q084
+  repeat: 3
+  category: session_derived
+  split: dev
+  suggested: wrong_metric_definition
+  reason: leads with 6.633333, a wrong-definition value
+  suspect_scoring: 'leads with wrong-definition value 6.633333 but also states the gold value: check that
+    the wrong value is the headline, not labelled context'
+  label: wrong_metric_definition
+- question: q087
+  repeat: 3
+  category: session_derived
+  split: dev
+  suggested: wrong_metric_definition
+  reason: leads with 75.6, a wrong-definition value
+  suspect_scoring: null
+  label: wrong_metric_definition
+confirmed:
+  by: owner
+  date: '2026-11-20'
+  decision: 15 wrong_metric_definition, 3 missing_caveat, 1 answer_misreport (q060 r3). q067 r1 passes
+    with describe_table grounding. q034 r2/r3 confirmed scoring false negatives, resolved by the range-sum
+    rule.
+rescored_to_pass:
+- question: q067
+  repeat: 1
+  before: false
+  after: true
+  old_label: failed_refusal
+- question: q096
+  repeat: 1
+  before: false
+  after: true
+  old_label: failed_refusal
+- question: q095
+  repeat: 2
+  before: false
+  after: true
+  old_label: failed_refusal
+- question: q095
+  repeat: 3
+  before: false
+  after: true
+  old_label: failed_refusal
+- question: q096
+  repeat: 3
+  before: false
+  after: true
+  old_label: failed_refusal
+rescored_to_fail: []
+scoring_false_negatives:
+- question: q034
+  repeat: 2
+  note: correct sum over the cited per-day rows inside the date range the answer states; scored as a pass
+    by the range-sum rule (owner decision 2026-11-20)
+- question: q034
+  repeat: 3
+  note: correct sum over the cited per-day rows inside the date range the answer states; scored as a pass
+    by the range-sum rule (owner decision 2026-11-20)

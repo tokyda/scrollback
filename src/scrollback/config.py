@@ -97,6 +97,8 @@ class AgentConfig(_Strict):
     sql_max_retries: int = Field(2, ge=0)  # consecutive failed run_sql calls allowed to retry
     max_result_rows: int = Field(200, gt=0)
     statement_timeout_sec: float = Field(10.0, gt=0)
+    # Tables the agent may query: marts (default) or staging (E-1 warehouse ablation).
+    tables: Literal["marts", "staging"] = "marts"
     # E0 baseline switches (DESIGN §7.5): descriptions arrive in E1.
     describe_include_descriptions: bool = False
     describe_sample_rows: int = Field(3, ge=0)

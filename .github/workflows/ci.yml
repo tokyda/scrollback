@@ -38,3 +38,5 @@ jobs:
         run: uv run scrollback build --db "$RUNNER_TEMP/wh.duckdb"
       - name: Inspect gaps
         run: uv run scrollback inspect gaps --db "$RUNNER_TEMP/wh.duckdb"
+      - name: Eval gold-SQL validity check
+        run: uv run scrollback eval check-gold

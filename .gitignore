@@ -11,9 +11,10 @@ data/warehouse/*
 
 # Agent traces and eval runs (may contain query results)
 traces/
-eval/runs/*
+eval/runs/**
+!eval/runs/*/
+!eval/runs/*/summary.json
 !eval/runs/.gitkeep
-!eval/runs/**/summary.json
 
 # Charts produced at runtime
 charts/

@@ -437,3 +437,26 @@ def test_agent_traces_table_is_not_queryable_by_agent(agent_settings: Settings) 
          mock_turn(final("n/a", []))],
     )  # fmt: skip
     assert tool_results(llm, 1)[0]["content"].startswith("[table_not_allowed]")
+
+
+def test_e_minus_1_staging_scope(agent_settings: Settings) -> None:
+    agent_settings.agent = agent_settings.agent.model_copy(update={"tables": "staging"})
+    sql = "SELECT count(*) AS views FROM stg_watch WHERE local_date = DATE '2026-11-19'"
+    result, llm = run(
+        agent_settings,
+        [
+            mock_turn(("describe_table", {"table": "stg_watch"}),
+                      ("run_sql", {"sql": "SELECT count(*) FROM fct_views"})),
+            mock_turn(("run_sql", {"sql": sql})),
+            mock_turn(final("167 views", ["r1"])),
+        ],
+    )  # fmt: skip
+    first = llm.requests[0]
+    assert "- stg_watch" in first["system"] and "fct_views" not in first["system"]
+    enum = first["tools"][0]["input_schema"]["properties"]["table"]["enum"]
+    assert enum == ["stg_watch", "stg_like", "stg_favorite", "stg_search", "stg_share"]
+    described, blocked = tool_results(llm, 1)
+    assert "column_stats" in json.loads(described["content"])  # staging is row-level
+    assert blocked["content"].startswith("[table_not_allowed]")
+    assert json.loads(tool_results(llm, 2)[0]["content"])["rows"] == [[167]]
+    assert result.status == "answered"

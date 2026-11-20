@@ -1,0 +1,15 @@
+# E0 baseline (DESIGN §7.5): schema only. Tools describe_table / run_sql / make_chart /
+# final_answer; system_v1.md; no descriptions, no metrics.yml, no glossary, no refusal rules.
+# Experiments are config diffs: later ones change only these overrides.
+name: e00_baseline
+description: "E0 baseline: schema only, minimal prompt v1, Sonnet 5.5 at medium effort"
+overrides:
+  llm:
+    model: claude-sonnet-5-5
+    effort: medium
+  agent:
+    prompt_version: 1
+    result_mode: aggregate_only
+    describe_include_descriptions: false
+    sql_max_retries: 2
+    max_steps: 8

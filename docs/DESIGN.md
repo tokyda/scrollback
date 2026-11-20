@@ -434,27 +434,100 @@ Implemented in `src/scrollback/tracing.py`:
 
 Gold answers are computed by running `gold_sql` against the **synthetic dataset at a fixed seed**, so they're reproducible in CI. A check fails if any gold SQL errors or returns empty when it shouldn't.
 
+**As built** (`src/scrollback/evals/`, data in `eval/`):
+- **Pinned parameters.** `questions.yaml` starts with a `params:` block (timezones and every metric parameter) used for both gold answers and eval runs. Tuning `config.yaml` on real data therefore never moves the gold answers. *(Added.)*
+- **One warehouse per `today` anchor.** For anchor T, the committed sample is filtered to records whose local date is ≤ T, as if exported at the end of that day, then ingested and built with the pinned params. A question asked "on" T can't see later data, and "this month" on the 1st really is one day. Warehouses are cached in `data/warehouse/eval/`, keyed by the sample, anchor, params and dbt project. *(Added: a single full warehouse would let past anchors see "future" data.)*
+- **Extra question fields:**
+  - `split` (dev/test, stratified by category; test is held out for baseline and final runs);
+  - `tests` (one line on what the question checks);
+  - `units` (one per gold column, which drives tolerant matching);
+  - `alternatives` (other acceptable readings, `ambiguous` only);
+  - `wrong_values` (numbers that only come from a wrong definition);
+  - `requires_caveat` (true for every `trap`);
+  - `likely_failure` (a hint for label suggestion);
+  - `expect_empty`.
+- **`answer_type: no_data`** *(added)*, `trap` only. The right answer is "there's no data for that" (e.g. "today" when the export ends yesterday). It passes only if the answer says so, and **any** stated amount, including 0, fails, because unknown isn't zero (§4.4 `dim_date` coverage).
+- **Ambiguous-reading policy.** Alternatives exist only in the `ambiguous` category. When a review finds that a question elsewhere has more than one reasonable reading, it **moves to `ambiguous` with every reasonable reading accepted**, rather than being reworded after the fact (q056 "watch more": watch time 6.09× or videos 5.73×; q082 "last Monday" asked on a Friday). A reasonable reading found later is added as another alternative (q060 "at night": 10pm–6am). An ambiguous answer must match one reading in both its result and its text, and must state its assumptions.
+- **Ties:** ranking and top-N golds were checked for ties at their cutoff (none at review, 2026-11-20). Ties below the cutoff don't matter, because a top-N answer is scored on its first N rows only. If a future gold has a tie at the cutoff, every tied answer must be listed as an alternative.
+- **Round 2** *(added 2026-11-20, after E0 scored ~95%)*: 20 harder questions (q077–q096, 13 dev / 7 test), where no single column gives the answer away. They cover relative windows the marts don't encode (week before last, last full week, this quarter, same weekday last week, past fortnight), session statistics with no column (median, share by session start hour, sessions per *active* day, longest by estimate vs span), runs of inactive days, an imputed last view, "exactly" traps and two more no-proxy refusals. The set is now 96 questions (64 dev / 32 test).
+- **Unanswerable questions have no reasonable proxy in the data.** No search terms or gaps can stand in for the answer, so a refusal is the only right answer.
+- **Writing rules.** Gold SQL follows `knowledge/metrics.yml` and the glossary, and questions were written without running the agent on them.
+- **`scrollback eval check-gold`** (runs in CI) validates the schema and its invariants: unique ids, ≥ 6 per category, both splits in every category, refusal ⇔ `unanswerable`, caveat ⇔ `trap`. It also runs every gold SQL and alternative and checks shapes, that `expected_metrics` exist, and that no wrong value equals its gold. **Every gold SQL and alternative must pass the agent's own `aggregate_only` SQL guard**, so no question needs SQL the agent isn't allowed to run (q039's gold was rewritten to aggregate per day for this reason). Finally it compares against the committed `eval/gold_snapshot.json`, so any gold change (from models, generator or params) is a deliberate `--update`.
+
 ### 7.2 Scoring (deterministic first)
 
 | Score | How |
 |---|---|
-| `execution_accuracy` | the agent's final SQL result matches the gold result: scalars within tolerance, tables compared as sets (or ordered for `ordered_table`), column names ignored |
-| `answer_accuracy` | the number(s) in the final text match the gold result (extracted with regex, then compared within tolerance), which catches correct SQL that's misreported |
-| `metric_selection` | `metrics_used` ⊇ `expected_metrics` |
-| `refusal_correct` | for `unanswerable`: refused or caveated, with no fabricated number |
-| `caveat_present` | for estimate metrics: the answer mentions it's an estimate |
+| `execution_accuracy` | the agent's final SQL result matches the gold result: scalars within tolerance, tables compared as sets (or ordered for `ordered_table`), column names ignored. *As built: cited results only; also via arithmetic the answer shows (see below)* |
+| `answer_accuracy` | the number(s) in the final text match the gold result (extracted with regex, then compared within tolerance), which catches correct SQL that's misreported. *As built: rounding-aware, and fails if the answer leads with a wrong-definition value* |
+| `metric_selection` | `metrics_used` ⊇ `expected_metrics` *(reported only; not part of pass)* |
+| `refusal_correct` | for `unanswerable`: refused or caveated, with no fabricated number. *As built: a leading refusal, and every later number grounded (fix D)* |
+| `caveat_present` | for estimate metrics: the answer mentions it's an estimate. *As built: required for `trap` questions only, and reported for the rest* |
 | efficiency | steps, tool calls, tokens, latency, cost |
 
-An optional LLM-as-judge scores answer clarity (1–5) as a **secondary** metric only. It never decides correctness.
+An optional LLM-as-judge scores answer clarity (1–5) as a **secondary** metric only. It never decides correctness. *(Not built yet.)*
+
+**As built** (`evals/score.py`). The rules below supersede the summary table above where they differ.
+- **Which result is scored.** Execution is judged on the results `final_answer` cites; any one match passes. A correct answer that cites no result fails execution and is labelled `answer_misreport` (E-1 q001).
+  - *Tables:* every gold column must map to a distinct result column (names ignored, extra columns allowed). Rows compare as a set (`table`) or as an ordered prefix (`ordered_table`, so extra rows below a top-N are fine). A one-row gold also matches a result that lists its values in different rows, e.g. a `GROUP BY is_weekend`.
+  - *Scalars:* the gold value must appear in the result's first row.
+- **Text.** Every gold value must be stated, with numbers judged by rounding at their printed precision ("~103" for 102.74).
+  - Dates, years, times and "N tables/queries" are never read as answer numbers.
+  - Dates, hours of day and days of week match in common spellings.
+  - A ratio also matches as a percentage.
+  - Seconds, minutes and hours convert into each other: in SQL results freely, but in text only when a unit word follows the number, and a bare integer never matches a scaled gold.
+  - A `wrong_values` number fails the answer only if the answer **leads with it**, i.e. states it before the first unambiguous mention of the gold value it competes with (same column unit), or never states the gold. A number matching both is ignored. *(Changed after the E0 review: "11,521 different videos, from 11,885 total views" is labelled context and passes; "the longest ran 62 min… estimated 35 min" leads with the wrong definition and fails.)*
+- **Execution has two levels.** `execution_strict` means the gold value is literally a cell of a cited result. `execution` (used for pass) also accepts a gold value derived from a cited result by simple arithmetic: a contiguous range sum of a column, +, −, × or ÷ of two cells in the same row, or the difference or ratio of two cells in the same column. A derived value counts **only when the answer shows the arithmetic**: the text states the derived value and every cell it was computed from. **Range sums over dated rows** have their own rule. If the answer states a total and a date range (in its text or assumptions, e.g. "2026-11-09 to 2026-11-15", "10–16 Nov 2026", "Mon 9 Nov to Sun 15 Nov"), the scorer sums only the cited rows whose date falls inside that range, and the sum must match both the stated total and the gold. Both levels are reported. *(Changed after the E0 review, tightened after E-1, then given the range-sum rule by owner decision on 2026-11-20. "Sat 293 + Sun 186 ≈ 479 min" counts. "This week 189 min vs last week 273 min" with "This week = 2026-11-16 to 2026-11-20" counts. Two unrelated cells that happen to differ by the gold value (E-1 q044: 8.1 − 3.9 = 4.2 vs 4.18) don't count, and neither does a total matching the gold whose stated range sums to something else.)*
+- **Pass rules:**
+  - `unanswerable`: with no numbers stated, a refusal phrase anywhere passes. With numbers stated, the answer must **lead with a refusal** (a refusal phrase in the first sentence, which itself states no number), and every later number must be **grounded** in a run_sql result from that run: a cell, simple arithmetic as in execution scoring, or the result's row count. Ungrounded numbers fail, and so does a hedged guess like "I can't know exactly, but you probably watched 40 min". *(Changed after the E0 re-baseline review, fix D: a clear refusal followed by real, labelled context numbers is a correct refusal. Values returned by describe_table (row counts, column statistics, sample cells) also count as grounded, by owner decision after E-1.)*
+  - `no_data`: says there's no data (including "no watch events for today" and "the data ends on…") and states no amount *for that day*. "0 watch events for today" fails: unknown isn't zero. Numbers in a sentence clearly about another day ("yesterday", "that day", "the day before", another date) and not about today don't count. *(Changed after the E0 review: "no data for today; yesterday you watched 103 min" passes; "you watched 0 minutes" fails.)*
+  - `trap`: execution ∧ answer ∧ caveat (estimate or coverage phrases).
+  - `ambiguous`: execution ∧ answer **on the same reading** ∧ non-empty `assumptions`.
+  - everything else: execution ∧ answer.
+
+  `metric_selection` and caveats on non-trap estimate questions are reported, not required.
+- **Checking the scorer.** An oracle mock agent (runs the gold SQL, states the result) must score 100% end to end in the tests.
 
 ### 7.3 Bad-case taxonomy
 Every failed question gets one primary label: auto-suggested from the trace, then confirmed by hand in `eval/labels/<run_id>.yaml`.
+
+**As built** (`evals/labels.py`):
+- **Suggestions,** in order:
+  1. run status (`tool_loop_or_step_limit`, `over_refusal`);
+  2. `failed_refusal` for unanswerable and `no_data` questions;
+  3. no cited result → `hallucinated_table_or_column` if a run_sql error names an unknown column or table, else `sql_error_unrecovered`;
+  4. a stated wrong value → `wrong_metric_definition`;
+  5. right result but wrong text → `answer_misreport`;
+  6. right number but no caveat or no assumptions → `missing_caveat`;
+  7. date literals differing from gold → `wrong_time_window` (or `timezone_or_day_boundary` when the question hints at it);
+  8. otherwise the question's `likely_failure` hint, then `aggregation_error`.
+- **Possible scoring false negatives** are flagged separately in `suspect_scoring`, so they're reviewed apart from genuine agent failures. The cases flagged:
+  - a refusal or "no data" phrase *together with* numbers counted as made up;
+  - a wrong-definition value alongside the gold value;
+  - the right result with a failed text check, or the reverse;
+  - only the caveat missing.
+
+  *(The E0 review showed the first version missed the first two kinds.)*
+- **The label file** lists one entry per failed (question, repeat), with `suggested`, `reason`, `suspect_scoring` and an empty `label` to confirm. `scrollback eval report <run>` uses confirmed labels when present.
+- **Review practice** (Phase 4):
+  - Every failure is read by hand. Genuine agent failures are reported separately from suspected scoring false negatives and from question-design problems.
+  - Only the owner confirms labels. Suggested labels are heuristics, and for an ablation they can be wrong across the board: E-1's date-literal rule suggested `wrong_time_window` for 56 runs, which were relabelled from the answers.
+  - A failure whose scoring is under open discussion keeps `label: null` and a `note` until it is decided.
+  - Scoring and question fixes are approved by the owner, tested on real answer texts, and applied to every affected run with `eval rescore`. Runs that flip are reported.
 
 `wrong_metric_definition` · `wrong_time_window` · `timezone_or_day_boundary` · `hallucinated_table_or_column` · `join_or_grain_error` · `aggregation_error` · `sql_error_unrecovered` · `answer_misreport` · `missing_caveat` · `failed_refusal` · `over_refusal` · `tool_loop_or_step_limit`
 
 ### 7.4 Runs and reports
 `scrollback eval run --config experiments/e03_rag.yaml --repeat 3`
 - Writes `eval/runs/<timestamp>_<name>/results.jsonl` and `summary.json`.
+- **As built:** `scrollback eval run --config eval/experiments/<exp>.yaml [--split dev|test|all] [--repeat 3] [--workers 4] [--only q001,…] [--yes]`.
+  - **Cost gate:** without `--yes` it only prints a cost estimate, from past traces of the same model × 1.3 for the harder set, plus a p90-based upper figure. Nothing calls the API until `--yes`. *(Added.)*
+  - **Experiments** override only the `llm` and `agent` config sections, so each one is a config diff. The set's pinned params always apply.
+  - **Run directory:** `config.json` (resolved non-secret config, experiment, question ids, git commit), `results.jsonl`, `traces.jsonl` (eval runs write traces here, not to `agent_traces`), `summary.json` and `report.md`.
+  - **Labels:** a label file is written to `eval/labels/`.
+  - `--app-config` replaces the global `--config` for this command, since `--config` names the experiment.
+- **`scrollback eval rescore <run>`** re-scores a finished run from its saved answers and cited results (up to 200 rows each) with the current questions and scorer. It makes no API calls. The first re-score keeps `results.original.jsonl`. Changes are always reported against the original scoring (`rescored_to_pass` / `rescored_to_fail` in the label file), and confirmed labels and notes carry over.
+- **Report:** accuracy is mean (min–max) over repeats. Per-category accuracy is shown for **dev only**; the held-out **test** split is reported overall only, since it has too few questions per category. The report also covers sub-scores, efficiency, cost, the bad-case distribution, every failure with its label and reason, per-question pass counts and flaky questions.
 - `scrollback eval report <run_a> <run_b>` produces markdown with overall and per-category accuracy, the bad-case distribution, the questions that regressed or improved, and cost and latency.
 - Each config is run with `--repeat 3`, and the mean ± spread is reported, because LLM output varies even at temperature 0.
 
@@ -463,6 +536,7 @@ Each step is one config. Results go into the README table.
 
 | ID | Change | Hypothesis |
 |---|---|---|
+| E-1 | **warehouse ablation**: the E0 agent and prompt, but only the staging views (`stg_*`) may be queried (`agent.tables: staging`); no sessions, watch-time estimates, flags or zero-filled spine | quantifies what the data modelling alone contributes (E0 − E-1) |
 | E0 | schema only, `run_sql` only | baseline |
 | E1 | + table and column descriptions (`describe_include_descriptions: true`) | fewer hallucinated columns |
 | E2 | + metrics glossary via RAG | fewer wrong metric definitions |
@@ -470,9 +544,11 @@ Each step is one config. Results go into the README table.
 | E4 | + richer structured SQL errors: the valid tables and columns, did-you-mean suggestions for unknown names, and a short fix hint per guard rule | fewer unrecovered SQL errors |
 | E5 | + `query_metric` semantic-layer tool | biggest jump on metric questions, fewer tokens |
 | E6 | + "cannot answer" doc + refusal rules (and the estimate-caveat rule) | fewer failed refusals, check over-refusal |
+| E7 | model swap (small vs large) | the cost/accuracy tradeoff |
+
+*(E-1 added, 2026-11-20, after E0 scored ~95%: much of E0's strength appears to come from the marts encoding the definitions as columns (`est_watch_sec`, `is_binge`, `is_late_night`, `is_active`). E-1 measures that directly. The SQL guard, `describe_table` and the prompt's table list all follow `agent.tables`. In the staging scope no table counts as pre-aggregated, so every query must aggregate.)*
 
 *(E4 changed, 2026-11-20: basic self-correction, where the error goes back to the model with up to `sql_max_retries` = 2 retries, is already part of the E0 baseline, so E4 now measures richer error content instead. E0's errors are the guard's rule code plus DuckDB's or the guard's message.)*
-| E7 | model swap (small vs large) | the cost/accuracy tradeoff |
 
 ---
 
@@ -560,15 +636,17 @@ scrollback/
 │   ├── agent/{loop.py, tools.py, sql_guard.py, llm.py, prompts/}
 │   ├── charts.py
 │   ├── tracing.py
+│   ├── evals/{questions.py, warehouses.py, gold.py, score.py, run.py, labels.py, report.py}
 │   ├── monitor/{anomaly.py, digest.py}
 │   ├── api/app.py
 │   └── bot/telegram_bot.py
-├── eval/
+├── eval/                    # eval data; the code lives in src/scrollback/evals/ (importable, typed)
 │   ├── questions.yaml
+│   ├── gold_snapshot.json
 │   ├── experiments/*.yaml
 │   ├── runs/                # git-ignored except selected summaries
 │   ├── labels/
-│   └── harness/{run.py, score.py, report.py}
+│   └── reports/             # committed baseline/experiment reports
 └── tests/
     └── fixtures/            # static test inputs (synthetic only)
 ```

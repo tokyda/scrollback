@@ -37,7 +37,6 @@ def test_group_help_lists_subcommands(group: str) -> None:
 @pytest.mark.parametrize(
     ("args", "label"),
     [
-        (["eval", "run", "--config", "x.yaml"], "Phase 4"),
         (["kb", "index"], "Phase 5"),
         (["serve", "bot"], "Phase 6"),
         (["alerts", "check"], "stretch"),
