@@ -1,0 +1,34 @@
+run_id: 20261120T050523Z_e01_descriptions
+instructions: 'Confirm each failure: set `label` to one of the taxonomy labels (the suggestion is a starting
+  point). Optionally set `scoring_false_negative: true` and a `note`.'
+taxonomy:
+- wrong_metric_definition
+- wrong_time_window
+- timezone_or_day_boundary
+- hallucinated_table_or_column
+- join_or_grain_error
+- aggregation_error
+- sql_error_unrecovered
+- answer_misreport
+- missing_caveat
+- failed_refusal
+- over_refusal
+- tool_loop_or_step_limit
+failures:
+- question: q087
+  repeat: 3
+  category: session_derived
+  split: dev
+  suggested: wrong_metric_definition
+  reason: leads with 75.6, a wrong-definition value
+  suspect_scoring: 'leads with wrong-definition value 75.6 but also states the gold value: check that
+    the wrong value is the headline, not labelled context'
+  label: wrong_metric_definition
+  note: 'Owner-confirmed 2026-11-21: genuine failure. The headline answer to "how long was it" is the
+    75.6-min span; the 34.8-min estimate comes second.'
+rescored_to_pass: []
+rescored_to_fail: []
+confirmed:
+  by: owner
+  date: '2026-11-21'
+  decision: 1 wrong_metric_definition (q087 r3, leads with the span). No scoring false negatives.
