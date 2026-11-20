@@ -340,7 +340,8 @@ def _scores_dict(s: Any) -> dict[str, Any]:
     return {
         "execution": s.execution, "execution_strict": s.execution_strict, "answer": s.answer,
         "gold_stated": s.gold_stated, "metric_selection": s.metric_selection,
-        "refusal": s.refusal, "caveat": s.caveat, "assumptions": s.assumptions,
+        "refusal": s.refusal, "caveat": s.caveat, "caveat_strong": s.caveat_strong,
+        "assumptions": s.assumptions,
         "reading": s.reading, "wrong_value": s.wrong_value, "refused": s.refused,
         "fabricated": s.fabricated, "notes": s.notes,
     }  # fmt: skip

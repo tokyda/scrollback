@@ -76,6 +76,13 @@ def summarize(records: list[dict[str, Any]], qset: QuestionSet) -> dict[str, Any
             "caveat_on_estimate_questions": _sub_rate(
                 [r for r in records if r["question"] in est_qs], "caveat"
             ),
+            # Reported only (DESIGN §7.2): says it's an estimate AND why.
+            "strong_caveat_on_traps": _sub_rate(
+                [r for r in records if r["question"] in caveat_qs], "caveat_strong"
+            ),
+            "strong_caveat_on_estimate_questions": _sub_rate(
+                [r for r in records if r["question"] in est_qs], "caveat_strong"
+            ),
             "assumptions_on_ambiguous": _sub_rate(
                 [r for r in records if r["category"] == "ambiguous"], "assumptions"
             ),
@@ -156,6 +163,9 @@ def render_report(
         f"| caveat_present (traps) | {_pct(sub['caveat_on_traps'])} |",
         "| caveat_present (all estimate questions) | "
         f"{_pct(sub['caveat_on_estimate_questions'])} |",
+        f"| strong caveat, estimate + reason (traps) | {_pct(sub.get('strong_caveat_on_traps'))} |",
+        "| strong caveat, estimate + reason (all estimate questions) | "
+        f"{_pct(sub.get('strong_caveat_on_estimate_questions'))} |",
         f"| assumptions stated (ambiguous) | {_pct(sub['assumptions_on_ambiguous'])} |",
         "",
         "## Efficiency (mean per question run)",
@@ -203,10 +213,23 @@ def render_report(
     return "\n".join(lines)
 
 
-def compare(a: dict[str, Any], b: dict[str, Any]) -> str:
-    """Markdown diff of two summaries: accuracy deltas, regressions and improvements."""
+SUB_SCORE_ROWS = (
+    ("execution", "execution"),
+    ("answer", "answer"),
+    ("metric_selection", "metric selection (reported only)"),
+    ("caveat_on_traps", "caveat (traps)"),
+    ("caveat_on_estimate_questions", "caveat (estimate questions)"),
+    ("strong_caveat_on_traps", "strong caveat (traps, reported only)"),
+    ("strong_caveat_on_estimate_questions", "strong caveat (estimate questions, reported only)"),
+)
+
+
+def compare(a: dict[str, Any], b: dict[str, Any], split: str = "all") -> str:
+    """Markdown diff of two summaries: accuracy, sub-scores, efficiency, regressions and
+    improvements. ``split`` only labels the header; the caller filters the records."""
+    title = f"# Compare {a.get('run_id')} -> {b.get('run_id')}"
     lines = [
-        f"# Compare {a.get('run_id')} -> {b.get('run_id')}",
+        title + ("" if split == "all" else f" ({split} split only)"),
         "",
         "| Slice | A | B |",
         "|---|---|---|",
@@ -235,7 +258,29 @@ def compare(a: dict[str, Any], b: dict[str, Any]) -> str:
         f"Improved ({len(better)}): "
         + (", ".join(f"{q} {pa[q]}->{pb[q]}" for q in better) or "none"),
         "",
-        f"Cost: ${a['efficiency']['total_cost_usd'] or 0:.2f} -> "
-        f"${b['efficiency']['total_cost_usd'] or 0:.2f}",
+        "| Sub-score | A | B |",
+        "|---|---|---|",
+    ]
+    for key, label in SUB_SCORE_ROWS:
+        sa, sb = a["sub_scores"].get(key), b["sub_scores"].get(key)
+        lines.append(f"| {label} | {_pct(sa)} | {_pct(sb)} |")
+    ea, eb = a["efficiency"], b["efficiency"]
+
+    def num(v: float | None, fmt: str) -> str:
+        return "n/a" if v is None else format(v, fmt)
+
+    lines += [
+        "",
+        "| Efficiency (mean per run) | A | B |",
+        "|---|---|---|",
+        f"| steps | {num(ea['steps'], '.2f')} | {num(eb['steps'], '.2f')} |",
+        f"| tool calls | {num(ea['tool_calls'], '.2f')} | {num(eb['tool_calls'], '.2f')} |",
+        f"| tool errors | {num(ea['tool_errors'], '.3f')} | {num(eb['tool_errors'], '.3f')} |",
+        f"| tokens | {num(ea['tokens'], ',.0f')} | {num(eb['tokens'], ',.0f')} |",
+        f"| latency (s) | {num(ea['latency_s'], '.1f')} | {num(eb['latency_s'], '.1f')} |",
+        f"| cost per run ($) | {num(ea['cost_per_question_usd'], '.4f')} | "
+        f"{num(eb['cost_per_question_usd'], '.4f')} |",
+        f"| total cost ($) | {num(ea['total_cost_usd'], '.2f')} | "
+        f"{num(eb['total_cost_usd'], '.2f')} |",
     ]
     return "\n".join(lines)

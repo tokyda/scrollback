@@ -538,3 +538,75 @@ def test_stated_date_ranges(text: str, expected: list[tuple[str, str]]) -> None:
 
     got = stated_date_ranges(text, date(2026, 11, 20))
     assert [(a.isoformat(), b.isoformat()) for a, b in got] == expected
+
+
+# --------------------------------------------------------------------------- strong caveat
+# Real answer texts from the E0 (20261119T222732Z) and E1 (20261120T050523Z) dev runs.
+
+STRONG_CAVEATS = [
+    "This is an estimate based on the gaps between views.",  # E0 q013
+    "It's an estimate, because watch time is inferred from the gaps between views.",  # E1 q007
+    "That's an estimate based on view timing.",  # E0 q017
+    "This is an estimate, not an exact timer. The data only has view timestamps, so watch time "
+    "per video is inferred from the gaps between views.",  # E0 q070
+    "This is an estimate, not an exact figure: the data only has view start times, so watch time "
+    "comes from the gaps between views (capped), and the last view in each session is imputed.",
+    "About 18.5 seconds (estimated). The data has no exact watch duration, so this is an "
+    "estimate.",  # E0 q093
+    "It was the final view of its session, so the figure is the median of the other estimates "
+    "in that session, not a measured time.",  # E1 q093
+    "If you meant one video, the longest was 3.0 minutes, which is the cap on the watch-time "
+    "estimate.",  # E0 q073
+    "TikTok doesn't log watch duration, so it's inferred from the gaps between views.",  # E1 q070
+]
+
+WEAK_CAVEATS = [
+    "This is an estimate.",  # E0 q071
+    "This is estimated watch time.",  # E0 q075
+    "It's an estimate built from per-view watch-time estimates.",  # E1 q071
+    "This is an estimate based on per-view watch estimates, not a measured screen-on time.",
+    "This is an estimate, not a measured screen-time figure.",  # E1 q075
+    "It is an estimate, not an exact figure.",  # E1 q074
+    "About 60 minutes (≈1 hour) of estimated TikTok watch time on Sunday 15 Nov 2026. That was "
+    "102 views across 6 sessions.",  # E1 q075 r3
+    "You watched about 293 minutes (roughly 4.9 hours) on Saturday 24 October 2026.",  # no caveat
+    "Your longest single sessions start time was 22:13, with 48 views.",  # "start time" alone
+]
+
+
+@pytest.mark.parametrize("text", STRONG_CAVEATS)
+def test_strong_caveat_states_estimate_and_reason(text: str) -> None:
+    from scrollback.evals.score import (
+        ESTIMATE_REASON_RE,
+        STRONG_ESTIMATE_RE,
+        normalise_text,
+    )
+
+    t = normalise_text(text)
+    assert STRONG_ESTIMATE_RE.search(t) and ESTIMATE_REASON_RE.search(t)
+
+
+@pytest.mark.parametrize("text", WEAK_CAVEATS)
+def test_weak_caveat_is_not_strong(text: str) -> None:
+    from scrollback.evals.score import (
+        ESTIMATE_REASON_RE,
+        STRONG_ESTIMATE_RE,
+        normalise_text,
+    )
+
+    t = normalise_text(text)
+    assert not (STRONG_ESTIMATE_RE.search(t) and ESTIMATE_REASON_RE.search(t))
+
+
+def test_strong_caveat_is_reported_not_required() -> None:
+    weak = run("q071", "About 24.9 hours in October 2026. This is an estimate.", [[1492.725]])
+    assert weak.passed and weak.caveat and weak.caveat_strong is False
+    strong = run(
+        "q071",
+        "About 24.9 hours in October 2026. This is an estimate based on the gaps between views.",
+        [[1492.725]],
+    )
+    assert strong.passed and strong.caveat_strong is True
+    # A strong caveat never rescues a missing number.
+    wrong = run("q071", "About 30 hours, estimated from the gaps between views.", [[1800.0]])
+    assert wrong.caveat_strong and not wrong.passed

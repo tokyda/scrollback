@@ -453,9 +453,11 @@ def eval_report(
     run_b: Annotated[
         Path | None, typer.Argument(exists=True, file_okay=False, help="Run to compare with.")
     ] = None,
+    split: Annotated[
+        str, typer.Option(help="Compare only this split: dev | test | all (two runs only).")
+    ] = "all",
 ) -> None:
     """Re-render a run's report (using confirmed labels if any), or compare two runs."""
-    import json
 
     from scrollback.evals.labels import load_confirmed
     from scrollback.evals.questions import load_questions
@@ -463,10 +465,18 @@ def eval_report(
     from scrollback.evals.run import DEFAULT_LABELS_DIR, load_records
 
     qset = load_questions()
+    if split not in ("dev", "test", "all"):
+        typer.echo("--split must be dev, test or all", err=True)
+        raise typer.Exit(2)
     if run_b is not None:
-        a = json.loads((run_a / "summary.json").read_text())
-        b = json.loads((run_b / "summary.json").read_text())
-        typer.echo(compare(a, b))
+        # Summarise from the records so both runs cover the same split and current scores.
+        summaries = []
+        for run in (run_a, run_b):
+            recs = [r for r in load_records(run) if split == "all" or r["split"] == split]
+            summ = summarize(recs, qset)
+            summ["run_id"] = run.name
+            summaries.append(summ)
+        typer.echo(compare(summaries[0], summaries[1], split=split))
         return
     records = load_records(run_a)
     summary = summarize(records, qset)
@@ -484,16 +494,23 @@ def eval_rescore(
 ) -> None:
     """Re-score a finished run with the current questions and scorer (no API calls)."""
     from scrollback.evals.questions import load_questions
-    from scrollback.evals.run import rescore_run
+    from scrollback.evals.run import DEFAULT_LABELS_DIR, rescore_run
 
-    result = rescore_run(run, load_questions(), base=_settings(config))
+    result = rescore_run(
+        run, load_questions(), base=_settings(config), labels_dir=DEFAULT_LABELS_DIR
+    )
     for c in result["changed"]:
         arrow = "pass" if c["after"] else "FAIL"
         typer.echo(f"  {c['question']} r{c['repeat']}: -> {arrow} (was {c['old_label']})")
     acc = result["summary"]["accuracy"]
+
+    def pct(key: str) -> str:
+        mean = acc[key]["mean"]
+        return "n/a" if mean is None else f"{mean:.1%}"
+
     typer.echo(
-        f"{len(result['changed'])} runs changed. Overall {acc['overall']['mean']:.1%}, "
-        f"dev {acc['dev']['mean']:.1%}, test {acc['test']['mean']:.1%}"
+        f"{len(result['changed'])} runs changed (against the original scoring). "
+        f"Overall {pct('overall')}, dev {pct('dev')}, test {pct('test')}"
     )
 
 

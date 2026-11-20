@@ -83,6 +83,8 @@
   "refusal_correct": 1.0,
   "caveat_on_traps": 0.8888888888888888,
   "caveat_on_estimate_questions": 0.725925925925926,
+  "strong_caveat_on_traps": 0.3333333333333333,
+  "strong_caveat_on_estimate_questions": 0.3333333333333333,
   "assumptions_on_ambiguous": 1.0
  },
  "efficiency": {
@@ -212,5 +214,5 @@
   "q085"
  ],
  "run_id": "20261119T224207Z_em1_warehouse_ablation",
- "rescored_at": "2026-11-20T00:09:05+00:00"
+ "rescored_at": "2026-11-20T17:00:50+00:00"
 }

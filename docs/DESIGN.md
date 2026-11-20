@@ -486,6 +486,7 @@ An optional LLM-as-judge scores answer clarity (1–5) as a **secondary** metric
   - everything else: execution ∧ answer.
 
   `metric_selection` and caveats on non-trap estimate questions are reported, not required.
+- **Strong caveat** *(added 2026-11-21, owner decision; reported only, never part of pass)*: the answer says the number is an estimate **and** gives the reason: the gaps between views, that only start times are logged, no duration, the cap, the imputed last view, or pauses. "Roughly" and "approximately" are rounding words, not caveats; "this is an estimate" or "based on per-view watch-time estimates" is a plain caveat without a reason. The two parts may be in different sentences. Reported for traps and for all estimate questions. Tests use real E0/E1 answer texts; adding it flipped no runs. *(E1 showed that the plain caveat check is easy to satisfy by labelling a number "estimated", so the stronger version shows whether the agent explains the estimate.)*
 - **Checking the scorer.** An oracle mock agent (runs the gold SQL, states the result) must score 100% end to end in the tests.
 
 ### 7.3 Bad-case taxonomy
@@ -528,7 +529,7 @@ Every failed question gets one primary label: auto-suggested from the trace, the
   - `--app-config` replaces the global `--config` for this command, since `--config` names the experiment.
 - **`scrollback eval rescore <run>`** re-scores a finished run from its saved answers and cited results (up to 200 rows each) with the current questions and scorer. It makes no API calls. The first re-score keeps `results.original.jsonl`. Changes are always reported against the original scoring (`rescored_to_pass` / `rescored_to_fail` in the label file), and confirmed labels and notes carry over.
 - **Report:** accuracy is mean (min–max) over repeats. Per-category accuracy is shown for **dev only**; the held-out **test** split is reported overall only, since it has too few questions per category. The report also covers sub-scores, efficiency, cost, the bad-case distribution, every failure with its label and reason, per-question pass counts and flaky questions.
-- `scrollback eval report <run_a> <run_b>` produces markdown with overall and per-category accuracy, the bad-case distribution, the questions that regressed or improved, and cost and latency.
+- `scrollback eval report <run_a> <run_b> [--split dev|test|all]` produces markdown with overall and per-category accuracy, the questions that regressed or improved, the sub-scores (including the strong caveat) and efficiency (steps, tool calls, tool errors, tokens, latency, cost per run and total). The comparison is summarised from both runs' records, so `--split dev` compares a dev-only run with the dev half of a full run on equal terms. *(Changed 2026-11-21: it used to compare the saved summaries, so a dev-only run's cost was set against a full run's.)*
 - Each config is run with `--repeat 3`, and the mean ± spread is reported, because LLM output varies even at temperature 0.
 
 ### 7.5 Planned experiment ladder

@@ -159,6 +159,26 @@ def test_compare_runs(oracle_run: Path, tmp_path: Path) -> None:
     b = json.loads((run_dir / "summary.json").read_text())
     text = compare(a, b)
     assert "Regressed (2): q001 1/1->0/1, q002 1/1->0/1" in text
+    assert "| strong caveat (traps, reported only) |" in text
+    assert "| tokens |" in text and "| cost per run ($) |" in text
+
+
+def test_cli_compare_one_split(oracle_run: Path, tmp_path: Path) -> None:
+    wrong = run_eval(
+        E0, QSET, base=repo_settings(), llm_factory=lambda s: WrongLLM(), split="all",
+        repeat=1, workers=1, only=["q001", "q004"], runs_dir=tmp_path / "r",
+        labels_dir=tmp_path / "l",
+    )  # fmt: skip
+    result = CliRunner().invoke(
+        app, ["eval", "report", str(oracle_run), str(wrong), "--split", "dev"]
+    )
+    assert result.exit_code == 0, result.output
+    assert "(dev split only)" in result.output
+    # q004 is a test question, so it is left out of a dev-only comparison.
+    assert "Regressed (1): q001 1/1->0/1" in result.output
+    assert "| test | n/a | n/a |" in result.output
+    bad = CliRunner().invoke(app, ["eval", "report", str(oracle_run), str(wrong), "--split", "x"])
+    assert bad.exit_code == 2
 
 
 def test_experiment_settings() -> None:
@@ -231,3 +251,18 @@ def test_rescore_is_stable_and_keeps_labels(tmp_path: Path) -> None:
     assert doc["failures"][0]["label"] == "aggregation_error"
     assert (run_dir / "results.original.jsonl").exists()
     assert len(load_records(run_dir)) == 2
+
+
+def test_cli_rescore_dev_only_run(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from scrollback.evals import run as run_module
+
+    run_dir = run_eval(
+        E0, QSET, base=repo_settings(), llm_factory=lambda s: OracleLLM(), split="dev",
+        repeat=1, workers=1, only=["q071"], runs_dir=tmp_path / "r", labels_dir=tmp_path / "l",
+    )  # fmt: skip
+    monkeypatch.setattr(run_module, "DEFAULT_LABELS_DIR", tmp_path / "l")
+    result = CliRunner().invoke(app, ["eval", "rescore", str(run_dir)])
+    assert result.exit_code == 0, result.output
+    assert "test n/a" in result.output
+    rec = load_records(run_dir)[0]
+    assert "caveat_strong" in rec["scores"]

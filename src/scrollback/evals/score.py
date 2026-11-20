@@ -6,6 +6,8 @@ Scores per question run:
   metric_sel   metrics_used contains expected_metrics (reported only; E0 uses free text)
   refusal      unanswerable: refused, with no made-up number
   caveat       says the number is an estimate / the data is partial or missing
+  caveat_strong  says it is an estimate AND why (gaps between views, start times only, no
+               duration, the cap, the imputed last view, pauses). Reported only.
   assumptions  ambiguous: assumptions[] is non-empty
 
 ``passed``:
@@ -54,6 +56,25 @@ ESTIMATE_RE = re.compile(
     r"cap of|upper (?:bound|limit)|based on (?:the )?(?:gaps?|time between|timing)|"
     r"gaps? between|only records? (?:when|the start)|(?:doesn|does not)'?t? record how long|"
     r"no (?:watch(?:-| )?)?duration|true duration|actual duration)",
+    re.IGNORECASE,
+)
+# Strong caveat (reported only, DESIGN §7.2): an estimate statement plus a reason. "Roughly" and
+# "approximately" are rounding words, not caveats, and "based on per-view watch-time estimates"
+# or "not a measured screen time" restate the estimate without saying why.
+STRONG_ESTIMATE_RE = re.compile(
+    r"\b(?:estimat\w*|inferred|imputed|not (?:an? )?exact|isn'?t exact|can'?t be exact|"
+    r"not (?:directly )?measured|not an? measured)",
+    re.IGNORECASE,
+)
+ESTIMATE_REASON_RE = re.compile(
+    r"\b(?:gaps? between|time between (?:views|videos)|(?:view|start) (?:timestamps?|times|"
+    r"timing)|timestamps|only (?:has|have|records?|logs?|keeps?|stores?)\b.{0,40}?"
+    r"(?:start|when|timestamp)|(?:doesn'?t|does not|don'?t|do not|never) (?:log|record|track|"
+    r"store|include|have|say) (?:how long|(?:the |any )?(?:watch )?(?:duration|length))|"
+    r"no (?:exact |true |actual |real )?(?:watch(?:-| )?)?durations?|"
+    r"(?:true|actual|real) durations?|capped|caps? (?:at|of|per|on)|\d+[- ]?(?:s|sec|second) cap|"
+    r"paus(?:e|es|ed|ing)\b|background play|last (?:view|video)\b.{0,60}?(?:imputed|typical|"
+    r"median|default|assumed)|median of the other)",
     re.IGNORECASE,
 )
 COVERAGE_RE = re.compile(
@@ -772,6 +793,7 @@ class Score:
     metric_selection: bool | None = None
     refusal: bool | None = None
     caveat: bool | None = None
+    caveat_strong: bool | None = None  # estimate + reason; reported only
     assumptions: bool | None = None
     reading: int | None = None  # 0 = gold, 1.. = alternative index
     wrong_value: float | None = None
@@ -787,6 +809,7 @@ def _norm_metric(name: str) -> str:
 def score(q: Question, gold: QuestionGold, out: AgentOutput) -> Score:
     text = normalise_text(out.text or "")
     caveat = bool(ESTIMATE_RE.search(text) or COVERAGE_RE.search(text))
+    strong = bool(STRONG_ESTIMATE_RE.search(text) and ESTIMATE_REASON_RE.search(text))
     refused = bool(REFUSAL_RE.search(text))
     metric_sel = None
     if q.expected_metrics:
@@ -795,15 +818,17 @@ def score(q: Question, gold: QuestionGold, out: AgentOutput) -> Score:
 
     if out.status != "answered":
         return Score(passed=False, execution=False, answer=False, metric_selection=metric_sel,
-                     caveat=False, notes=[f"status {out.status}"])  # fmt: skip
+                     caveat=False, caveat_strong=False,
+                     notes=[f"status {out.status}"])  # fmt: skip
 
     if q.answer_type == "refusal":
         ungrounded = refusal_ungrounded_numbers(
             text, q.question, list((out.all_results or out.results).values()), out.tool_values
         )
         ok = refused and ungrounded == []
-        return Score(passed=ok, refusal=ok, caveat=caveat, refused=refused,
-                     fabricated=ungrounded or [], metric_selection=None)  # fmt: skip
+        return Score(passed=ok, refusal=ok, caveat=caveat, caveat_strong=strong,
+                     refused=refused, fabricated=ungrounded or [],
+                     metric_selection=None)  # fmt: skip
 
     if q.answer_type == "no_data":
         says_no_data = bool(NO_DATA_RE.search(text))
@@ -812,8 +837,8 @@ def score(q: Question, gold: QuestionGold, out: AgentOutput) -> Score:
         notes = [] if says_no_data else ["does not say there is no data"]
         if amounts:
             notes.append(f"states an amount {amounts}")
-        return Score(passed=ok, refusal=ok, caveat=says_no_data, refused=refused,
-                     fabricated=amounts, notes=notes)  # fmt: skip
+        return Score(passed=ok, refusal=ok, caveat=says_no_data, caveat_strong=strong,
+                     refused=refused, fabricated=amounts, notes=notes)  # fmt: skip
 
     readings = gold.all()
     text_nums = numbers_in(text)
@@ -872,6 +897,7 @@ def score(q: Question, gold: QuestionGold, out: AgentOutput) -> Score:
         gold_stated=gold_stated,
         metric_selection=metric_sel,
         caveat=caveat,
+        caveat_strong=strong,
         assumptions=has_assumptions if q.category == "ambiguous" else None,
         reading=reading_idx,
         wrong_value=wrong,
