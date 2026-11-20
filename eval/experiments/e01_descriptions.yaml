@@ -1,0 +1,15 @@
+# E1 (DESIGN §7.5): E0 + table and column descriptions in describe_table.
+# One change from e00_baseline: describe_include_descriptions false -> true. The descriptions
+# come from dbt/models/marts/_marts.yml as they stand on main (no edits for this experiment).
+name: e01_descriptions
+description: "E1: E0 + table and column descriptions in describe_table"
+overrides:
+  llm:
+    model: claude-sonnet-5-5
+    effort: medium
+  agent:
+    prompt_version: 1
+    result_mode: aggregate_only
+    describe_include_descriptions: true
+    sql_max_retries: 2
+    max_steps: 8
