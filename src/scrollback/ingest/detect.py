@@ -67,9 +67,19 @@ FIELD_ALIASES: dict[str, str] = {
 
 @dataclass(frozen=True)
 class VariantSpec:
+    """One export shape. ``paths`` run from the top of the document to each dataset's list:
+    ``(top-level key, ..., section key, list key)``, so a dataset may live outside the activity
+    root. ``markers`` are further top-level keys the variant requires; when several variants
+    match, the one with the most markers wins (it is the more specific shape)."""
+
     name: str
     root: str
-    paths: Mapping[Dataset, tuple[str, str]]  # dataset -> (section key, list key) under root
+    paths: Mapping[Dataset, tuple[str, ...]]
+    markers: tuple[str, ...] = ()
+
+
+def _under(root: str, paths: Mapping[Dataset, tuple[str, str]]) -> dict[Dataset, tuple[str, ...]]:
+    return {dataset: (root, *path) for dataset, path in paths.items()}
 
 
 _COMMON_PATHS: dict[Dataset, tuple[str, str]] = {
@@ -83,12 +93,30 @@ VARIANTS: tuple[VariantSpec, ...] = (
     VariantSpec(
         name="v1_activity",
         root="Activity",
-        paths={Dataset.WATCH: ("Video Browsing History", "VideoList"), **_COMMON_PATHS},
+        paths=_under(
+            "Activity", {Dataset.WATCH: ("Video Browsing History", "VideoList"), **_COMMON_PATHS}
+        ),
     ),
     VariantSpec(
         name="v2_your_activity",
         root="Your Activity",
-        paths={Dataset.WATCH: ("Watch History", "VideoList"), **_COMMON_PATHS},
+        paths=_under(
+            "Your Activity", {Dataset.WATCH: ("Watch History", "VideoList"), **_COMMON_PATHS}
+        ),
+    ),
+    # Seen in the first real export (2026-11): likes and favourites moved to a top-level
+    # "Likes and Favorites" object, and searches to "Your Activity > Searches".
+    VariantSpec(
+        name="v3_likes_favorites",
+        root="Your Activity",
+        markers=("Likes and Favorites",),
+        paths={
+            Dataset.WATCH: ("Your Activity", "Watch History", "VideoList"),
+            Dataset.LIKE: ("Likes and Favorites", "Like List", "ItemFavoriteList"),
+            Dataset.FAVORITE: ("Likes and Favorites", "Favorite Videos", "FavoriteVideoList"),
+            Dataset.SEARCH: ("Your Activity", "Searches", "SearchList"),
+            Dataset.SHARE: ("Your Activity", "Share History", "ShareHistoryList"),
+        },
     ),
 )
 VARIANT_NAMES: tuple[str, ...] = tuple(v.name for v in VARIANTS)
@@ -142,22 +170,37 @@ def _path_str(path: tuple[str, ...]) -> str:
 
 
 def _extract_section(
-    root: Mapping[str, Any], spec: VariantSpec, dataset: Dataset
+    document: Mapping[str, Any], spec: VariantSpec, dataset: Dataset
 ) -> DatasetSection | None:
-    section_key, list_key = spec.paths[dataset]
-    path = (spec.root, section_key, list_key)
-    if section_key not in root:
+    path = tuple(spec.paths[dataset])
+    *parents, section_key, list_key = path
+    container: Any = document
+    for depth, key in enumerate(parents):
+        if not isinstance(container, Mapping):
+            raise UnknownExportFormatError(
+                f"{_path_str(tuple(parents[:depth]))}: expected an object, "
+                f"found {type(container).__name__}"
+            )
+        if key not in container or container[key] is None:
+            return None
+        container = container[key]
+    if not isinstance(container, Mapping):
+        raise UnknownExportFormatError(
+            f"{_path_str(tuple(parents))}: expected an object, found {type(container).__name__}"
+        )
+    if section_key not in container:
         return None
-    section = root[section_key]
+    section = container[section_key]
+    section_path = (*parents, section_key)
     if section is None:
         return DatasetSection(dataset, path, [], {})
     if not isinstance(section, Mapping):
         raise UnknownExportFormatError(
-            f"{_path_str(path[:2])}: expected an object, found {type(section).__name__}"
+            f"{_path_str(section_path)}: expected an object, found {type(section).__name__}"
         )
     if list_key not in section:
         raise UnknownExportFormatError(
-            f"{_path_str(path[:2])}: missing list key {list_key!r}. "
+            f"{_path_str(section_path)}: missing list key {list_key!r}. "
             f"Keys found: {_fmt_keys(section.keys())}"
         )
     items = section[list_key]
@@ -204,6 +247,58 @@ def _extract_section(
     return DatasetSection(dataset, path, list(items), key_map, [str(k) for k in unknown])
 
 
+def _find_key(
+    node: Any, key: str, path: tuple[str, ...] = (), depth: int = 0
+) -> list[tuple[str, ...]]:
+    """Paths (keys only) where ``key`` occurs as an object key, a few levels deep."""
+    if depth > 4 or not isinstance(node, Mapping):
+        return []
+    found = [(*path, key)] if key in node else []
+    for k, v in node.items():
+        if isinstance(v, Mapping):
+            found += _find_key(v, key, (*path, str(k)), depth + 1)
+    return found
+
+
+def _check_not_moved(document: Mapping[str, Any], spec: VariantSpec, absent: list[Dataset]) -> None:
+    """An absent dataset whose list key exists somewhere else means the export moved it: fail
+    loudly rather than load without it (the first real export moved likes and searches)."""
+    for dataset in absent:
+        list_key = spec.paths[dataset][-1]
+        elsewhere = _find_key(document, list_key)
+        if elsewhere:
+            raise UnknownExportFormatError(
+                f"{spec.name}: {dataset.value} expected at {_path_str(spec.paths[dataset])}, "
+                f"but {list_key!r} was found at {_path_str(elsewhere[0])}. The export layout "
+                "changed: add a variant to VARIANTS in ingest/detect.py"
+            )
+
+
+def _pick_variant(document: Mapping[str, Any]) -> VariantSpec:
+    matches = [
+        spec for spec in VARIANTS
+        if spec.root in document and all(m in document for m in spec.markers)
+    ]  # fmt: skip
+    if not matches:
+        roots = ", ".join(sorted({repr(s.root) for s in VARIANTS}))
+        raise UnknownExportFormatError(
+            "Unrecognised TikTok export: no known activity root. "
+            f"Top-level keys found: {_fmt_keys(document.keys())}. Expected one of: {roots}"
+        )
+    if len({s.root for s in matches}) > 1:
+        raise UnknownExportFormatError(
+            "Ambiguous TikTok export: several activity roots present "
+            f"{_fmt_keys({s.root for s in matches})}"
+        )
+    most = max(len(s.markers) for s in matches)
+    best = [s for s in matches if len(s.markers) == most]
+    if len(best) > 1:
+        raise UnknownExportFormatError(
+            f"Ambiguous TikTok export: matches variants {_fmt_keys(s.name for s in best)}"
+        )
+    return best[0]
+
+
 def detect(document: Any) -> DetectedExport:
     """Identify the format variant and extract every known dataset section."""
     if not isinstance(document, Mapping):
@@ -212,27 +307,14 @@ def detect(document: Any) -> DetectedExport:
             "object"
         )
 
-    matches = [spec for spec in VARIANTS if spec.root in document]
-    if not matches:
-        roots = ", ".join(f"{s.root!r} ({s.name})" for s in VARIANTS)
-        raise UnknownExportFormatError(
-            "Unrecognised TikTok export: no known activity root. "
-            f"Top-level keys found: {_fmt_keys(document.keys())}. Expected one of: {roots}"
-        )
-    if len(matches) > 1:
-        raise UnknownExportFormatError(
-            "Ambiguous TikTok export: several activity roots present "
-            f"{_fmt_keys(s.root for s in matches)}"
-        )
-
-    spec = matches[0]
+    spec = _pick_variant(document)
     root = document[spec.root]
     if not isinstance(root, Mapping):
         raise UnknownExportFormatError(
             f"{spec.root!r}: expected an object, found {type(root).__name__}"
         )
 
-    watch_section_key = spec.paths[Dataset.WATCH][0]
+    watch_section_key = spec.paths[Dataset.WATCH][1]
     if watch_section_key not in root:
         raise UnknownExportFormatError(
             f"Unrecognised TikTok export: {spec.root!r} has no watch history section "
@@ -242,16 +324,20 @@ def detect(document: Any) -> DetectedExport:
     sections: dict[Dataset, DatasetSection] = {}
     absent: list[Dataset] = []
     for dataset in Dataset:
-        extracted = _extract_section(root, spec, dataset)
+        extracted = _extract_section(document, spec, dataset)
         if extracted is None:
             absent.append(dataset)
         else:
             sections[dataset] = extracted
 
-    known_sections = {section for section, _ in spec.paths.values()}
-    ignored = [k for k in document if k != spec.root] + [
-        f"{spec.root} > {k}" for k in root if k not in known_sections
-    ]
+    _check_not_moved(document, spec, absent)
+
+    used_tops = {path[0] for path in spec.paths.values()}
+    used_sections = {path[:2] for path in spec.paths.values()}
+    ignored = [k for k in document if k not in used_tops]
+    for top in (k for k in document if k in used_tops):
+        if isinstance(document[top], Mapping):
+            ignored += [f"{top} > {k}" for k in document[top] if (top, k) not in used_sections]
     return DetectedExport(
         variant=spec.name, sections=sections, absent=absent, ignored_top_level=ignored
     )

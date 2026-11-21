@@ -115,9 +115,9 @@ To get it: TikTok → Settings → Account → Download your data → choose **J
 | Dataset | Typical path(s) | Record fields |
 |---|---|---|
 | Watch history | `Activity › Video Browsing History › VideoList` or `Your Activity › Watch History › VideoList` | `Date`, `Link` |
-| Likes | `Activity › Like List › ItemFavoriteList` or `Your Activity › Like List › ItemFavoriteList` | `Date`/`date`, `Link`/`link` |
-| Favourites | `… › Favorite Videos › FavoriteVideoList` | `Date`, `Link` |
-| Searches | `… › Search History › SearchList` | `Date`, `SearchTerm` |
+| Likes | `Activity › Like List › ItemFavoriteList`, `Your Activity › Like List › ItemFavoriteList`, or (v3) `Likes and Favorites › Like List › ItemFavoriteList` | `Date`/`date`, `Link`/`link` |
+| Favourites | `… › Favorite Videos › FavoriteVideoList`; (v3) under `Likes and Favorites` | `Date`, `Link` |
+| Searches | `… › Search History › SearchList`; (v3) `Your Activity › Searches › SearchList` | `Date`, `SearchTerm` |
 | Shares | `… › Share History › ShareHistoryList` | `Date`, `Link`, `Method`, `SharedContent` |
 
 - **Date format** is `YYYY-MM-DD HH:MM:SS`, assumed to be UTC. *Validate this:* check a few views against times you remember. The source timezone is a config value (`SOURCE_TZ`), not hard-coded. The display timezone is a separate config value (`LOCAL_TZ`, default `Asia/Singapore`), used for `local_date`, `local_hour` and so on.
@@ -125,33 +125,34 @@ To get it: TikTok → Settings → Account → Download your data → choose **J
 - **Coverage:** the export may only hold a limited history window. Repeated exports overlap, so ingestion must be incremental and idempotent.
 - **Input:** a JSON export, either a `.json` file or a `.zip` containing exactly one `.json`. The TXT export is out of scope. *(Changed: §3 previously said JSON/TXT.)*
 
-**Variant detection** (`ingest/detect.py`) is declarative: each variant names an activity root key (`Activity` → `v1_activity`, `Your Activity` → `v2_your_activity`) and a `(section, list)` path per dataset. Record keys match known fields case-insensitively, ignoring spaces and underscores. Detection fails loudly, naming the keys it found and never values, when:
+**Variant detection** (`ingest/detect.py`) is declarative: each variant names an activity root key (`Activity` → `v1_activity`, `Your Activity` → `v2_your_activity`), optional top-level marker keys (`Your Activity` + `Likes and Favorites` → `v3_likes_favorites`) and a full path from the top of the document to each dataset's list, so a dataset may sit outside the activity root. When several variants match, the one with the most markers wins. *(v3 and full paths added 2026-11-22, after the first real export.)* Record keys match known fields case-insensitively, ignoring spaces and underscores. Detection fails loudly, naming the keys it found and never values, when:
 - no known root, or more than one, is present at the top level;
 - the root has no watch history section;
 - a known section is missing its list key, or the list isn't a list of objects;
-- no record in a non-empty list has a required field.
+- no record in a non-empty list has a required field;
+- a dataset is absent at its expected path but its list key (e.g. `ItemFavoriteList`) exists elsewhere in the document. *(Added 2026-11-22: under the v2 rules the first real export loaded without its likes, favourites and searches, silently, because absent sections are allowed.)*
 
 **Unknown extra fields are tolerated.** A record key that doesn't map to a known field for its dataset is logged as a warning (key names only, once per section), stored in the record's `extras` JSON column under its original name, and ingestion continues. Extras never affect `record_hash`, so a later export that adds a field doesn't create duplicates. The CLI prints the warning and `ingest_log.dataset_counts` records the unknown key names per dataset, so a new field gets noticed and can be mapped properly. *(Changed: unknown fields used to fail the whole ingest. A real export that adds a harmless field such as a duration shouldn't block loading; the structural checks above still fail loudly.)*
 
 Missing optional sections (likes, favourites, searches, shares) are allowed and recorded as absent. Unrelated sections such as profile or DMs are ignored. A `null` section or list is treated as empty. An individual record that is missing a field is rejected (§4.2), not treated as a shape error.
 
 #### Format assumptions to verify against a real export
-None of these have been checked yet; all were built and tested against synthetic data. Update this list when the first real export is ingested.
+Checked against the first real export on 2026-11-22 (v3 layout; 92,477 views, 6,000 likes, 2,188 favourites, 1,635 searches, 1,650 shares; 0 rejects, no unknown fields). Results in **bold**.
 
-1. The export is a single JSON object, delivered as `user_data_tiktok.json` or as a zip containing it.
-2. The activity root is `Activity` or `Your Activity`, and exactly one of them is present.
-3. The watch history path is `Video Browsing History › VideoList` (v1) or `Watch History › VideoList` (v2).
-4. Likes, favourites, searches and shares sit at the same section/list names in both variants (`Like List › ItemFavoriteList`, `Favorite Videos › FavoriteVideoList`, `Search History › SearchList`, `Share History › ShareHistoryList`).
-5. Record field names are `Date`, `Link`, `SearchTerm`, `Method`, `SharedContent`, with casing that may vary (e.g. `date`/`link` in likes). Any other field is kept in `extras` with a warning. Check the first real ingest for such warnings: a field like a watch duration would change the watch-time method in §4.3.
-6. `Date` is always `YYYY-MM-DD HH:MM:SS`, with no timezone suffix, and the time is UTC.
-7. Watch, like and favourite links contain `/video/<digits>`, either as `tiktokv.com/share/video/<id>/` or as `tiktok.com/@<user>/video/<id>`.
-8. Share records may point at non-video content (a profile, a live stream, a sound), in which case `Link` has no video ID and `SharedContent` says what was shared.
-9. An empty history appears as `[]`, `null` or a missing section, and none of these means a broken export.
-10. Record order is unknown (newest first is assumed in the synthetic data); the parser doesn't rely on it.
-11. The file is UTF-8, possibly with a BOM.
-12. The export itself may contain exact duplicate records.
-13. How far back the export reaches (the history window) is unknown.
-14. A second-resolution timestamp plus video ID uniquely identifies a view; two genuine views of the same video in the same second don't occur.
+1. The export is a single JSON object, delivered as `user_data_tiktok.json` or as a zip containing it. **Held** (a `.json` file).
+2. The activity root is `Activity` or `Your Activity`, and exactly one of them is present. **Held** (`Your Activity`).
+3. The watch history path is `Video Browsing History › VideoList` (v1) or `Watch History › VideoList` (v2). **Held** (v2 path).
+4. Likes, favourites, searches and shares sit at the same section/list names in both variants (`Like List › ItemFavoriteList`, `Favorite Videos › FavoriteVideoList`, `Search History › SearchList`, `Share History › ShareHistoryList`). **Broke:** likes and favourites moved to a top-level `Likes and Favorites` object (each section also has an `App` integer beside the list), and searches to `Your Activity › Searches › SearchList`. Shares held. Added as `v3_likes_favorites`.
+5. Record field names are `Date`, `Link`, `SearchTerm`, `Method`, `SharedContent`, with casing that may vary (e.g. `date`/`link` in likes). Any other field is kept in `extras` with a warning. Check the first real ingest for such warnings: a field like a watch duration would change the watch-time method in §4.3. **Held:** watch `Date`/`Link`, likes `date`/`link`, favourites `Date`/`Link`, searches `Date`/`SearchTerm`, shares `Date`/`Link`/`Method`/`SharedContent`. No extra fields, so no duration field: §4.3 stands.
+6. `Date` is always `YYYY-MM-DD HH:MM:SS`, with no timezone suffix, and the time is UTC. **Format held** for every record in all five lists. UTC: the hour-of-day profile under UTC has its trough at 05:00–08:00 Singapore time; confirmation from the owner's own memory is pending.
+7. Watch, like and favourite links contain `/video/<digits>`, either as `tiktokv.com/share/video/<id>/` or as `tiktok.com/@<user>/video/<id>`. **Held**, all in the `tiktokv.com/share/video/<id>/` form.
+8. Share records may point at non-video content (a profile, a live stream, a sound), in which case `Link` has no video ID and `SharedContent` says what was shared. **Held:** 1,645 `share_video`, 4 `share_live` and 1 `share_profile`; the 5 non-video shares have no video ID.
+9. An empty history appears as `[]`, `null` or a missing section, and none of these means a broken export. **Held where seen:** empty lists elsewhere in the export are `null`; none of the five datasets was empty.
+10. Record order is unknown (newest first is assumed in the synthetic data); the parser doesn't rely on it. **Newest first** in watch history (no out-of-order pair).
+11. The file is UTF-8, possibly with a BOM. **Held**, no BOM.
+12. The export itself may contain exact duplicate records. **Held for shares only:** 702 of 1,650 share records are exact duplicates (probably one video sent to several chats; there is no recipient field), plus 1 pair that differs only in `Method`; all 703 dedupe by `record_hash`. Watch, likes, favourites and searches have none.
+13. How far back the export reaches (the history window) is unknown. **Differs by dataset:** watch history 2026-05-21 to 2026-11-19 (about 6 months), searches and shares about 6 months, likes 2025-01-05 on (exactly 6,000, so probably capped), favourites 2023-05-26 on.
+14. A second-resolution timestamp plus video ID uniquely identifies a view; two genuine views of the same video in the same second don't occur. **Held:** no (second, video) collisions. 3,753 seconds hold views of different videos.
 
 ### 4.2 Ingestion
 `scrollback ingest <path-to-export.json>`
@@ -751,3 +752,4 @@ scrollback/
 - Which export variants does the parser need to support? Collect one real export early.
 - ~~Should `is_rewatch` count a video as a rewatch on any repeat, or only after a gap?~~ Any repeat (§4.4).
 - What should the default binge threshold and session gap be? Tune them by looking at the distribution of your real gaps.
+- **Date spine vs. history windows** *(found 2026-11-22 on the first real export, undecided)*. `dim_date` and `agg_daily` start at the earliest record of *any* dataset. In the real export that is the first like (2025-01-05), so the spine has 685 days but watch history covers only 184 of them. The 500 days before the watch window look like zero-view days when they are unknown (§4.1 item 13), which skews daily averages, active days and streaks. Synthetic data didn't show it because every dataset shares one window. A likely fix is to bound the spine by the watch history's first and last dates (or flag days outside it); check whether it moves any eval gold before changing it.

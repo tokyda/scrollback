@@ -156,7 +156,10 @@ def synth(
         str, typer.Option(help="Last local date covered, YYYY-MM-DD (fixed for determinism).")
     ] = "2026-11-19",
     variant: Annotated[
-        str, typer.Option(help="Export format variant: v1_activity or v2_your_activity.")
+        str,
+        typer.Option(
+            help="Export format variant: v1_activity, v2_your_activity or v3_likes_favorites."
+        ),
     ] = "v2_your_activity",
     local_tz: Annotated[
         str, typer.Option(help="Timezone the synthetic person lives in.")
