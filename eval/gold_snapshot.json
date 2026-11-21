@@ -939,6 +939,46 @@
       0.330585
      ]
     ]
+   },
+   {
+    "columns": [
+     "(sum(CASE  WHEN (is_late_night) THEN (est_watch_sec) ELSE 0 END) / sum(est_watch_sec))"
+    ],
+    "rows": [
+     [
+      0.16573
+     ]
+    ]
+   },
+   {
+    "columns": [
+     "(sum(CASE  WHEN (((local_hour >= 22) OR (local_hour < 5))) THEN (est_watch_sec) ELSE 0 END) / sum(est_watch_sec))"
+    ],
+    "rows": [
+     [
+      0.318489
+     ]
+    ]
+   },
+   {
+    "columns": [
+     "(sum(CASE  WHEN ((local_hour < 6)) THEN (est_watch_sec) ELSE 0 END) / sum(est_watch_sec))"
+    ],
+    "rows": [
+     [
+      0.177903
+     ]
+    ]
+   },
+   {
+    "columns": [
+     "(sum(CASE  WHEN (((local_hour >= 22) OR (local_hour < 6))) THEN (est_watch_sec) ELSE 0 END) / sum(est_watch_sec))"
+    ],
+    "rows": [
+     [
+      0.330662
+     ]
+    ]
    }
   ]
  },

@@ -942,13 +942,29 @@ questions:
     difficulty: medium
     split: dev
     today: 2026-11-20
-    tests: night share of views with any stated window ([0,5), [22,5), [0,6) or [22,6))
+    # Watch-time-share readings added 2026-11-21 (owner): accepted as a reading the owner would
+    # have taken before seeing answers; same four windows as the view-share readings.
+    tests: >-
+      night share of views or of estimated watch time, with any stated window
+      ([0,5), [22,5), [0,6) or [22,6))
     answer_type: scalar
     gold_sql: SELECT avg(CASE WHEN is_late_night THEN 1.0 ELSE 0.0 END) FROM fct_views
     alternatives:
       - SELECT avg(CASE WHEN local_hour >= 22 OR local_hour < 5 THEN 1.0 ELSE 0.0 END) FROM fct_views
       - SELECT avg(CASE WHEN local_hour < 6 THEN 1.0 ELSE 0.0 END) FROM fct_views
       - SELECT avg(CASE WHEN local_hour >= 22 OR local_hour < 6 THEN 1.0 ELSE 0.0 END) FROM fct_views
+      - |
+        SELECT sum(CASE WHEN is_late_night THEN est_watch_sec ELSE 0 END) / sum(est_watch_sec)
+        FROM fct_views
+      - |
+        SELECT sum(CASE WHEN local_hour >= 22 OR local_hour < 5 THEN est_watch_sec ELSE 0 END)
+               / sum(est_watch_sec) FROM fct_views
+      - |
+        SELECT sum(CASE WHEN local_hour < 6 THEN est_watch_sec ELSE 0 END) / sum(est_watch_sec)
+        FROM fct_views
+      - |
+        SELECT sum(CASE WHEN local_hour >= 22 OR local_hour < 6 THEN est_watch_sec ELSE 0 END)
+               / sum(est_watch_sec) FROM fct_views
     units: [ratio]
     tolerance: 0.005
     expected_metrics: [late_night_share]
