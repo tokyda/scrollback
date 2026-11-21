@@ -71,6 +71,8 @@ def suggest_label(
             return "sql_error_unrecovered", f"no successful query cited; errors {codes}"
         return "answer_misreport", "answer cites no query result"
 
+    if isinstance(s.wrong_value, str):
+        return "answer_misreport", f"labels {s.wrong_value[:10]} with the wrong weekday"
     if s.wrong_value is not None:
         return "wrong_metric_definition", f"leads with {s.wrong_value}, a wrong-definition value"
     if s.execution and not s.answer:

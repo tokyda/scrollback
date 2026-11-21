@@ -81,10 +81,12 @@ Build scope by phase. Each phase ends with a "Done when" check. See `docs/DESIGN
 **Done when:** for Haiku, within ~2 points of Sonnet E1 with cost per question side by side (met at E1-haiku), and from E2a on each step shows no dev regression beyond repeat variance, with recall@k, tokens/cost per question and the remaining failures it fixes reported; for Sonnet, the best config's mean dev pass rate is above E0's best dev repeat and its worst dev repeat is at least E0's dev mean; the dev session-length cluster (q023, q042, q084, q087) passes at least 10 of 12 runs; the final test pass rate is at least E0's 96.9%; tokens per question are reported; and every gain is linked to a run report (DESIGN §7.5).
 
 ## Phase 6: Telegram bot
-- [ ] Telegram bot: free-text questions, chart as photo, "Show SQL" button, allowed chat IDs only
-- [ ] Bot commands: `/today`, `/week`, `/metrics`, `/feedback`
-- [ ] `/feedback` attaches to the trace; `scrollback eval import-feedback` turns bad feedback into candidate eval questions
-- [ ] `AGENT_RESULT_MODE=aggregate_only` enforced for real data
+- [x] Telegram bot: free-text questions, chart as photo, "Show SQL" button, allowed chat IDs only (`scrollback serve bot`; DESIGN §8)
+- [x] Bot commands: `/today`, `/week` (both about the most recent data, owner decision 2026-11-22), `/metrics`, `/feedback`; `/wrapped` moved to stretch
+- [x] `/feedback` attaches to the trace; `scrollback eval import-feedback` turns bad feedback into candidate eval questions (git-ignored `eval/candidates/feedback.yaml`)
+- [x] `AGENT_RESULT_MODE=aggregate_only` enforced for real data (the bot refuses to start otherwise)
+- [x] *(added)* `ask` and the bot share `interactive.experiment` (Haiku E6b by default) on the calibrated real params; evals unaffected (DESIGN §6.7)
+- [x] Final check from the phone with the real bot and API (2026-11-22): answers, charts, Show SQL, /today, /week, /metrics, a clean refusal and feedback all worked; bad feedback on /week became a candidate. Fixes from it: replies to the question or SQL message rate it, the command menu, quieter logs, /week weekday names from `dim_date`, and the feedback confirmation quotes the rated question
 
 **Done when:** asking a question from your phone returns an answer and chart, and bad feedback shows up as a candidate eval question.
 
@@ -102,7 +104,7 @@ Build scope by phase. Each phase ends with a "Done when" check. See `docs/DESIGN
 ## Stretch backlog
 - FastAPI service: `/ask`, `/metrics`, `/health`, `/charts/{id}.png`, bearer-token auth (DESIGN §8)
 - Monitoring: robust z-score anomaly alerts with a "why?" button, data-health checks, scheduled jobs (DESIGN §9); test that injected synthetic events trigger alerts and normal days don't
-- Weekly "Wrapped" digest: deterministic numbers + short LLM narrative
+- Weekly "Wrapped" digest: deterministic numbers + short LLM narrative, plus the bot's `/wrapped` command (DESIGN §8)
 - oEmbed enrichment into `dim_video` + creator metrics (DESIGN §10)
 - LangGraph port of the agent loop; compare its eval results with the hand-built loop
 - Second source adapter (YouTube Takeout or Spotify extended history), sharing the metrics layer where it fits

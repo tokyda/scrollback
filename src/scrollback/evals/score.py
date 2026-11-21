@@ -37,7 +37,7 @@ from itertools import permutations
 from typing import Any
 
 from scrollback.evals.gold import GoldAnswer, QuestionGold
-from scrollback.evals.questions import Question
+from scrollback.evals.questions import Question, parse_wrong_label
 
 # --------------------------------------------------------------------------- text patterns
 
@@ -743,7 +743,37 @@ def text_states(text: str, value: Any, unit: str, tolerance: float) -> bool:
 NON_NUMERIC_UNITS = ("date", "dow", "text", "hour_of_day")
 
 
-def states_wrong_value(text: str, q: Question, readings: list[GoldAnswer]) -> float | None:
+def _weekday_re(name: str) -> str:
+    """Monday, Mon, Mon. / Thursday, Thu, Thur, Thurs / Tuesday, Tue, Tues ..."""
+    n = name.lower()
+    return rf"\b{n[:3]}(?:{n[3:]}|{n[3:4]}|{n[3:5]})?\.?"
+
+
+def weekday_pair_positions(text: str, iso: str, weekday: str) -> list[int]:
+    """Where the text labels date ``iso`` with ``weekday``: "Fri 14 Nov", "Friday, November 14",
+    "14 Nov (Fri)", "2026-11-14 Friday", "| 2026-11-14 | Friday |". A weekday merely near a date
+    in a comma list ("14 Nov, Sat 15 Nov") is not a label for it."""
+    w = _weekday_re(weekday)
+    pats = []
+    for p in _date_patterns(iso):
+        pats += [rf"{w},?\s+{p.pattern}", rf"{p.pattern}\s*\(\s*{w}", rf"{p.pattern}\s*\|\s*{w}"]
+    pats.append(rf"\b{iso}\s+{w}")
+    return sorted({m.start() for p in pats for m in re.finditer(p, text, re.I)})
+
+
+def states_wrong_label(text: str, wrong: str) -> bool:
+    """True if the text labels the date with the wrong weekday before (or without) the right
+    one; the same "leads with" rule as wrong numbers (fix A)."""
+    day, wrong_name = parse_wrong_label(wrong)
+    iso = day.isoformat()
+    wrong_pos = weekday_pair_positions(text, iso, wrong_name)
+    if not wrong_pos:
+        return False
+    right_pos = weekday_pair_positions(text, iso, day.strftime("%A"))
+    return not right_pos or min(wrong_pos) < min(right_pos)
+
+
+def states_wrong_value(text: str, q: Question, readings: list[GoldAnswer]) -> float | str | None:
     """A wrong-definition value the answer leads with, or None.
 
     A wrong value counts only if it is stated *before* the first unambiguous mention of the
@@ -758,7 +788,10 @@ def states_wrong_value(text: str, q: Question, readings: list[GoldAnswer]) -> fl
         for g in readings for row in g.rows for i, v in enumerate(row)
         if _as_float(v) is not None and q.units[i % len(q.units)] not in NON_NUMERIC_UNITS
     ]  # fmt: skip
-    for wrong in q.wrong_values:
+    for label in [w for w in q.wrong_values if isinstance(w, str)]:
+        if states_wrong_label(text, label):
+            return label
+    for wrong in [float(w) for w in q.wrong_values if not isinstance(w, str)]:
         for u in [u for u in q.units if u not in NON_NUMERIC_UNITS] or ["number"]:
             competing = [g for g, gu in all_golds if gu == u]
 
@@ -921,7 +954,7 @@ class Score:
     caveat_strong: bool | None = None  # estimate + reason; reported only
     assumptions: bool | None = None
     reading: int | None = None  # 0 = gold, 1.. = alternative index
-    wrong_value: float | None = None
+    wrong_value: float | str | None = None
     refused: bool = False
     fabricated: list[float] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)

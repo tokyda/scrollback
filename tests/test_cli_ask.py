@@ -136,3 +136,35 @@ def test_ask_bad_today(agent_settings: Settings, tmp_path: Path) -> None:
         ["ask", "q", "--today", "yesterday", "--config", str(_config(agent_settings, tmp_path))],
     )
     assert result.exit_code == 2 and "--today must be YYYY-MM-DD" in result.output
+
+
+def test_ask_uses_interactive_experiment(
+    agent_settings: Settings, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """ask runs interactive.experiment (as the bot does): E6b's prompt and tools."""
+    exp = Path(__file__).resolve().parents[1] / "eval/experiments/e06b_cannot_answer_haiku.yaml"
+    cfg = _config(agent_settings, tmp_path)
+    cfg.write_text(cfg.read_text() + f"interactive:\n  experiment: {exp}\n")
+    client = _script(monkeypatch, [mock_turn(("run_sql", {"sql": SQL})), mock_turn(ANSWER)])
+    result = runner.invoke(app, ["ask", "q", "--today", "2026-11-20", "--config", str(cfg)])
+    assert result.exit_code == 0, result.output
+    assert "· e06b_cannot_answer_haiku" in result.output
+    tools = [t["name"] for t in client.requests[0]["tools"]]
+    assert tools[0] == "search_knowledge"
+
+    client = _script(monkeypatch, [mock_turn(("run_sql", {"sql": SQL})), mock_turn(ANSWER)])
+    result = runner.invoke(
+        app, ["ask", "q", "--today", "2026-11-20", "--no-experiment", "--config", str(cfg)]
+    )
+    assert result.exit_code == 0, result.output
+    assert "· config.yaml" in result.output
+    assert "search_knowledge" not in [t["name"] for t in client.requests[0]["tools"]]
+
+
+def test_ask_bad_experiment_path(agent_settings: Settings, tmp_path: Path) -> None:
+    cfg = _config(agent_settings, tmp_path)
+    result = runner.invoke(
+        app, ["ask", "q", "--experiment", str(tmp_path / "nope.yaml"), "--config", str(cfg)]
+    )
+    assert result.exit_code == 1
+    assert "experiment could not be loaded" in result.output

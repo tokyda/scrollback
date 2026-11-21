@@ -121,8 +121,14 @@ def check_gold(qset: QuestionSet, golds: dict[str, QuestionGold]) -> list[str]:
             if q.answer_type == "scalar" and isinstance(g.scalar_value(), int | float):
                 value = float(g.scalar_value())
                 for wrong in q.wrong_values:
-                    if abs(wrong - value) <= max(q.tolerance, 1e-9):
+                    if isinstance(wrong, float | int) and abs(wrong - value) <= max(
+                        q.tolerance, 1e-9
+                    ):
                         problems.append(f"{q.id}: wrong_value {wrong} equals the gold answer")
+            gold_dates = {str(v)[:10] for row in g.gold.rows for v in row}
+            for wrong in q.wrong_values:
+                if isinstance(wrong, str) and wrong[:10] not in gold_dates:
+                    problems.append(f"{q.id}: wrong_value {wrong!r} is for a date not in the gold")
     return problems
 
 

@@ -791,3 +791,84 @@ def test_strong_caveat_is_reported_not_required() -> None:
     # A strong caveat never rescues a missing number.
     wrong = run("q071", "About 30 hours, estimated from the gaps between views.", [[1800.0]])
     assert wrong.caveat_strong and not wrong.passed
+
+
+# --------------------------------------------------------------------------- weekday labels (q097)
+# Answer shapes follow the bot's real /week answer (2026-11-22, "- Fri 14 Nov: 312.4"), with
+# the synthetic gold's values. Gold: 13 Nov (Fri) ... 19 Nov (Thu).
+
+Q097_COLS = ["local_date", "dow_name", "est_watch_min"]
+Q097_ROWS = [
+    ["2026-11-13", "Friday", 53.858333], ["2026-11-14", "Saturday", 61.7],
+    ["2026-11-15", "Sunday", 60.225], ["2026-11-16", "Monday", 33.15],
+    ["2026-11-17", "Tuesday", 30.408333], ["2026-11-18", "Wednesday", 22.466667],
+    ["2026-11-19", "Thursday", 102.741667],
+]  # fmt: skip
+Q097_MIN = ["53.9", "61.7", "60.2", "33.1", "30.4", "22.5", "102.7"]
+Q097_DAYS = ["Fri", "Sat", "Sun", "Mon", "Tue", "Wed", "Thu"]
+
+
+def _bullets(days: list[str]) -> str:
+    lines = [
+        f"- {d} {13 + i} Nov: {m} min" for i, (d, m) in enumerate(zip(days, Q097_MIN, strict=True))
+    ]
+    return "Estimated watch time for 13-19 Nov 2026 (estimate):\n" + "\n".join(lines)
+
+
+def test_q097_right_weekdays_pass() -> None:
+    s = run("q097", _bullets(Q097_DAYS), Q097_ROWS, Q097_COLS)
+    assert s.passed and s.wrong_value is None
+
+
+def test_q097_off_by_one_weekdays_fail() -> None:
+    """The real failure: every day labelled with the previous day's weekday. All seven names
+    still appear, so only the date-weekday pairing catches it."""
+    shifted = ["Thu", "Fri", "Sat", "Sun", "Mon", "Tue", "Wed"]
+    s = run("q097", _bullets(shifted), Q097_ROWS, Q097_COLS)
+    assert s.execution and s.gold_stated  # every cell is still stated somewhere
+    assert not s.passed and s.wrong_value == "2026-11-13 Thursday"
+    forward = ["Sat", "Sun", "Mon", "Tue", "Wed", "Thu", "Fri"]
+    assert run("q097", _bullets(forward), Q097_ROWS, Q097_COLS).wrong_value == "2026-11-13 Saturday"
+
+
+def test_q097_label_shapes() -> None:
+    names = [r[1] for r in Q097_ROWS]
+    table = "| date | weekday | minutes |\n|---|---|---|\n" + "\n".join(
+        f"| {r[0]} | {n} | {m} |" for r, n, m in zip(Q097_ROWS, names, Q097_MIN, strict=True)
+    )
+    assert run("q097", table, Q097_ROWS, Q097_COLS).passed
+    bad_table = table.replace("| 2026-11-15 | Sunday |", "| 2026-11-15 | Saturday |")
+    assert run("q097", bad_table, Q097_ROWS, Q097_COLS).wrong_value == "2026-11-15 Saturday"
+    parens = "; ".join(
+        f"{r[0]} ({n}): {m} min" for r, n, m in zip(Q097_ROWS, names, Q097_MIN, strict=True)
+    )
+    assert run("q097", parens, Q097_ROWS, Q097_COLS).passed
+    long_form = ", ".join(
+        f"{n}, November {13 + i}: {m} minutes"
+        for i, (n, m) in enumerate(zip(names, Q097_MIN, strict=True))
+    )
+    assert run("q097", long_form, Q097_ROWS, Q097_COLS).passed
+    comma_list = ", ".join(f"{d} {13 + i} Nov {m} min" for i, (d, m) in
+                           enumerate(zip(Q097_DAYS, Q097_MIN, strict=True)))  # fmt: skip
+    assert run("q097", comma_list, Q097_ROWS, Q097_COLS).passed  # "13 Nov, Sat" is no label
+
+
+def test_q097_correction_after_the_right_label_passes() -> None:
+    text = _bullets(Q097_DAYS) + "\n(14 Nov is a Saturday, not Fri 14 Nov as the chart title said.)"
+    assert run("q097", text, Q097_ROWS, Q097_COLS).passed  # right label first (fix A)
+
+
+def test_q097_without_weekdays_fails() -> None:
+    text = "\n".join(f"- {13 + i} Nov: {m} min" for i, m in enumerate(Q097_MIN))
+    s = run("q097", text, Q097_ROWS, Q097_COLS)
+    assert not s.passed and not s.answer
+
+
+def test_q097_label_suggestion() -> None:
+    from scrollback.evals.labels import suggest_label
+
+    shifted = ["Thu", "Fri", "Sat", "Sun", "Mon", "Tue", "Wed"]
+    s = run("q097", _bullets(shifted), Q097_ROWS, Q097_COLS)
+    label, reason = suggest_label(QSET.get("q097"), s, status="answered", tool_calls=[],
+                                  sql_used=["SELECT 1"])  # fmt: skip
+    assert label == "answer_misreport" and "2026-11-13" in reason

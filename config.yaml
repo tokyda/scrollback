@@ -58,3 +58,16 @@ agent:
 kb:
   embedding_model: BAAI/bge-small-en-v1.5   # local, via fastembed
   rrf_k: 60
+
+# What `scrollback ask` and the Telegram bot run (DESIGN §6.7, §8). Evals never read this
+# section: they use llm/agent above plus their own experiment file and pinned params.
+# Only the experiment's llm/agent overrides apply; the metric params above stay (calibrated on
+# the real export). null = llm/agent above as they are. `ask --no-experiment` does the same.
+interactive:
+  experiment: eval/experiments/e06b_cannot_answer_haiku.yaml   # best eval config (Haiku E6b)
+
+# Telegram bot (DESIGN §8). TELEGRAM_BOT_TOKEN and TELEGRAM_ALLOWED_CHAT_IDS live in .env.
+bot:
+  poll_timeout_sec: 30
+  chart_keywords: [chart, plot, graph, trend, visualise, visualize]  # free text asks for a chart
+  drop_pending_on_start: true   # skip messages sent while the bot was off (no surprise runs)

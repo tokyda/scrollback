@@ -30,7 +30,6 @@ from statistics import mean
 from typing import Any
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field
 
 from scrollback.agent.llm import LLMClient
 from scrollback.agent.loop import config_snapshot, load_system_prompt, prompt_sha256, run_agent
@@ -41,6 +40,11 @@ from scrollback.evals.labels import suggest_label, suspect_scoring, write_label_
 from scrollback.evals.questions import Question, QuestionSet
 from scrollback.evals.score import AgentOutput, ResultTable, describe_table_values, score
 from scrollback.evals.warehouses import build_anchors, eval_settings
+from scrollback.experiments import (  # re-exported for the CLI and tests
+    Experiment,
+    apply_overrides,
+    load_experiment,  # noqa: F401
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_RUNS_DIR = REPO_ROOT / "eval" / "runs"
@@ -48,34 +52,9 @@ DEFAULT_LABELS_DIR = REPO_ROOT / "eval" / "labels"
 RESULT_ROWS_KEPT = 200  # = agent.max_result_rows, so re-scoring sees full results
 
 
-class Experiment(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    name: str = Field(pattern=r"^[a-z0-9_]+$")
-    description: str
-    overrides: dict[str, dict[str, Any]] = Field(default_factory=dict)  # llm / agent sections
-
-
-def load_experiment(path: Path) -> Experiment:
-    return Experiment.model_validate(yaml.safe_load(path.read_text(encoding="utf-8")))
-
-
 def experiment_settings(base: Settings, exp: Experiment, qset: QuestionSet) -> Settings:
     """Base settings + experiment overrides (llm/agent only) + the set's pinned params."""
-    allowed = {"llm", "agent"}
-    bad = set(exp.overrides) - allowed
-    if bad:
-        raise ValueError(f"experiment may only override {sorted(allowed)}, got {sorted(bad)}")
-    settings = base.model_copy(deep=True)
-    if "llm" in exp.overrides:
-        settings.llm = type(settings.llm).model_validate(
-            {**settings.llm.model_dump(), **exp.overrides["llm"]}
-        )
-    if "agent" in exp.overrides:
-        settings.agent = type(settings.agent).model_validate(
-            {**settings.agent.model_dump(), **exp.overrides["agent"]}
-        )
-    return eval_settings(settings, qset.params)
+    return eval_settings(apply_overrides(base, exp), qset.params)
 
 
 # --------------------------------------------------------------------------- cost estimate

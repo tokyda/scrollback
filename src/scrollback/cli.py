@@ -58,6 +58,34 @@ def _settings(config: Path | None) -> Settings:
         raise typer.Exit(1) from None
 
 
+ExperimentOption = Annotated[
+    Path | None,
+    typer.Option(
+        "--experiment",
+        help="Experiment file whose llm/agent overrides to use (default: interactive.experiment).",
+    ),
+]
+NoExperimentOption = Annotated[
+    bool,
+    typer.Option("--no-experiment", help="Use config.yaml's llm/agent as they are."),
+]
+
+
+def _interactive_settings(
+    config: Path | None, experiment: Path | None, no_experiment: bool
+) -> tuple[Settings, str]:
+    """Settings for ask and the bot, and a label naming the config in use."""
+    from scrollback.experiments import interactive_settings
+
+    base = _settings(config)
+    try:
+        settings, exp = interactive_settings(base, experiment, use_experiment=not no_experiment)
+    except (OSError, ValueError) as exc:
+        typer.echo(f"Config error: experiment could not be loaded: {exc}", err=True)
+        raise typer.Exit(1) from None
+    return settings, (exp.name if exp else "config.yaml")
+
+
 def _run_build(settings: Settings, db_path: Path, quiet: bool = False) -> None:
     """Run `dbt build`; exit 1 when there is no data or any model/test fails."""
     from scrollback.warehouse.db import has_view_data
@@ -272,15 +300,6 @@ def _trace_line(result: object) -> str:
     )
 
 
-STATUS_MESSAGES = {
-    "step_limit": "No answer: the agent reached its step limit without a final answer.",
-    "refused": "No answer: the model declined this request.",
-    "no_final_answer": "No answer: the agent stopped without giving a final answer.",
-    "max_tokens": "No answer: the model ran out of output tokens.",
-    "error": "No answer: the model call failed",
-}
-
-
 @app.command()
 def ask(
     question: Annotated[str, typer.Argument(help="Question in plain English.")],
@@ -292,16 +311,21 @@ def ask(
     ] = None,
     db: DbOption = None,
     config: ConfigOption = None,
+    experiment: ExperimentOption = None,
+    no_experiment: NoExperimentOption = False,
 ) -> None:
-    """Ask the agent a question about your viewing history."""
+    """Ask the agent a question about your viewing history.
+
+    Runs the same config as the Telegram bot: config.yaml plus the llm/agent overrides of
+    interactive.experiment (the best eval config), on config.yaml's calibrated metric params."""
     from datetime import date
 
     from scrollback.agent import llm as llm_module
     from scrollback.agent.llm import LLMError
-    from scrollback.agent.loop import run_agent
+    from scrollback.agent.loop import STATUS_MESSAGES, run_agent
     from scrollback.warehouse.db import has_view_data
 
-    settings = _settings(config)
+    settings, config_label = _interactive_settings(config, experiment, no_experiment)
     db_path = db or settings.paths.warehouse
     if not has_view_data(db_path):
         typer.echo("No data: run `scrollback ingest <export>` first.", err=True)
@@ -329,7 +353,7 @@ def ask(
             message += f": {result.trace.error}"
         typer.echo(message, err=True)
     typer.echo("")
-    typer.echo(_trace_line(result))
+    typer.echo(f"{_trace_line(result)} · {config_label}")
     if result.trace_db_error:
         typer.echo(f"Warning: {result.trace_db_error}", err=True)
     if result.status != "answered":
@@ -544,9 +568,45 @@ def eval_retrieval(
 
 
 @eval_app.command("import-feedback")
-def eval_import_feedback() -> None:
-    """Turn bad bot feedback into candidate eval questions."""
-    _not_implemented("eval import-feedback", "Phase 6")
+def eval_import_feedback(
+    out: Annotated[
+        Path | None,
+        typer.Option(help="Candidates file (default: eval/candidates/feedback.yaml, git-ignored)."),
+    ] = None,
+    traces_dir: Annotated[
+        Path | None, typer.Option(help="Traces folder (default: paths.traces_dir).")
+    ] = None,
+    config: ConfigOption = None,
+) -> None:
+    """Turn bad bot feedback into candidate eval questions for review.
+
+    Writes to a git-ignored review file, never to eval/questions.yaml. Prints counts only."""
+    from scrollback.evals.feedback_import import DEFAULT_CANDIDATES_PATH, import_feedback
+    from scrollback.evals.questions import load_questions
+
+    settings = _settings(config)
+    try:
+        summary = import_feedback(
+            traces_dir or settings.paths.traces_dir,
+            out or DEFAULT_CANDIDATES_PATH,
+            load_questions(),
+        )
+    except ValueError as exc:
+        typer.echo(f"Cannot import: {exc}", err=True)
+        raise typer.Exit(1) from None
+    typer.echo(
+        f"{summary.feedback} feedback lines; {summary.bad} answers rated bad (latest rating). "
+        f"Added {summary.added} candidates, {summary.already_in_file} already in the file."
+    )
+    if summary.missing_traces:
+        typer.echo(f"{summary.missing_traces} bad ratings have no trace yet; not added.")
+    if summary.matches_eval_set:
+        typer.echo(f"{summary.matches_eval_set} new candidates ask a question already in the set.")
+    if summary.now_good:
+        typer.echo(f"{summary.now_good} candidates in the file are now rated good; review them.")
+    typer.echo(
+        f"Review: {summary.path} (git-ignored; copy accepted ones to questions.yaml by hand)"
+    )
 
 
 @kb_app.command("index")
@@ -607,9 +667,74 @@ def serve_api() -> None:
 
 
 @serve_app.command("bot")
-def serve_bot() -> None:
-    """Run the Telegram bot."""
-    _not_implemented("serve bot", "Phase 6")
+def serve_bot(
+    db: DbOption = None,
+    config: ConfigOption = None,
+    experiment: ExperimentOption = None,
+    no_experiment: NoExperimentOption = False,
+) -> None:
+    """Run the Telegram bot (long polling; Ctrl+C to stop).
+
+    Answers only chats in TELEGRAM_ALLOWED_CHAT_IDS, with the same config as `ask`
+    (interactive.experiment), and only in aggregate_only mode. Each question costs money."""
+    import logging
+
+    from scrollback.agent import llm as llm_module
+    from scrollback.agent.llm import LLMError
+    from scrollback.bot.telegram_api import RedactingFilter, TelegramAPI, TelegramError
+    from scrollback.bot.telegram_bot import ScrollbackBot
+    from scrollback.warehouse.db import has_view_data
+
+    settings, config_label = _interactive_settings(config, experiment, no_experiment)
+    token_secret = settings.secrets.telegram_bot_token
+    token = token_secret.get_secret_value() if token_secret else ""
+    problems = []
+    if not token:
+        problems.append("TELEGRAM_BOT_TOKEN is not set (.env)")
+    if not settings.secrets.telegram_allowed_chat_ids:
+        problems.append("TELEGRAM_ALLOWED_CHAT_IDS is empty (.env); the bot would answer no one")
+    if settings.agent.result_mode != "aggregate_only":
+        problems.append("agent.result_mode must be aggregate_only for the bot (DESIGN §4.6)")
+    db_path = db or settings.paths.warehouse
+    if not has_view_data(db_path):
+        problems.append(f"no data in {db_path.name}: run `scrollback ingest <export>` first")
+    if problems:
+        for problem in problems:
+            typer.echo(f"Cannot start the bot: {problem}", err=True)
+        raise typer.Exit(1)
+
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+    for handler in logging.getLogger().handlers:
+        handler.addFilter(RedactingFilter(token))
+    logging.getLogger("matplotlib").setLevel(logging.WARNING)  # "categorical units" chatter
+
+    if settings.agent.search_knowledge:
+        from scrollback.kb.index import ensure_index
+
+        ensure_index(settings)  # build or load now, not on the first question
+    try:
+        client = llm_module.create_llm_client(settings)
+    except LLMError as exc:
+        typer.echo(f"LLM setup failed: {exc}", err=True)
+        raise typer.Exit(1) from None
+    api = TelegramAPI(token, timeout_sec=settings.bot.poll_timeout_sec + 30)
+    bot = ScrollbackBot(api, settings, client, db_path=db_path)
+    n = len(settings.secrets.telegram_allowed_chat_ids)
+    typer.echo(
+        f"Bot running: {config_label} ({settings.llm.model}, "
+        f"prompt v{settings.agent.prompt_version}, effort {settings.llm.effort}), "
+        f"{n} allowed chat{'s' if n != 1 else ''}, "
+        f"warehouse {db_path.name}, {settings.agent.result_mode}. Ctrl+C to stop."
+    )
+    try:
+        bot.run()
+    except KeyboardInterrupt:
+        typer.echo("Bot stopped.")
+    except TelegramError as exc:  # already token-free
+        typer.echo(f"Bot stopped: {exc}", err=True)
+        raise typer.Exit(1) from None
+    finally:
+        api.close()
 
 
 if __name__ == "__main__":  # pragma: no cover

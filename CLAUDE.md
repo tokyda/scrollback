@@ -24,7 +24,26 @@ pin timezone and metrics to `eval/questions.yaml` `params` (cap 180 s, last view
 synthetic warehouses and the gold never move when `config.yaml` is tuned. Never commit the
 owner's per-day Screen Time figures.
 
-**Next: Phase 6, the Telegram bot** (ROADMAP).
+**Phase 6, the Telegram bot: done on branch `phase-6` (PR #10 open, not merged until the owner
+says).** DESIGN §8 "As built". Phone check 2026-11-22 passed on the real bot (7 paid runs,
+$0.011 in total, all E6b, prompt hash `a8da3c450e57`). It found the /week weekday bug: Haiku
+labelled every day one off, and the fix is bot-level (weekday names from `dim_date.dow_name`,
+then 7/7 right). That case is in the git-ignored candidates file, pending owner review.
+Key decisions (owner, 2026-11-22):
+- `ask` and the bot run `interactive.experiment` (default `e06b_cannot_answer_haiku.yaml`):
+  only its llm/agent overrides, on config.yaml's calibrated metrics. Evals never read the
+  `interactive` section (tested). `ask --experiment f | --no-experiment`.
+- `/today` and `/week` are fixed agent questions about the *most recent day / last 7 days of
+  data* (exports lag); `/week` takes weekday names from `dim_date.dow_name`. The dates show in
+  the assumptions. Charts only on a chart keyword or `/week`.
+- `/feedback` rates the replied-to question, answer, chart or SQL message, or else the last
+  answer, and its confirmation quotes the rated question (a reply sent from Telegram's command
+  menu can lose its reply link).
+- Feedback: `traces/feedback/feedback.jsonl` + `agent_feedback` table; message map
+  `traces/bot/messages.jsonl`. `eval import-feedback` writes git-ignored
+  `eval/candidates/feedback.yaml`, never `questions.yaml`.
+- Telegram client is our own over httpx; the token is in every URL, so httpx loggers stay at
+  WARNING and errors/logs are redacted (a test plants a fake token).
 
 On real data the privacy rules below apply in full. Print counts and aggregates only, never
 records, and keep `AGENT_RESULT_MODE=aggregate_only`. Tests, evals and CI stay on synthetic
@@ -33,6 +52,10 @@ data.
 **PRs.** All merged into `main`: #1 (Phases 0-1), #3 (Phase 2), #4 (Phase 3), #5 (Phase 4),
 #6 (Phase 5), #7 (docs) and #8 (real export and calibration). #2 was superseded by #3. No PR is
 open.
+
+**Eval set:** 97 questions since 2026-11-22. q097 (dev, weekday labels) came from bot feedback and
+has text `wrong_values` like `"2026-11-14 Friday"` (DESIGN §7.1, §7.2). No eval has run with it;
+all results below are on the 96-question set.
 
 **Headline results** (96 questions, 64 dev / 32 held-out test, x 3 repeats, effort medium; the
 full table is in `README.md`, the final runs in `eval/reports/final_test.md`):
@@ -217,8 +240,13 @@ uv run scrollback ingest data/sample/user_data_tiktok.json [--db path.duckdb] [-
 uv run scrollback build [--db path.duckdb] [-q]   # dbt build with --vars from config.yaml
 uv run scrollback inspect gaps [--db path.duckdb] # gap distribution, aggregates only
 
-# agent (needs ANTHROPIC_API_KEY in .env; costs money: ~$0.01-0.02 per question on Sonnet 5.5)
-uv run scrollback ask "how many minutes did I watch yesterday" [--show-sql] [--chart] [--today YYYY-MM-DD]
+# agent (needs ANTHROPIC_API_KEY in .env; costs money: ~$0.001 per question on Haiku E6b, the
+# interactive default; ~$0.01 on Sonnet)
+uv run scrollback ask "how many minutes did I watch yesterday" [--show-sql] [--chart] [--today YYYY-MM-DD] [--experiment f | --no-experiment]
+
+# Telegram bot (TELEGRAM_BOT_TOKEN and TELEGRAM_ALLOWED_CHAT_IDS in .env; each question costs money)
+uv run scrollback serve bot
+uv run scrollback eval import-feedback            # bad feedback -> eval/candidates/feedback.yaml
 
 # evals (DESIGN §7): gold check runs in CI; runs cost money and need --yes
 uv run scrollback eval check-gold [--update] [--show]
@@ -244,8 +272,14 @@ them; `tests/test_ingest_e2e.py` and CI fail if they drift.
 
 - `src/scrollback/config.py`: settings loader.
 - `src/scrollback/cli.py`: Typer app; `ingest`, `synth`, `build`, `inspect gaps`, `ask`, `eval`
-  (`check-gold`, `run`, `rescore`, `report`, `retrieval`) and `kb` (`index`, `search`) are real;
-  `serve`, `alerts`, `digest`, `enrich` and `eval import-feedback` are stubs.
+  (`check-gold`, `run`, `rescore`, `report`, `retrieval`, `import-feedback`), `kb` (`index`,
+  `search`) and `serve bot` are real; `serve api`, `alerts`, `digest` and `enrich` are stubs.
+- `src/scrollback/experiments.py`: experiment files, `apply_overrides`, `interactive_settings`.
+- `src/scrollback/bot/`: `telegram_api.py` (httpx Bot API client, token redaction),
+  `telegram_bot.py` (`ScrollbackBot`: allowlist, answers, Show SQL, commands, feedback).
+- `src/scrollback/feedback.py`: feedback store, `find_trace`, `MessageMap`;
+  `evals/feedback_import.py`: `import-feedback`.
+- `tests/telegram_fake.py`: in-memory Bot API (httpx.MockTransport) for bot tests.
 - `src/scrollback/ingest/detect.py`: declarative format variants; `UnknownExportFormatError`.
 - `src/scrollback/ingest/parse.py`: pydantic validation, video ID extraction, `record_hash`.
 - `src/scrollback/ingest/load.py`: reads json/zip, idempotent load, `ingest_log`.
@@ -339,5 +373,7 @@ them; `tests/test_ingest_e2e.py` and CI fail if they drift.
   for real data. `video_id` and search terms may appear in results (owner's decision).
 - Never log or print the API key. It is read once from settings into the SDK client; traces hold
   a non-secret config snapshot only. `traces/` and `charts/` are git-ignored.
-- The Telegram bot only answers chat IDs in `TELEGRAM_ALLOWED_CHAT_IDS`.
+- The Telegram bot only answers chat IDs in `TELEGRAM_ALLOWED_CHAT_IDS` (others ignored
+  silently) and refuses to start without `aggregate_only`. Never log the bot token, question
+  text, answers or chat IDs. `eval/candidates/` is git-ignored (real questions and answers).
 - Tests, evals and CI run against synthetic data only.

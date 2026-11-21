@@ -129,6 +129,29 @@ class KBConfig(_Strict):
     rrf_k: int = Field(60, gt=0)  # reciprocal-rank fusion constant
 
 
+class InteractiveConfig(_Strict):
+    """What ``scrollback ask`` and the Telegram bot run (DESIGN §6.7, §8). Evals never read it:
+    they take llm/agent from config.yaml plus their own experiment file."""
+
+    # An eval experiment file whose llm/agent overrides apply on top of config.yaml (its
+    # pinned eval params do not: interactive runs use the calibrated metrics above). Relative
+    # to the repo root; null = config.yaml's llm/agent as they are.
+    experiment: Path | None = None
+
+
+DEFAULT_CHART_KEYWORDS = ["chart", "plot", "graph", "trend", "visualise", "visualize"]
+
+
+class BotConfig(_Strict):
+    """Telegram bot options (DESIGN §8). Token and allowed chat IDs are secrets (.env)."""
+
+    poll_timeout_sec: int = Field(30, gt=0, le=50)  # long-polling wait per getUpdates call
+    # A free-text question asks for a chart only when it contains one of these words.
+    chart_keywords: list[str] = Field(default_factory=lambda: list(DEFAULT_CHART_KEYWORDS))
+    # Skip messages that arrived while the bot was off, so none trigger paid runs unseen.
+    drop_pending_on_start: bool = True
+
+
 class Secrets(_Strict):
     anthropic_api_key: SecretStr | None = None
     telegram_bot_token: SecretStr | None = None
@@ -143,6 +166,8 @@ class Settings(_Strict):
     llm: LLMConfig = Field(default_factory=LLMConfig)
     agent: AgentConfig = Field(default_factory=AgentConfig)
     kb: KBConfig = Field(default_factory=KBConfig)
+    interactive: InteractiveConfig = Field(default_factory=InteractiveConfig)
+    bot: BotConfig = Field(default_factory=BotConfig)
     secrets: Secrets = Field(default_factory=Secrets)
     root: Path = Field(default_factory=Path.cwd)
 
@@ -224,4 +249,7 @@ def load_config(
     except ValueError as exc:
         raise ConfigError(f"invalid configuration: {exc}") from exc
     settings.paths = settings.paths.resolved(root)
+    exp = settings.interactive.experiment
+    if exp is not None and not exp.is_absolute():
+        settings.interactive.experiment = root / exp
     return settings
