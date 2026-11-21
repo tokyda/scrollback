@@ -9,7 +9,7 @@ layer, data-quality tests and an eval harness for the agent.
 
 If you change a design decision, update `docs/DESIGN.md` in the same commit and say why.
 
-## Current status (2026-11-21)
+## Current status (2026-11-22)
 
 **Phases.** Phases 0-4 are done, except the Phase 1 item "ingest one real export": no real
 export yet, so every TikTok-format assumption is listed in DESIGN §4.1. When one arrives, put
@@ -66,6 +66,8 @@ The scoring false negatives found in review are listed in the label files.
 - *Fix B (tightened):* a derived value (range sum; +, -, x, / in a row; difference or ratio in
   a column) counts only if the text states it **and every cell used**. That blocks
   coincidences like E-1 q044 (8.1 - 3.9 = 4.2 vs 4.18).
+- *Cross-result rule (2026-11-22):* a one-row table gold also matches when each value is a cell
+  of some cited result of the run **and** the text states every value (E2b q087 r1).
 - *Range-sum rule:* a total over many dated rows also counts when the answer states the total
   **and a date range** (in text or assumptions). The scorer parses the range, sums only the
   cited rows inside it, and the sum must match both the stated total and the gold. This
@@ -108,7 +110,7 @@ The scoring false negatives found in review are listed in the label files.
    q072 r3 (`failed_refusal`). Haiku done-when (replaced 2026-11-21, DESIGN §7.5): within ~2
    points of Sonnet E1 is met; from E2a on, judge each step on no regression beyond repeat
    variance, recall@k, tokens/cost per question, and which of the 4 failures it fixes.
-3. **Next: E2a → E6 on Haiku** (owner decision 2026-11-21, although E1-haiku is above ~93%),
+3. **E2a → E6 on Haiku** (owner decision 2026-11-21, although E1-haiku is above ~93%),
    one config change each, cumulative; accuracy first, plus tokens, steps and recall@k. Cost
    estimate and the owner's OK before each run; stop for review after each.
    - **E2a done** (`20261121T070131Z_e02a_search_haiku`, report `eval/reports/e02a_search_haiku.md`):
@@ -123,11 +125,20 @@ The scoring false negatives found in review are listed in the label files.
    - **E2a′** (E2a re-run on the new retrieval, `20261121T143825Z_e02a_search_haiku`, report
      `eval/reports/e02a_rerun_haiku.md`): 98.4%, same as E2a; offline recall@6 81.6%, in-run
      86.6%. **E2b done** (`20261121T144258Z_e02b_lookup_rule_haiku`, `system_v2.md` =
-     v1_search + one rule, report `eval/reports/e02b_lookup_rule_haiku.md`): 99.0% (98.4-100),
-     $0.0010 per question, in-run recall 91.2%, strong caveats on traps 44% -> 67%. Fails q072
-     r3 and q087 r1; q087 r1 is a suspected scoring false negative (gold values split across
-     two cited results), fix awaiting the owner. Labels for E2a′ and E2b pending. Best Haiku
-     config so far: E2b. Next: E3 (examples.yml + overlap check), after the owner's review.
+     v1_search + one rule, report `eval/reports/e02b_lookup_rule_haiku.md`): **99.5%** (98.4-100),
+     level with Sonnet E1, $0.0010 per question, in-run recall 91.2%, strong caveats on traps
+     44% -> 67%. Only failure: q072 r3 (`failed_refusal`, "0 minutes"). Labels for E2a′ and E2b
+     owner-confirmed. Best Haiku config so far: E2b.
+   - Scorer (2026-11-22, owner decision, `cfbed84`): a one-row table gold also matches across
+     the run's cited results when the text states every gold value (E2b q087 r1, the only
+     flip); "no TikTok views for" is a no-data/coverage phrase.
+   - **Plan change (2026-11-22, owner):** E3 skipped (no headroom; DESIGN §7.5), E5
+     (`query_metric`) moved to the stretch backlog. **Next: E6** on Haiku, built on E2b:
+     `system_v3.md` (v2 + estimate-caveat, refusal-first and "unknown isn't zero" rules) and
+     `kb_sources` + `cannot_answer` (`eval/experiments/e06_refusal_rules_haiku.yaml`). Built;
+     dev estimate $0.24, awaiting the owner's OK. Offline recall@6 with E6's sources: unanswerable
+     16.7%, ranking 100 -> 70%, trap 86.1 -> 76.4% (cannot_answer chunks crowd others).
+   - If a printed estimate exceeds the approved amount, ask before running, even by cents.
    - Glossary edit committed before E2 (`2fa833a`, sessions.md: span vs session length);
      disclose it in the E2a report. `metrics.yml` and the docs predate the eval questions.
    - Owner decisions 2026-11-21: the cell and group-share scorer rules (`94914c9`) accepted;
@@ -139,12 +150,11 @@ The scoring false negatives found in review are listed in the label files.
      new rule). **E2b** = + the "look up definitions before computing" rule (`system_v2.md`).
      One prompt version = one exact text: `prompt_version` becomes a string, and every trace
      records `system_prompt_sha256` of the rendered prompt.
-   - Before E3, write `knowledge/examples.yml` and its overlap check (token Jaccard >= 0.6 or
-     embedding cosine >= 0.85 fails; matching gold SQL skeleton warns; confirm with the owner).
-   - **E4 is cut** (no SQL-error failures; DESIGN §7.5). **E6** = caveat/refusal rules,
-     `system_v3.md`. Never edit `system_v1.md`. Opus is off the ladder.
+   - **E3 skipped, E4 cut, E5 stretch** (DESIGN §7.5). Never edit `system_v1.md`. Opus is
+     off the ladder.
    - Recall@k needs `expected_knowledge` on each question; show the owner 15 for review first.
-4. **Final:** the best Haiku config and Sonnet E1, once each, on the test split.
+4. **Final (after E6):** the best Haiku config and Sonnet E1, once each, on the test split;
+   then the README results table.
 5. The strong-caveat sub-score (estimate + reason) is reported only; it never affects pass.
 6. Every real-API run needs a printed cost estimate and the owner's OK first. A Sonnet dev
    run (64 x 3) costs about $2; Haiku is priced at about 1/20 of Sonnet.

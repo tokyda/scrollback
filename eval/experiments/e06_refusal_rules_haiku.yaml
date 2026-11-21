@@ -1,0 +1,20 @@
+# E6 on Haiku (DESIGN §7.5): E2b + caveat, refusal and "unknown isn't zero" rules, plus the
+# cannot_answer doc in the knowledge index. Built on e02b_lookup_rule_haiku (E3 skipped, E5
+# moved to stretch; owner decision 2026-11-22). Two parts, one step, as the ladder defines E6:
+# - prompt system_v3.md = system_v2.md + three rules (a test checks that this is the only
+#   difference);
+# - kb_sources adds cannot_answer.
+name: e06_refusal_rules_haiku
+description: "E6 on Haiku: E2b + caveat/refusal/unknown-isn't-zero rules and the cannot_answer doc"
+overrides:
+  llm:
+    model: claude-haiku-5-5
+    effort: medium
+  agent:
+    prompt_version: "3"
+    result_mode: aggregate_only
+    describe_include_descriptions: true
+    search_knowledge: true
+    kb_sources: [metrics, docs, tables, cannot_answer]
+    sql_max_retries: 2
+    max_steps: 8

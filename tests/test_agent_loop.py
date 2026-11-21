@@ -568,6 +568,23 @@ def test_prompt_v2_is_v1_search_plus_one_rule() -> None:
     assert v2.replace(rule, "", 1) == v1s
 
 
+def test_prompt_v3_is_v2_plus_three_rules() -> None:
+    from scrollback.agent.loop import PROMPTS_DIR
+
+    v2 = (PROMPTS_DIR / "system_v2.md").read_text()
+    v3 = (PROMPTS_DIR / "system_v3.md").read_text()
+    rules = (
+        "- If a number is an estimate, say so in the answer and give the reason in a few words.\n"
+        "- If the data can't answer the question, say so in the first sentence and name what's "
+        "missing.\n  Don't guess. You may then give a related number the data does have, labelled"
+        " as such.\n"
+        "- A day or period with no rows is unknown, not zero, if it falls outside the dates the "
+        "data\n  covers. Check the data's first and last dates; if the period is outside them, "
+        "say the data\n  doesn't cover it instead of reporting 0.\n"
+    )
+    assert v3 == v2 + rules  # appended to the Rules list, nothing else changed
+
+
 def test_search_knowledge_tool_in_the_loop(agent_settings: Settings) -> None:
     settings = search_settings(agent_settings)
     turns = [

@@ -386,6 +386,8 @@ Implemented in `src/scrollback/agent/sql_guard.py`. Every rejection has a stable
 
 **`system_v1.md` (E0) is deliberately minimal:** role, the four tools, the mart table names (no descriptions), "base every number on a run_sql result and cite its result_ids", the `aggregate_only` rule when it's on, relative dates resolved against the supplied today with Monday–Sunday weeks and the range stated in `assumptions`, ambiguity handling, "fix failing queries", and "lead with the number". It contains **no** metric definitions, glossary content, estimate caveats or refusal rules; those are what E1–E6 add and measure. The full target rule set is below.
 
+**`system_v2.md` (E2b)** = `system_v1_search.md` + the lookup rule. **`system_v3.md` (E6)** = v2 + three rules, appended to its Rules list: say when a number is an estimate and why in a few words; if the data can't answer, say so in the first sentence and name what's missing (no guessing; a related number the data has may follow, labelled); a day or period with no rows outside the data's first and last dates is unknown, not zero. Tests check each version is exactly its parent plus its rules.
+
 - Always resolve metric definitions through `search_knowledge` before computing anything.
 - Prefer `query_metric`, and fall back to `run_sql` for anything it can't express.
 - Resolve relative dates ("last week") against the supplied `today` and timezone. State the resolved range in `assumptions`. Weeks run Monday to Sunday.
