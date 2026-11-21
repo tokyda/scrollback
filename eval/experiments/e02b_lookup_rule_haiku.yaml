@@ -1,0 +1,19 @@
+# E2b on Haiku (DESIGN §7.5): E2a + the lookup rule.
+# One change from e02a_search_haiku: prompt system_v2.md, which is system_v1_search.md plus one
+# rule ("Before computing any metric, look up its definition with search_knowledge and compute
+# it as defined."). Same tool, sources, k and retrieval as E2a, except the 2026-11-21 index
+# change (a glossary section's keywords are its heading only; 4af80ab), disclosed in the report.
+name: e02b_lookup_rule_haiku
+description: "E2b on Haiku: E2a + the rule to look up a metric's definition before computing it"
+overrides:
+  llm:
+    model: claude-haiku-5-5
+    effort: medium
+  agent:
+    prompt_version: "2"
+    result_mode: aggregate_only
+    describe_include_descriptions: true
+    search_knowledge: true
+    kb_sources: [metrics, docs, tables]
+    sql_max_retries: 2
+    max_steps: 8

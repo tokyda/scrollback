@@ -116,6 +116,12 @@ The scoring false negatives found in review are listed in the label files.
      question; offline recall@6 79.3%, in-run recall 87.6%. Owner-confirmed failures: q072 r1/r3
      (`failed_refusal`, "0 minutes"), q080 r1 (`wrong_time_window`). q072 r2 was a scoring
      false negative, fixed by widening the no-data phrase ("No TikTok views are recorded").
+   - Retrieval (2026-11-21): a glossary section's keywords are its heading only (`4af80ab`):
+     recall@6 unchanged at 79.3%. The crowding section ("sessions that cross midnight") is
+     lifted mainly by the year in its example dates; a "numbers aren't keyword tokens" rule
+     (81.6%, 3 trap gains, no losses) was measured but not applied, pending the owner.
+   - **E2b is built** (`eval/experiments/e02b_lookup_rule_haiku.yaml`, `system_v2.md` =
+     v1_search + one rule; estimate $0.23 for dev x3), waiting for the owner's OK.
    - Glossary edit committed before E2 (`2fa833a`, sessions.md: span vs session length);
      disclose it in the E2a report. `metrics.yml` and the docs predate the eval questions.
    - Owner decisions 2026-11-21: the cell and group-share scorer rules (`94914c9`) accepted;

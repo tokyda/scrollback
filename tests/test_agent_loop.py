@@ -556,6 +556,18 @@ def test_prompt_v1_search_is_v1_plus_one_tool_line() -> None:
     assert added[0].startswith("- search_knowledge(query):")
 
 
+def test_prompt_v2_is_v1_search_plus_one_rule() -> None:
+    from scrollback.agent.loop import PROMPTS_DIR
+
+    v1s = (PROMPTS_DIR / "system_v1_search.md").read_text()
+    v2 = (PROMPTS_DIR / "system_v2.md").read_text()
+    rule = (
+        "- Before computing any metric, look up its definition with search_knowledge and "
+        "compute it as\n  defined.\n"
+    )
+    assert v2.replace(rule, "", 1) == v1s
+
+
 def test_search_knowledge_tool_in_the_loop(agent_settings: Settings) -> None:
     settings = search_settings(agent_settings)
     turns = [
