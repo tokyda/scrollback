@@ -63,7 +63,7 @@ Build scope by phase. Each phase ends with a "Done when" check. See `docs/DESIGN
 
 ## Phase 5: RAG and optimisation ladder
 - [ ] Knowledge indexer: chunks `metrics.yml`, docs, `schema.yml` and examples → embeddings in DuckDB
-- [ ] `search_knowledge` with hybrid retrieval (embeddings + synonym/keyword match)
+- [x] `search_knowledge` with hybrid retrieval (embeddings + synonym/keyword match): fastembed bge-small + BM25, RRF; `kb index`, `kb search`
 - [ ] `knowledge/examples.yml` few-shot pairs + overlap check against the eval set
 - [x] SQL error self-correction (max 2 retries) *(already part of the E0 baseline, DESIGN §6.3)*
 - [ ] Semantic compiler `metrics.yml → SQL` + `query_metric` tool
@@ -74,7 +74,7 @@ Build scope by phase. Each phase ends with a "Done when" check. See `docs/DESIGN
 - [ ] Final: best Haiku config and Sonnet E1 on the test split
 - [x] *(added)* Scorer fixes from the Haiku review ("Sept", weekday date ranges, "est.", a no-data phrase, ratio and row-label cells, group shares) and q060's watch-time reading (§7.2)
 - [x] *(added)* Strong-caveat sub-score (estimate + reason; reported only, §7.2) and `eval report a b --split`
-- [ ] Retrieval eval: for each question, is the right metric or doc in the top k (recall@k)
+- [ ] Retrieval eval: for each question, is the right metric or doc in the top k (recall@k) *(built: `expected_knowledge`, `eval retrieval`, per-run `kb_recall`; waiting for the owner's review of 15 samples before it is run)*
 - [ ] README results table: accuracy, bad-case mix, tokens and latency per experiment
 
 **Done when:** for Haiku, the best Haiku config beats E1-haiku beyond repeat variance on dev and is within ~2 points of Sonnet E1, with cost per question side by side; for Sonnet, the best config's mean dev pass rate is above E0's best dev repeat and its worst dev repeat is at least E0's dev mean; the dev session-length cluster (q023, q042, q084, q087) passes at least 10 of 12 runs; the final test pass rate is at least E0's 96.9%; tokens per question are reported; and every gain is linked to a run report (DESIGN §7.5).

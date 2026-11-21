@@ -106,6 +106,13 @@ The scoring false negatives found in review are listed in the label files.
 3. **Next: E2a → E6 on Haiku** (owner decision 2026-11-21, although E1-haiku is above ~93%),
    one config change each, cumulative; accuracy first, plus tokens, steps and recall@k. Cost
    estimate and the owner's OK before each run; stop for review after each.
+   - **E2a is built** (`eval/experiments/e02a_search_haiku.yaml`; estimate $0.21 for dev x3),
+     waiting for the owner's OK. It also waits for the owner's review of 15 `expected_knowledge`
+     samples before `eval retrieval` is run.
+   - Glossary edit committed before E2 (`2fa833a`, sessions.md: span vs session length);
+     disclose it in the E2a report. `metrics.yml` and the docs predate the eval questions.
+   - Open for the owner: Haiku done-when part 1 (E1-haiku has a 100% repeat); the cell and
+     group-share scorer rules (`94914c9`); labels for the superseded first E0 run's q060 r1/r3.
    - Knowledge indexer: fastembed, `bge-small-en-v1.5`, in a separate git-ignored DuckDB
      file; `{param}` placeholders are filled at retrieval time from the run's settings.
    - **E2a** = `search_knowledge` only, prompt `system_v1_search.md` (v1 + one tool line, no
@@ -151,6 +158,11 @@ uv run scrollback eval run --config eval/experiments/e00_baseline.yaml [--split 
 uv run scrollback eval run ... --yes                 # actually runs (E0 96x3 ~ $2.80)
 uv run scrollback eval rescore eval/runs/<run>       # re-score saved answers, no API calls
 uv run scrollback eval report eval/runs/<run> [eval/runs/<other> --split dev]
+uv run scrollback eval retrieval [--k 6] [--split dev] [--experiment <exp.yaml>] [--misses]  # offline recall@k
+
+# knowledge base (Phase 5): index rebuilds itself when knowledge files or the model change
+uv run scrollback kb index [--rebuild]
+uv run scrollback kb search "screen time" [--k 6] [--text]
 ```
 
 Never run `dbt` directly: `dbt_project.yml` has no var defaults on purpose, and
@@ -163,9 +175,9 @@ them; `tests/test_ingest_e2e.py` and CI fail if they drift.
 ## Code map (built so far)
 
 - `src/scrollback/config.py`: settings loader.
-- `src/scrollback/cli.py`: Typer app; `ingest`, `synth`, `build`, `inspect gaps`, `ask` and `eval`
-  (`check-gold`, `run`, `rescore`, `report`) are real; `kb`, `serve`, `alerts`, `digest`, `enrich`
-  and `eval import-feedback` are stubs.
+- `src/scrollback/cli.py`: Typer app; `ingest`, `synth`, `build`, `inspect gaps`, `ask`, `eval`
+  (`check-gold`, `run`, `rescore`, `report`, `retrieval`) and `kb` (`index`, `search`) are real;
+  `serve`, `alerts`, `digest`, `enrich` and `eval import-feedback` are stubs.
 - `src/scrollback/ingest/detect.py`: declarative format variants; `UnknownExportFormatError`.
 - `src/scrollback/ingest/parse.py`: pydantic validation, video ID extraction, `record_hash`.
 - `src/scrollback/ingest/load.py`: reads json/zip, idempotent load, `ingest_log`.
@@ -177,15 +189,23 @@ them; `tests/test_ingest_e2e.py` and CI fail if they drift.
 - `dbt/`: staging (`stg_*`), intermediate (`int_view_gaps`, `int_sessions`), marts (`fct_*`,
   `dim_date`, `agg_daily`), generic test `accepted_range`, singular tests in `dbt/tests/`.
 - `knowledge/metrics.yml`: metric definitions; `knowledge/docs/`: glossary docs.
+- `src/scrollback/kb/`: `chunks.py` (metric, glossary-section, table and example chunks;
+  sources per `agent.kb_sources`), `index.py` (fastembed bge-small in `data/kb/knowledge.duckdb`,
+  hash-checked; `hashing` embedder for tests), `retrieve.py` (cosine + BM25, RRF; `{param}`
+  filled at retrieval).
 - `src/scrollback/agent/llm.py`: `LLMClient` protocol, `AnthropicLLMClient`, `ScriptedLLMClient`
   (+ `mock_turn`), `create_llm_client` (tests monkeypatch it).
 - `src/scrollback/agent/sql_guard.py`: sqlglot guard with stable rule codes.
-- `src/scrollback/agent/tools.py`: describe_table, run_sql, make_chart, final_answer + schemas.
-- `src/scrollback/agent/loop.py`: `run_agent()`; prompts in `agent/prompts/system_v{N}.md`.
+- `src/scrollback/agent/tools.py`: describe_table, run_sql, make_chart, final_answer, and
+  search_knowledge when `agent.search_knowledge` is on.
+- `src/scrollback/agent/loop.py`: `run_agent()`; prompts in `agent/prompts/system_v{version}.md`
+  (`prompt_version` is text: "1", "1_search"); a prompt/tool mismatch fails to load; traces
+  record `system_prompt_sha256`.
 - `src/scrollback/agent/pricing.py`: dated per-model prices; `tracing.py`: JSONL + `agent_traces`.
 - `src/scrollback/evals/`: `questions.py` (schema), `warehouses.py` (per-anchor warehouses),
   `gold.py` (gold + snapshot), `score.py` (deterministic scoring), `labels.py`, `run.py`
-  (runner, rescore), `report.py`. Data in `eval/` (questions, experiments, labels, reports).
+  (runner, rescore; per-run `kb_recall`), `report.py`, `retrieval.py` (offline recall@k over
+  `expected_knowledge`). Data in `eval/` (questions, experiments, labels, reports).
 
 ## Eval conventions
 
