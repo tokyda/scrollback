@@ -568,9 +568,45 @@ def eval_retrieval(
 
 
 @eval_app.command("import-feedback")
-def eval_import_feedback() -> None:
-    """Turn bad bot feedback into candidate eval questions."""
-    _not_implemented("eval import-feedback", "Phase 6")
+def eval_import_feedback(
+    out: Annotated[
+        Path | None,
+        typer.Option(help="Candidates file (default: eval/candidates/feedback.yaml, git-ignored)."),
+    ] = None,
+    traces_dir: Annotated[
+        Path | None, typer.Option(help="Traces folder (default: paths.traces_dir).")
+    ] = None,
+    config: ConfigOption = None,
+) -> None:
+    """Turn bad bot feedback into candidate eval questions for review.
+
+    Writes to a git-ignored review file, never to eval/questions.yaml. Prints counts only."""
+    from scrollback.evals.feedback_import import DEFAULT_CANDIDATES_PATH, import_feedback
+    from scrollback.evals.questions import load_questions
+
+    settings = _settings(config)
+    try:
+        summary = import_feedback(
+            traces_dir or settings.paths.traces_dir,
+            out or DEFAULT_CANDIDATES_PATH,
+            load_questions(),
+        )
+    except ValueError as exc:
+        typer.echo(f"Cannot import: {exc}", err=True)
+        raise typer.Exit(1) from None
+    typer.echo(
+        f"{summary.feedback} feedback lines; {summary.bad} answers rated bad (latest rating). "
+        f"Added {summary.added} candidates, {summary.already_in_file} already in the file."
+    )
+    if summary.missing_traces:
+        typer.echo(f"{summary.missing_traces} bad ratings have no trace yet; not added.")
+    if summary.matches_eval_set:
+        typer.echo(f"{summary.matches_eval_set} new candidates ask a question already in the set.")
+    if summary.now_good:
+        typer.echo(f"{summary.now_good} candidates in the file are now rated good; review them.")
+    typer.echo(
+        f"Review: {summary.path} (git-ignored; copy accepted ones to questions.yaml by hand)"
+    )
 
 
 @kb_app.command("index")

@@ -17,6 +17,9 @@ eval/runs/**
 !eval/runs/*/summary.json
 !eval/runs/.gitkeep
 
+# Candidate eval questions from bot feedback: real questions and answers (DESIGN §8)
+eval/candidates/
+
 # Charts produced at runtime
 charts/
 
