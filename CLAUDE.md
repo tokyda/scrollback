@@ -11,10 +11,10 @@ If you change a design decision, update `docs/DESIGN.md` in the same commit and 
 
 ## Current status (2026-11-22)
 
-**Phases.** Phases 0-5 are done and merged. The first real export is ingested (branch
-`real-data`): DESIGN §4.1 records every format assumption against it (it added variant
-`v3_likes_favorites`), UTC is confirmed, and the date spine now covers the watch-history window
-only (§4.4).
+**Phases.** Phases 0-5 are done and merged. The first real export was ingested and the
+parameters calibrated in PR #8 (merged): DESIGN §4.1 records every format assumption against it
+(it added variant `v3_likes_favorites`), UTC is confirmed, and the date spine now covers the
+watch-history window only (§4.4).
 
 **Real data (2026-11-22).** `config.yaml` points at `data/warehouse/real.duckdb` (git-ignored)
 with parameters tuned on the real export: gap 30 min, **cap 120 s** (calibrated against a week
@@ -24,14 +24,15 @@ pin timezone and metrics to `eval/questions.yaml` `params` (cap 180 s, last view
 synthetic warehouses and the gold never move when `config.yaml` is tuned. Never commit the
 owner's per-day Screen Time figures.
 
-**Next:** Phase 6 (Telegram bot).
+**Next: Phase 6, the Telegram bot** (ROADMAP).
 
 On real data the privacy rules below apply in full. Print counts and aggregates only, never
 records, and keep `AGENT_RESULT_MODE=aggregate_only`. Tests, evals and CI stay on synthetic
 data.
 
-**PRs.** Everything through Phase 5 is merged into `main`: #1 (Phases 0-1), #3 (Phase 2), #4
-(Phase 3), #5 (Phase 4) and #6 (Phase 5). #2 was superseded by #3.
+**PRs.** All merged into `main`: #1 (Phases 0-1), #3 (Phase 2), #4 (Phase 3), #5 (Phase 4),
+#6 (Phase 5), #7 (docs) and #8 (real export and calibration). #2 was superseded by #3. No PR is
+open.
 
 **Headline results** (96 questions, 64 dev / 32 held-out test, x 3 repeats, effort medium; the
 full table is in `README.md`, the final runs in `eval/reports/final_test.md`):
