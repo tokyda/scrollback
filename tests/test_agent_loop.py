@@ -391,7 +391,7 @@ def test_trace_written_with_tokens_and_cost(agent_settings: Settings) -> None:
     assert line["tokens"] == {"input": 3000, "output": 400, "cache_read": 6000, "cache_write": 800}
     expected_cost = 2 * (1500 * 2.00 + 200 * 10.00 + 3000 * 0.10 + 400 * 2.50) / 1e6
     assert line["cost_usd"] == pytest.approx(expected_cost)
-    assert line["prompt_version"] == 1 and line["model"] == "mock-model"
+    assert line["prompt_version"] == "1" and line["model"] == "mock-model"
     assert [t["name"] for t in line["tool_calls"]] == ["run_sql", "final_answer"]
     assert line["tool_calls"][0]["meta"]["executed"].endswith("LIMIT 200")
     assert line["final_answer"]["sql_used"]
@@ -406,6 +406,69 @@ def test_trace_written_with_tokens_and_cost(agent_settings: Settings) -> None:
     con.close()
     assert row is not None
     assert row[:4] == ("answered", 2, 2, 3000) and row[4] == pytest.approx(expected_cost)
+
+
+def test_trace_records_prompt_version_and_hash(agent_settings: Settings) -> None:
+    import hashlib
+
+    from scrollback.agent.loop import load_system_prompt
+
+    result, _ = run(agent_settings, [mock_turn(final("n/a", []))])
+    expected = hashlib.sha256(load_system_prompt(agent_settings).encode()).hexdigest()
+    assert result.trace.system_prompt_sha256 == expected
+    line = json.loads(result.trace_path.read_text().splitlines()[-1])
+    assert line["system_prompt_sha256"] == expected and line["prompt_version"] == "1"
+    con = duckdb.connect(str(agent_settings.paths.warehouse), read_only=True)
+    row = con.execute(
+        "SELECT prompt_version, system_prompt_sha256 FROM agent_traces WHERE trace_id = ?",
+        [result.trace.trace_id],
+    ).fetchone()
+    con.close()
+    assert row == ("1", expected)
+
+
+def test_agent_traces_from_before_phase_5_are_migrated(tmp_path: Any) -> None:
+    from scrollback.tracing import Trace, write_db
+
+    db = tmp_path / "old.duckdb"
+    con = duckdb.connect(str(db))
+    old_ddl = (
+        "CREATE TABLE agent_traces (trace_id VARCHAR PRIMARY KEY, started_at TIMESTAMP NOT NULL, "
+        "question VARCHAR NOT NULL, today DATE NOT NULL, local_tz VARCHAR NOT NULL, "
+        "model VARCHAR NOT NULL, models_served VARCHAR NOT NULL, "
+        "prompt_version INTEGER NOT NULL, status VARCHAR NOT NULL, steps INTEGER NOT NULL, "
+        "n_tool_calls INTEGER NOT NULL, n_tool_errors INTEGER NOT NULL, "
+        "input_tokens BIGINT NOT NULL, output_tokens BIGINT NOT NULL, "
+        "cache_read_tokens BIGINT NOT NULL, cache_write_tokens BIGINT NOT NULL, "
+        "cost_usd DOUBLE, latency_ms DOUBLE NOT NULL, final_answer JSON, llm_calls JSON NOT NULL, "
+        "tool_calls JSON NOT NULL, config JSON NOT NULL, error VARCHAR)"
+    )
+    con.execute(old_ddl)
+    con.execute(
+        "INSERT INTO agent_traces VALUES ('old', '2026-11-19 00:00:00', 'q', '2026-11-19', "
+        "'UTC', 'm', 'm', 1, 'answered', 1, 0, 0, 0, 0, 0, 0, NULL, 1.0, NULL, '[]', '[]', "
+        "'{}', NULL)"
+    )
+    con.close()
+    trace = Trace(trace_id="new", started_at="2026-11-21T00:00:00", question="q",
+                  today="2026-11-21", local_tz="UTC", model="m", prompt_version="1_search",
+                  config={}, system_prompt_sha256="abc")  # fmt: skip
+    write_db(trace, db)
+    con = duckdb.connect(str(db), read_only=True)
+    rows = con.execute(
+        "SELECT trace_id, prompt_version, system_prompt_sha256 FROM agent_traces ORDER BY 1"
+    ).fetchall()
+    con.close()
+    assert rows == [("new", "1_search", "abc"), ("old", "1", None)]
+
+
+def test_prompt_version_is_text() -> None:
+    from scrollback.config import AgentConfig
+
+    assert AgentConfig.model_validate({"prompt_version": 1}).prompt_version == "1"
+    assert AgentConfig.model_validate({"prompt_version": "1_search"}).prompt_version == "1_search"
+    with pytest.raises(ValueError):
+        AgentConfig.model_validate({"prompt_version": "../secrets"})
 
 
 def test_failed_runs_are_traced_too(agent_settings: Settings) -> None:

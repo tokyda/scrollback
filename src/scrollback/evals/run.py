@@ -33,7 +33,7 @@ import yaml
 from pydantic import BaseModel, ConfigDict, Field
 
 from scrollback.agent.llm import LLMClient
-from scrollback.agent.loop import config_snapshot, run_agent
+from scrollback.agent.loop import config_snapshot, load_system_prompt, prompt_sha256, run_agent
 from scrollback.agent.pricing import PRICES
 from scrollback.config import Settings
 from scrollback.evals.gold import QuestionGold, compute_golds
@@ -270,6 +270,7 @@ def run_eval(
         "run_id": run_id, "experiment": exp.model_dump(), "split": split, "repeat": repeat,
         "questions": [q.id for q in questions], "question_set_version": qset.version,
         "params": qset.params.model_dump(), "config": config_snapshot(settings),
+        "system_prompt_sha256": prompt_sha256(load_system_prompt(settings)),
         "git_commit": _git_commit(), "started_at": datetime.now(UTC).isoformat(),
     }, indent=1, default=str))  # fmt: skip
 

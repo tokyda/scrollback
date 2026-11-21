@@ -399,14 +399,15 @@ Every run writes one JSON line to `traces/` and a row to `agent_traces` in DuckD
 
 Implemented in `src/scrollback/tracing.py`:
 - **JSONL:** `traces/YYYY-MM-DD.jsonl`, one line per run, written for every status including failures.
-- **Each record:** `trace_id`, `today`, `local_tz`, the model requested and the models that served, `prompt_version`, and a snapshot of the non-secret config (llm, agent, metric params, timezones). Per LLM call: step, stop reason, input/output/cache-read/cache-write tokens, estimated cost, latency, text, tool names and request ID. Per tool call: input, duration, error code, a capped copy of the output, and metadata (the executed SQL, `result_id`, row count, chart path). Plus the final answer with `sql_used`, status and total latency.
+- **Each record:** `trace_id`, `today`, `local_tz`, the model requested and the models that served, `prompt_version`, `system_prompt_sha256` (the SHA-256 of the rendered system prompt), and a snapshot of the non-secret config (llm, agent, metric params, timezones). Per LLM call: step, stop reason, input/output/cache-read/cache-write tokens, estimated cost, latency, text, tool names and request ID. Per tool call: input, duration, error code, a capped copy of the output, and metadata (the executed SQL, `result_id`, row count, chart path). Plus the final answer with `sql_used`, status and total latency.
 - **Cost** is estimated from a dated per-model price table (`agent/pricing.py`) applied to each call's usage and serving model; an unknown model gives `null`, not a guess.
 - **Writing `agent_traces`:** the agent's read-only connection is closed before the row is written through a separate write connection. If the warehouse is locked, the JSONL line is still written and the CLI warns.
 - **Privacy:** traces contain aggregated query results and live only in git-ignored places. They never contain secrets; a test plants a fake key and checks both stores.
 - `agent_traces` isn't a mart, so the agent can't query it.
+- *(Changed in Phase 5: `prompt_version` became text and `system_prompt_sha256` was added. A table written before that is migrated in place on the next write: the column type changes to VARCHAR and old rows keep their version, with no hash.)*
 
 ### 6.7 Config and versioning
-- The prompt lives in `src/scrollback/agent/prompts/system_v{N}.md`, and the version is recorded in traces and eval runs.
+- The prompt lives in `src/scrollback/agent/prompts/system_v{version}.md`, and the version is recorded in traces and eval runs. **One prompt version is one exact text** (owner decision 2026-11-21): `agent.prompt_version` is a string (`"1"`, `"1_search"`, `"2"`, `"3"`), a published file is never edited, and every trace and eval run's `config.json` records `system_prompt_sha256` of the rendered prompt, so two runs with the same version can be checked for identical prompts.
 - Model, effort (default `medium`), max steps, retrieval k and tool on/off flags all come from `config.yaml` and env, so experiments are config diffs, not code diffs. *(Changed: there's no `temperature`. Current Claude models reject sampling parameters, and from API version 2026-10-21 every model does; `effort` controls depth and spend instead, and §7.4's `--repeat 3` covers run-to-run variance. A config that still sets `temperature` fails validation.)*
 - Default model: `claude-sonnet-5-5` at `medium` effort for the E0 baseline. Comparing with `claude-opus-5-5` is E7.
 

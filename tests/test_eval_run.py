@@ -184,9 +184,8 @@ def test_cli_compare_one_split(oracle_run: Path, tmp_path: Path) -> None:
 def test_experiment_settings() -> None:
     settings = experiment_settings(repo_settings(), E0, QSET)
     assert settings.llm.model == "claude-sonnet-5-5" and settings.llm.effort == "medium"
-    assert (
-        settings.agent.prompt_version == 1 and settings.agent.describe_include_descriptions is False
-    )
+    assert settings.agent.prompt_version == "1"
+    assert settings.agent.describe_include_descriptions is False
     assert settings.timezone.local_tz == "Asia/Singapore"
     bad = Experiment(name="x", description="x", overrides={"metrics": {"view_cap_sec": 1}})
     with pytest.raises(ValueError, match="may only override"):

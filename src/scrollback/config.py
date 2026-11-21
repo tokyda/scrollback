@@ -92,7 +92,9 @@ class LLMConfig(_Strict):
 class AgentConfig(_Strict):
     # aggregate_only: the SQL guard rejects row-level results (DESIGN §4.6, §6.3).
     result_mode: Literal["aggregate_only", "full"] = "aggregate_only"
-    prompt_version: int = Field(1, gt=0)
+    # One prompt version = one exact text: agent/prompts/system_v{prompt_version}.md
+    # ("1", "1_search", "2", ...). Traces record the SHA-256 of the rendered prompt.
+    prompt_version: str = Field("1", pattern=r"^[a-z0-9_]+$")
     max_steps: int = Field(8, gt=0)  # LLM calls per question
     sql_max_retries: int = Field(2, ge=0)  # consecutive failed run_sql calls allowed to retry
     max_result_rows: int = Field(200, gt=0)
@@ -102,6 +104,11 @@ class AgentConfig(_Strict):
     # E0 baseline switches (DESIGN §7.5): descriptions arrive in E1.
     describe_include_descriptions: bool = False
     describe_sample_rows: int = Field(3, ge=0)
+
+    @field_validator("prompt_version", mode="before")
+    @classmethod
+    def _version_as_text(cls, value: object) -> object:
+        return str(value) if isinstance(value, int) and not isinstance(value, bool) else value
 
 
 class Secrets(_Strict):

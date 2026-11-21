@@ -11,6 +11,7 @@ Only ``answered`` carries an answer; every other status ends without inventing a
 
 from __future__ import annotations
 
+import hashlib
 import time
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, date, datetime
@@ -65,6 +66,11 @@ def load_system_prompt(settings: Settings) -> str:
     )
 
 
+def prompt_sha256(system: str) -> str:
+    """SHA-256 of the rendered system prompt, recorded in every trace and eval run."""
+    return hashlib.sha256(system.encode("utf-8")).hexdigest()
+
+
 def local_today(settings: Settings) -> date:
     return datetime.now(ZoneInfo(settings.timezone.local_tz)).date()
 
@@ -112,6 +118,7 @@ def run_agent(
     )
     started = time.perf_counter()
     system = load_system_prompt(settings)
+    trace.system_prompt_sha256 = prompt_sha256(system)
     tools = tool_schemas(settings)
     messages: list[dict[str, Any]] = [
         {"role": "user", "content": user_message(question, today, tz, want_chart)}
