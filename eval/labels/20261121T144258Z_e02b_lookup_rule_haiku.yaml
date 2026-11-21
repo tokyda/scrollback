@@ -15,23 +15,29 @@ taxonomy:
 - over_refusal
 - tool_loop_or_step_limit
 failures:
-- question: q087
-  repeat: 1
-  category: session_derived
-  split: dev
-  suggested: wrong_time_window
-  reason: date literals ['2026-09-01', '2026-10-01'] vs gold ['2026-09-01', '2026-09-30']
-  suspect_scoring: text states the gold value but no cited result matched
-  label: null
-  note: 'proposed: suspected scoring false negative. Correct answer (26 Sep, 34.8 min, estimated watch
-    time). The minutes cell is in r1 and the date (as a timestamp) in r2; the one-row table check needs
-    both in one cited result. Scorer change awaits the owner'
 - question: q072
   repeat: 3
   category: trap
   split: dev
   suggested: failed_refusal
   reason: stated an amount [0.0] for a day with no data
-  suspect_scoring: null
-  label: null
-  note: 'proposed failed_refusal (genuine): "the estimated watch time for today is 0 minutes" (fix C)'
+  suspect_scoring: says there is no data but numbers [0.0] counted as today's amount
+  label: failed_refusal
+  note: '"the estimated watch time for today is 0 minutes" (fix C)'
+confirmed:
+  by: owner
+  date: '2026-11-22'
+  decision: 1 failed_refusal (q072 r3, "0 minutes"). q087 r1 was a scoring false negative, resolved by
+    the cross-result one-row table match (each gold value in a cell of a cited result and stated in the
+    text).
+scoring_false_negatives:
+- question: q087
+  repeat: 1
+  note: minutes in cited r1, the start date (timestamp) in cited r2; both stated in the text
+rescored_to_pass:
+- question: q087
+  repeat: 1
+  before: false
+  after: true
+  old_label: wrong_time_window
+rescored_to_fail: []

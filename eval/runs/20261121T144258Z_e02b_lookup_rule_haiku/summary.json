@@ -4,12 +4,12 @@
  "n_runs": 192,
  "accuracy": {
   "overall": {
-   "mean": 0.9895833333333334,
+   "mean": 0.9947916666666666,
    "min": 0.984375,
    "max": 1.0
   },
   "dev": {
-   "mean": 0.9895833333333334,
+   "mean": 0.9947916666666666,
    "min": 0.984375,
    "max": 1.0
   },
@@ -50,8 +50,8 @@
     "max": 1.0
    },
    "session_derived": {
-    "mean": 0.9583333333333334,
-    "min": 0.875,
+    "mean": 1.0,
+    "min": 1.0,
     "max": 1.0
    },
    "multi_step": {
@@ -77,11 +77,11 @@
   }
  },
  "sub_scores": {
-  "execution": 0.9941520467836257,
+  "execution": 1.0,
   "answer": 1.0,
   "metric_selection": 0.6783625730994152,
   "refusal_correct": 1.0,
-  "caveat_on_traps": 0.9444444444444444,
+  "caveat_on_traps": 1.0,
   "caveat_on_estimate_questions": 0.9166666666666666,
   "strong_caveat_on_traps": 0.6666666666666666,
   "strong_caveat_on_estimate_questions": 0.3333333333333333,
@@ -103,7 +103,6 @@
   "answered": 192
  },
  "labels_suggested": {
-  "wrong_time_window": 1,
   "failed_refusal": 1
  },
  "suspect_scoring": 1,
@@ -165,7 +164,7 @@
   "q082": "3/3",
   "q084": "3/3",
   "q085": "3/3",
-  "q087": "2/3",
+  "q087": "3/3",
   "q088": "3/3",
   "q089": "3/3",
   "q090": "3/3",
@@ -174,8 +173,8 @@
   "q095": "3/3"
  },
  "flaky": [
-  "q072",
-  "q087"
+  "q072"
  ],
- "run_id": "20261121T144258Z_e02b_lookup_rule_haiku"
+ "run_id": "20261121T144258Z_e02b_lookup_rule_haiku",
+ "rescored_at": "2026-11-21T16:50:04+00:00"
 }

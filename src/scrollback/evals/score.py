@@ -78,9 +78,10 @@ ESTIMATE_REASON_RE = re.compile(
     re.IGNORECASE,
 )
 COVERAGE_RE = re.compile(
-    r"\b(?:no data|no views? (?:recorded|yet|for)|not (?:yet )?(?:in the|available|included|"
-    r"covered)|(?:data|history|export|records?) (?:only )?(?:starts?|begins?|covers?|ends?|"
-    r"runs?|goes back)|only (?:covers?|goes back|starts?|from|since)|partial|incomplete|"
+    r"\b(?:no data|no (?:[a-z]+ )?views? (?:recorded|yet|for)|"
+    r"not (?:yet )?(?:in the|available|included|covered)|"
+    r"(?:data|history|export|records?) (?:only )?(?:starts?|begins?|covers?|ends?|runs?|"
+    r"goes back)|only (?:covers?|goes back|starts?|from|since)|partial|incomplete|"
     r"latest (?:data|date|record|day)|most recent (?:data|day|date)|up to yesterday|"
     r"through yesterday|before (?:the )?(?:history|data|export)|earliest|first (?:day|date) "
     r"(?:of|in) (?:the )?(?:data|history)|hasn'?t been (?:exported|loaded|recorded)|"
@@ -90,7 +91,7 @@ COVERAGE_RE = re.compile(
 NO_DATA_RE = re.compile(
     r"\b(?:no data|no (?:[a-z]+ )?(?:watch(?:ing)? )?(?:time|minutes|activity|views?|data) "
     r"(?:is |are |was |were |has been |have been )?(?:recorded|logged)|"
-    r"no (?:views?|records?|activity|watch(?:ing)? history) (?:recorded |yet |"
+    r"no (?:[a-z]+ )?(?:views?|records?|activity|watch(?:ing)? history) (?:recorded |yet |"
     r"for|logged|on)|no (?:watch )?(?:events?|views?|data|records?|activity) (?:for|on|today|"
     r"recorded|yet|logged)|(?:data|history|export) (?:ends?|stops?|finishes) (?:on|at)|"
     r"not (?:yet )?(?:in the (?:data|export|history)|available|included|"
@@ -412,6 +413,18 @@ def _long_format_match(q: Question, gold: GoldAnswer, result: ResultTable) -> bo
             return False
         used.add(hit)
     return True
+
+
+def cross_result_match(q: Question, gold: GoldAnswer, cited: list[ResultTable]) -> bool:
+    """A one-row table gold whose values are each in their own cell, spread over the cited
+    results of one run (minutes from one query, the date from another). Owner decision
+    2026-11-22 (E2b q087 r1): it counts only when the answer text also states every gold
+    value, which the caller checks, so a value that merely sits in some cited result can't
+    pass on its own."""
+    if q.answer_type != "table" or len(gold.rows) != 1 or len(cited) < 2:
+        return False
+    merged = ResultTable(columns=["_"], rows=[row for r in cited for row in r.rows])
+    return _long_format_match(q, gold, merged)
 
 
 DERIVE_MAX_ROWS = 100
@@ -964,9 +977,6 @@ def score(q: Question, gold: QuestionGold, out: AgentOutput) -> Score:
     reading_idx: int | None = None
     exec_reading: int | None = None
     for idx, g in enumerate(readings):
-        strict_ok = any(table_match(q, g, r) for r in cited)
-        execution_strict = execution_strict or strict_ok
-        exec_ok = strict_ok or any(derived_match(q, g, r, text_nums, ranges) for r in cited)
         values = [g.scalar] if q.answer_type == "scalar" else [v for row in g.rows for v in row]
         units = (
             [q.units[0]]
@@ -975,6 +985,11 @@ def score(q: Question, gold: QuestionGold, out: AgentOutput) -> Score:
         )
         text_ok = all(text_states(text, v, u, q.tolerance)
                       for v, u in zip(values, units, strict=True))  # fmt: skip
+        strict_ok = any(table_match(q, g, r) for r in cited) or (
+            text_ok and cross_result_match(q, g, cited)
+        )
+        execution_strict = execution_strict or strict_ok
+        exec_ok = strict_ok or any(derived_match(q, g, r, text_nums, ranges) for r in cited)
         if exec_ok and exec_reading is None:
             exec_reading = idx
         if exec_ok and text_ok:

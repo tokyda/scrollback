@@ -22,8 +22,8 @@ failures:
   suggested: failed_refusal
   reason: stated an amount [0.0] for a day with no data
   suspect_scoring: says there is no data but numbers [0.0] counted as today's amount
-  label: null
-  note: 'proposed failed_refusal (genuine): leads with "0 minutes"; unknown is not zero (fix C)'
+  label: failed_refusal
+  note: leads with "0 minutes"; unknown is not zero (fix C)
 - question: q052
   repeat: 2
   category: multi_step
@@ -31,9 +31,9 @@ failures:
   suggested: wrong_time_window
   reason: date literals ['2026-09-28', '2026-11-02'] vs gold ['2026-09-28', '2026-10-05', '2026-10-26']
   suspect_scoring: text states the gold value but no cited result matched
-  label: null
-  note: 'proposed aggregation_error (genuine): rounded weekly totals in SQL, then subtracted: 590.8 -
-    177.0 = 413.8 vs gold 413.858, tolerance 0.05 (as E1-haiku q052 r3)'
+  label: aggregation_error
+  note: 'rounded weekly totals in SQL, then subtracted: 590.8 - 177.0 = 413.8 vs gold 413.858, tolerance
+    0.05 (as E1-haiku q052 r3)'
 - question: q072
   repeat: 2
   category: trap
@@ -41,6 +41,12 @@ failures:
   suggested: failed_refusal
   reason: stated an amount [0.0, 0.0] for a day with no data
   suspect_scoring: says there is no data but numbers [0.0, 0.0] counted as today's amount
-  label: null
-  note: 'proposed failed_refusal (genuine): leads with "Zero ... the estimated watch time is 0 minutes"
-    (fix C)'
+  label: failed_refusal
+  note: leads with "Zero ... the estimated watch time is 0 minutes" (fix C)
+confirmed:
+  by: owner
+  date: '2026-11-22'
+  decision: 2 failed_refusal (q072 r1/r2, "0 minutes" / "Zero"), 1 aggregation_error (q052 r2, rounded
+    in SQL before subtracting).
+rescored_to_pass: []
+rescored_to_fail: []

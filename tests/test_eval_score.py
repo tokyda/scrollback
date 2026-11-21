@@ -496,6 +496,54 @@ def test_no_tiktok_views_are_recorded_is_a_no_data_statement() -> None:
     assert not run("q072", zero).passed
 
 
+def test_no_tiktok_views_for_today_says_no_data() -> None:
+    # E2b q072 r3: "no TikTok views for today" is a no-data statement (and so the caveat), but
+    # the run still fails because it then gives today 0 minutes (fix C).
+    text = (
+        "The export has no TikTok views for today (2026-11-20), so the estimated watch time for "
+        "today is 0 minutes. The latest view in the data is 2026-11-19 at 19:46 local time. The "
+        "export may simply not include today yet. For reference, yesterday (2026-11-19) was "
+        "about 103 minutes (102.7) across 167 views.\n\nThis is an estimate. The export has no "
+        "durations, so watch time is inferred from gaps between views."
+    )
+    rows = [["2026-11-18", 36, 22.5], ["2026-11-19", 167, 102.7]]
+    cols = ["local_date", "views", "est_watch_minutes"]
+    s = run("q072", text, rows, cols)
+    assert s.caveat and not s.passed and s.fabricated == [0.0]
+    without_zero = text.replace(", so the estimated watch time for today is 0 minutes", "")
+    assert run("q072", without_zero, rows, cols).passed
+
+
+Q087_E2B_R1 = (
+    "Your longest session in September 2026 started on Saturday 26 September 2026 at 22:13 "
+    "(local time) and lasted about 34.8 minutes (estimated watch time)."
+)
+
+
+def _q087_two_results(text: str, cite: list[str]) -> Score:
+    results = {
+        "r1": ResultTable(["longest_session_min", "sessions_in_sep"], [[34.783333, 96]]),
+        "r2": ResultTable(["start_of_longest", "min_start"],
+                          [["2026-09-26T22:13:21", "2026-09-26T22:13:21"]]),
+    }  # fmt: skip
+    out = AgentOutput(status="answered", text=text, result_ids=cite, assumptions=["Sep 2026"],
+                      results=results)  # fmt: skip
+    return score(QSET.get("q087"), gold("q087"), out)
+
+
+def test_one_row_gold_across_cited_results() -> None:
+    # E2b q087 r1: the minutes are in r1 and the date (as a timestamp) in r2.
+    s = _q087_two_results(Q087_E2B_R1, ["r1", "r2"])
+    assert s.passed and s.execution_strict
+    # Safeguard (owner, 2026-11-22): every gold value must also be stated in the text.
+    no_date = "Your longest session in September 2026 lasted about 34.8 minutes."
+    s = _q087_two_results(no_date, ["r1", "r2"])
+    assert not s.passed and not s.execution
+    # Only cited results count: the date in an uncited r2 doesn't help.
+    s = _q087_two_results(Q087_E2B_R1, ["r1"])
+    assert not s.passed and not s.execution
+
+
 def test_sept_is_a_date() -> None:
     # E1-haiku q087 r1: "26 Sept" for 2026-09-26.
     text = (

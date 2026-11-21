@@ -49,7 +49,7 @@ failures:
   split: dev
   suggested: failed_refusal
   reason: stated an amount [0.0] for a day with no data
-  suspect_scoring: null
+  suspect_scoring: says there is no data but numbers [0.0] counted as today's amount
   label: failed_refusal
   note: 'Leads with ''0 minutes'' for today: unknown is not zero.'
 confirmed:
