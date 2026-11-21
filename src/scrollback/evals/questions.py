@@ -6,6 +6,7 @@ The file pins its own parameters (``params:``) so gold answers never drift when
 
 from __future__ import annotations
 
+import re
 from collections import Counter
 from datetime import date
 from pathlib import Path
@@ -39,6 +40,17 @@ Label = Literal[
 ]  # fmt: skip
 LABELS: tuple[str, ...] = Label.__args__  # type: ignore[attr-defined]
 MIN_PER_CATEGORY = 6
+WEEKDAYS = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
+# A text wrong value is a wrong weekday label for a date: "2026-11-14 Friday" (Phase 6, q097).
+WRONG_LABEL_RE = re.compile(rf"^(\d{{4}}-\d{{2}}-\d{{2}}) ({'|'.join(WEEKDAYS)})$")
+
+
+def parse_wrong_label(value: str) -> tuple[date, str]:
+    """``"2026-11-14 Friday"`` -> (date, "Friday"); ValueError if malformed."""
+    m = WRONG_LABEL_RE.match(value)
+    if not m:
+        raise ValueError(f"a text wrong_value is '<YYYY-MM-DD> <Weekday>', got {value!r}")
+    return date.fromisoformat(m.group(1)), m.group(2)
 
 
 class _Strict(BaseModel):
@@ -70,7 +82,9 @@ class Question(_Strict):
     # definitions, not from retrieval output.
     expected_knowledge: list[str] = Field(default_factory=list)
     requires_caveat: bool = False
-    wrong_values: list[float] = Field(default_factory=list)  # wrong-definition numbers
+    # Numbers that only come from a wrong definition, or wrong weekday labels for a date
+    # ("2026-11-14 Friday"): stating one before the right value fails the answer.
+    wrong_values: list[float | str] = Field(default_factory=list)
     likely_failure: Label | None = None  # hint for label suggestion
     expect_empty: bool = False
 
@@ -91,6 +105,13 @@ class Question(_Strict):
             raise ValueError(f"{self.id}: trap questions require a caveat")
         if self.answer_type == "scalar" and len(self.units) != 1:
             raise ValueError(f"{self.id}: a scalar has exactly one unit")
+        for wrong in self.wrong_values:
+            if isinstance(wrong, str):
+                day, name = parse_wrong_label(wrong)
+                if day.strftime("%A") == name:
+                    raise ValueError(f"{self.id}: wrong_value {wrong!r} is the right weekday")
+                if "dow" not in self.units or "date" not in self.units:
+                    raise ValueError(f"{self.id}: weekday wrong_values need date and dow units")
         return self
 
 

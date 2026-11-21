@@ -53,6 +53,10 @@ data.
 #6 (Phase 5), #7 (docs) and #8 (real export and calibration). #2 was superseded by #3. No PR is
 open.
 
+**Eval set:** 97 questions since 2026-11-22. q097 (dev, weekday labels) came from bot feedback and
+has text `wrong_values` like `"2026-11-14 Friday"` (DESIGN §7.1, §7.2). No eval has run with it;
+all results below are on the 96-question set.
+
 **Headline results** (96 questions, 64 dev / 32 held-out test, x 3 repeats, effort medium; the
 full table is in `README.md`, the final runs in `eval/reports/final_test.md`):
 

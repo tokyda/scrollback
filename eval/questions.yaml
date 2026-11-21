@@ -1622,3 +1622,41 @@ questions:
     tests: LIVE streams are not in the watch history; no proxy
     answer_type: refusal
     expected_knowledge: [doc:cannot_answer#not-in-the-data-at-all, doc:cannot_answer#how-to-answer]
+
+  # ------------------------------------------------------------------------- round 3
+  # Added 2026-11-22 from bot feedback (Phase 6): the bot's /week answer on real data
+  # labelled all seven days one weekday off. Not in any reported run (README, final_test).
+  - id: q097
+    question: What was my watch time on each of the last 7 days in my data? Give the weekday for each day.
+    category: time_window
+    difficulty: medium
+    split: dev
+    today: 2026-11-20
+    tests: per-day watch time over the data's last 7 days, each day labelled with its right weekday
+    answer_type: table
+    gold_sql: |
+      SELECT a.local_date, d.dow_name, a.est_watch_min
+      FROM agg_daily a JOIN dim_date d USING (local_date)
+      WHERE a.local_date > (SELECT max(local_date) FROM fct_views) - 7
+      ORDER BY a.local_date
+    units: [date, dow, minutes]
+    tolerance: 0.05
+    expected_metrics: [est_watch_minutes]
+    expected_knowledge: [metric:est_watch_minutes, table:dim_date]
+    # off-by-one weekday labels, both directions (the bot's /week said Fri for Sat 14 Nov)
+    wrong_values:
+      - "2026-11-13 Thursday"
+      - "2026-11-13 Saturday"
+      - "2026-11-14 Friday"
+      - "2026-11-14 Sunday"
+      - "2026-11-15 Saturday"
+      - "2026-11-15 Monday"
+      - "2026-11-16 Sunday"
+      - "2026-11-16 Tuesday"
+      - "2026-11-17 Monday"
+      - "2026-11-17 Wednesday"
+      - "2026-11-18 Tuesday"
+      - "2026-11-18 Thursday"
+      - "2026-11-19 Wednesday"
+      - "2026-11-19 Friday"
+    likely_failure: answer_misreport

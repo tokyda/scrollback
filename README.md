@@ -14,6 +14,9 @@ the spec and [docs/ROADMAP.md](docs/ROADMAP.md) for progress.
 Every config is one change from the row above it. Dev was used to iterate; test ran only for
 the E0 baseline and the two final configs. All data is synthetic.
 
+A 97th question (q097, dev, weekday labelling) was added on 2026-11-22 from bot feedback. It is
+not in any run in this table.
+
 | Config | Model | Change | Dev pass rate | Test pass rate | Cost / question | Tokens / question | Latency |
 |---|---|---|---|---|---|---|---|
 | E-1 | Sonnet 5.5 | E0, but only the staging views (no marts) | 51.0% (50.0–51.6) | 59.4% | $0.0097¹ | 7,341¹ | 7.0 s¹ |

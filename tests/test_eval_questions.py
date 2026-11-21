@@ -185,3 +185,25 @@ def test_expected_knowledge_ids_exist() -> None:
     for q in qset.questions:
         for m in q.expected_metrics:
             assert f"metric:{m}" in q.expected_knowledge, q.id
+
+
+def test_weekday_wrong_values_are_validated() -> None:
+    import pytest
+    from pydantic import ValidationError
+
+    from scrollback.evals.questions import Question
+
+    base = {
+        "id": "q999", "question": "x", "category": "time_window", "difficulty": "easy",
+        "split": "dev", "today": "2026-11-20", "tests": "x", "answer_type": "table",
+        "gold_sql": "SELECT 1", "units": ["date", "dow", "minutes"],
+    }  # fmt: skip
+    assert Question(**base, wrong_values=[1.5, "2026-11-14 Friday"]).wrong_values[1] == (
+        "2026-11-14 Friday"
+    )
+    with pytest.raises(ValidationError, match="right weekday"):
+        Question(**base, wrong_values=["2026-11-14 Saturday"])
+    with pytest.raises(ValidationError, match="YYYY-MM-DD"):
+        Question(**base, wrong_values=["Fri 14 Nov"])
+    with pytest.raises(ValidationError, match="date and dow units"):
+        Question(**{**base, "units": ["minutes"]}, wrong_values=["2026-11-14 Friday"])
