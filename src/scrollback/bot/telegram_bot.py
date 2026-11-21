@@ -54,6 +54,13 @@ FEEDBACK_USAGE = (
     "Usage: <code>/feedback good|bad [note]</code>. Reply to an answer to rate that one; "
     "otherwise it rates the last answer here."
 )
+BOT_COMMANDS = [
+    ("today", "Watch time on the most recent day in your data"),
+    ("week", "The last 7 days of data, by day, with a chart"),
+    ("metrics", "What each metric means"),
+    ("feedback", "good|bad [note]: rate an answer (reply to it) or the last one"),
+    ("help", "What I can do"),
+]
 SQL_CALLBACK = "sql:"
 SQL_CHARS = 3500  # leaves room for the HTML wrapper inside Telegram's 4096 limit
 TEXT_BUDGET = MESSAGE_LIMIT - 96
@@ -167,7 +174,14 @@ class ScrollbackBot:
         log.info("skipped messages sent while the bot was off")
         return int(pending[-1]["update_id"]) + 1
 
+    def register_commands(self) -> None:
+        try:
+            self.api.set_my_commands(BOT_COMMANDS)
+        except TelegramError as exc:  # the menu is a convenience; keep running
+            log.warning("setMyCommands failed: %s", exc)
+
     def run(self, *, max_polls: int | None = None) -> None:
+        self.register_commands()
         offset = self.skip_pending() if self.settings.bot.drop_pending_on_start else None
         polls, backoff = 0, 1.0
         while max_polls is None or polls < max_polls:
@@ -282,6 +296,7 @@ class ScrollbackBot:
         mid = self.api.send_message(
             chat_id, format_reply(result), reply_markup=markup, reply_to=reply_to
         )
+        self.messages.add(chat_id, reply_to, trace.trace_id)  # the question itself
         self.messages.add(chat_id, mid, trace.trace_id)
         if a is not None and a.chart_path and Path(a.chart_path).exists():
             pid = self.api.send_photo(chat_id, Path(a.chart_path), reply_to=mid)
@@ -310,11 +325,12 @@ class ScrollbackBot:
         for i, sql in enumerate(sqls, 1):
             shown = sql if len(sql) <= SQL_CHARS else sql[:SQL_CHARS] + "\n-- …(truncated)"
             header = f"<b>Query {i} of {len(sqls)}</b>\n" if len(sqls) > 1 else ""
-            self.api.send_message(
+            sql_id = self.api.send_message(
                 chat_id,
                 f'{header}<pre><code class="language-sql">{_esc(shown)}</code></pre>',
                 reply_to=reply_to,
             )
+            self.messages.add(chat_id, sql_id, trace_id)
 
     # ------------------------------------------------------------------ feedback
 
@@ -330,7 +346,9 @@ class ScrollbackBot:
             if trace_id is None:
                 self.api.send_message(
                     chat_id,
-                    "That message isn't one of my answers, so there's nothing to rate.",
+                    "That message isn't linked to an answer. Reply to your question, my "
+                    "answer, its chart or its SQL, or send /feedback without replying to rate "
+                    "the last answer.",
                     reply_to=message_id,
                 )
                 return

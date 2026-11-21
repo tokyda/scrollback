@@ -235,6 +235,30 @@ def test_feedback_on_last_answer_and_on_reply(bot_settings: Settings, fake: Fake
     assert "recorded <b>bad</b>" in confirm and "candidate eval question" in confirm
 
 
+def test_feedback_reply_to_question_or_sql_message(
+    bot_settings: Settings, fake: FakeTelegram
+) -> None:
+    """Phone check 2026-11-22: a reply to the user's own question (or to the SQL message)
+    must rate that answer too, not only a reply to the answer or chart."""
+    bot = _bot(bot_settings, fake, SIMPLE + SIMPLE)
+    question = fake.message(OWNER, "first")
+    bot.handle_update(question)
+    data = fake.sent("sendMessage")[0].params["reply_markup"]["inline_keyboard"][0][0][
+        "callback_data"
+    ]
+    bot.handle_update(fake.callback(OWNER, data))
+    sql_msg_id = fake.next_message_id
+    bot.handle_update(fake.message(OWNER, "second"))  # becomes the chat's last answer
+    first = data.removeprefix("sql:")
+
+    bot.handle_update(
+        fake.message(OWNER, "/feedback bad q", reply_to=question["message"]["message_id"])
+    )
+    bot.handle_update(fake.message(OWNER, "/feedback bad sql", reply_to=sql_msg_id))
+    fbs = load_feedback(bot_settings.paths.traces_dir)
+    assert [(f.trace_id, f.note) for f in fbs] == [(first, "q"), (first, "sql")]
+
+
 def test_feedback_usage_and_nothing_to_rate(bot_settings: Settings, fake: FakeTelegram) -> None:
     bot = _bot(bot_settings, fake, [])
     bot.handle_update(fake.message(OWNER, "/feedback meh"))
@@ -243,7 +267,7 @@ def test_feedback_usage_and_nothing_to_rate(bot_settings: Settings, fake: FakeTe
     texts = [c.params["text"] for c in fake.sent("sendMessage")]
     assert texts[0].startswith("Usage:")
     assert texts[1].startswith("Nothing to rate yet")
-    assert texts[2].startswith("That message isn't one of my answers")
+    assert texts[2].startswith("That message isn't linked to an answer")
     assert load_feedback(bot_settings.paths.traces_dir) == []
 
 
@@ -256,11 +280,25 @@ def test_run_drops_pending_then_answers(bot_settings: Settings, fake: FakeTelegr
     fake.after_drop.append([fake.message(OWNER, "now")])
     bot = _bot(bot_settings, fake, SIMPLE)
     bot.run(max_polls=1)
+    (menu,) = fake.sent("setMyCommands")
+    names = [c["command"] for c in menu.params["commands"]]
+    assert names == ["today", "week", "metrics", "feedback", "help"]
     polls = fake.sent("getUpdates")
     assert polls[0].params["offset"] == -1
     assert polls[1].params["offset"] == old["update_id"] + 1
     assert len(fake.sent("sendMessage")) == 1  # only "now" was answered
     assert len(_llm(bot).requests) == 2 and "Question: now" in _first_user_message(bot)
+
+
+def test_command_menu_failure_does_not_stop_the_bot(
+    bot_settings: Settings, fake: FakeTelegram
+) -> None:
+    fake.failures["setMyCommands"] = (400, "Bad Request")
+    fake.queue(fake.message(OWNER, "/start"))
+    bot = _bot(bot_settings, fake, [])
+    bot.settings.bot.drop_pending_on_start = False
+    bot.run(max_polls=1)
+    assert fake.sent("sendMessage")
 
 
 def test_run_backs_off_on_errors(bot_settings: Settings, fake: FakeTelegram) -> None:

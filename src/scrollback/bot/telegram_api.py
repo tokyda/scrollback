@@ -52,9 +52,13 @@ class RedactingFilter(logging.Filter):
         return True
 
 
+# httpx2 is the anthropic SDK's own httpx copy (API URLs only, but the same noise).
+HTTP_LOGGERS = ("httpx", "httpcore", "httpx2", "httpcore2")
+
+
 def quiet_http_loggers() -> None:
     """httpx logs every request URL (with the token) at INFO; keep it to warnings."""
-    for name in ("httpx", "httpcore"):
+    for name in HTTP_LOGGERS:
         logging.getLogger(name).setLevel(logging.WARNING)
 
 
@@ -166,6 +170,13 @@ class TelegramAPI:
 
     def send_chat_action(self, chat_id: int, action: str = "typing") -> None:
         self.call("sendChatAction", {"chat_id": chat_id, "action": action})
+
+    def set_my_commands(self, commands: list[tuple[str, str]]) -> None:
+        """The command menu Telegram shows when you type "/"."""
+        self.call(
+            "setMyCommands",
+            {"commands": [{"command": c, "description": d} for c, d in commands]},
+        )
 
     def answer_callback_query(self, callback_query_id: str, text: str | None = None) -> None:
         params: dict[str, Any] = {"callback_query_id": callback_query_id}

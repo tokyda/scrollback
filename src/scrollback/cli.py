@@ -706,6 +706,7 @@ def serve_bot(
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     for handler in logging.getLogger().handlers:
         handler.addFilter(RedactingFilter(token))
+    logging.getLogger("matplotlib").setLevel(logging.WARNING)  # "categorical units" chatter
 
     if settings.agent.search_knowledge:
         from scrollback.kb.index import ensure_index

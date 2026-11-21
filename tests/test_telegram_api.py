@@ -83,7 +83,8 @@ def test_missing_token_rejected() -> None:
 
 def test_redacting_filter_and_quiet_loggers(caplog: pytest.LogCaptureFixture) -> None:
     quiet_http_loggers()
-    assert logging.getLogger("httpx").level == logging.WARNING
+    for name in ("httpx", "httpcore", "httpx2"):  # httpx2: the anthropic SDK's copy
+        assert logging.getLogger(name).level == logging.WARNING
     log = logging.getLogger("scrollback.test")
     caplog.handler.addFilter(RedactingFilter(FAKE_TOKEN))
     with caplog.at_level(logging.INFO):
