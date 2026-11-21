@@ -468,6 +468,67 @@ def test_widened_no_data_pattern() -> None:
     assert not s.passed and s.fabricated == [0.0]
 
 
+def test_no_watch_time_recorded_is_a_no_data_statement() -> None:
+    # E0-haiku q072 r1: says no watch time is recorded for today and gives yesterday's amount.
+    text = (
+        "No watch time is recorded for today (2026-11-20) yet. The latest view in the data is "
+        "2026-11-19 at 19:46 local, so today's data hasn't loaded or you haven't watched "
+        "anything since then. For reference, yesterday (2026-11-19) had 167 views and about "
+        "102.7 estimated minutes of watch time."
+    )
+    rows = [["2026-11-18", 36, 22.5], ["2026-11-19", 167, 102.7]]
+    assert run("q072", text, rows, ["local_date", "views", "est_watch_minutes"]).passed
+    zero = "No watch time is recorded for today: 0 minutes so far."
+    assert not run("q072", zero).passed
+
+
+def test_sept_is_a_date() -> None:
+    # E1-haiku q087 r1: "26 Sept" for 2026-09-26.
+    text = (
+        "Your longest session in September 2026 started on 26 Sept at 22:13 and was about "
+        "34.8 minutes of estimated watch time (48 views). Measured by wall-clock span from "
+        "first to last view, the longest September session was 75.6 minutes, which is a "
+        "different measure and may be a different session."
+    )
+    rows = [["2026-09-26T22:13:21", 48, 34.783333]]
+    s = run("q087", text, rows, ["session_start", "views_in_that_session", "watch_min"])
+    assert s.passed
+    assert text_states("on 26 Sept.", "2026-09-26", "date", 0)
+    assert text_states("on Sept 26", "2026-09-26", "date", 0)
+    assert not text_states("on 26 Sept", "2026-09-25", "date", 0)
+
+
+def test_est_dot_is_an_estimate_word() -> None:
+    # E1-haiku q075 r2 (trap): "60.2 est. watch minutes".
+    text = (
+        "About 60 minutes (60.2 est. watch minutes) of TikTok on Sunday 15 November 2026, "
+        "across 102 views in 6 sessions. The longest session was about 35 minutes."
+    )
+    rows = [["2026-11-15", 7, 102, 60.225, 6, 34.708333]]
+    cols = ["local_date", "dow", "views", "est_watch_min", "sessions", "longest_session_min"]
+    s = run("q075", text, rows, cols)
+    assert s.passed and s.caveat
+    assert not run("q075", text.replace(" est.", ""), rows, cols).passed
+    for word in ("best.", "interest.", "rest."):
+        assert not run("q075", f"About 60 minutes, the {word}", rows, cols).caveat
+
+
+def test_weekday_day_range_is_blanked_before_grounding() -> None:
+    # E1-haiku q065 r1 (unanswerable): the 9 in "Mon 9 - Sun 15 Nov 2026" is a date.
+    text = (
+        "I can't count ads: the warehouse has no field that marks a view as an ad. fct_views "
+        "records each view by video_id with timing and session fields only, and none of the "
+        "other tables flag ads. The closest figure I can give is total views last week: 480 "
+        "views across 466 distinct videos (Mon 9 \u2013 Sun 15 Nov 2026). That includes "
+        "everything you watched, so it is an upper bound on what you could have seen as ads, "
+        "not an ad count."
+    )
+    s = run("q065", text, [[480, 466]], ["views_last_week", "distinct_videos"])
+    assert s.passed and s.fabricated == []
+    s = run("q065", text.replace("480 views", "490 views"), [[480, 466]])
+    assert not s.passed and s.fabricated == [490.0]
+
+
 # --------------------------------------------------------------------------- range sums
 
 Q034_ROWS = [
@@ -528,6 +589,9 @@ def test_range_sum_e1_q059_r2_passes() -> None:
         ("from Mon 9 Nov to Sun 15 Nov", [("2026-11-09", "2026-11-15")]),
         ("Nov 2-8, 2026", [("2026-11-02", "2026-11-08")]),
         ("28 Oct to 3 Nov", [("2026-10-28", "2026-11-03")]),
+        ("(Mon 9 - Sun 15 Nov 2026)", [("2026-11-09", "2026-11-15")]),
+        ("26 Sept to 2 Oct", [("2026-09-26", "2026-10-02")]),
+        ("Sept 1-7", [("2026-09-01", "2026-09-07")]),
         ("on 2026-11-09 only", []),
     ],
 )

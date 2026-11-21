@@ -51,7 +51,7 @@ REFUSAL_RE = re.compile(
     re.IGNORECASE,
 )
 ESTIMATE_RE = re.compile(
-    r"\b(?:estimat\w*|approximat\w*|roughly|not exact\w*|isn'?t exact|no exact|"
+    r"\b(?:estimat\w*|est\.|approximat\w*|roughly|not exact\w*|isn'?t exact|no exact|"
     r"can'?t be exact|not (?:directly )?measured|inferred|capped|cap(?:s|ped)? at|"
     r"cap of|upper (?:bound|limit)|based on (?:the )?(?:gaps?|time between|timing)|"
     r"gaps? between|only records? (?:when|the start)|(?:doesn|does not)'?t? record how long|"
@@ -62,7 +62,7 @@ ESTIMATE_RE = re.compile(
 # "approximately" are rounding words, not caveats, and "based on per-view watch-time estimates"
 # or "not a measured screen time" restate the estimate without saying why.
 STRONG_ESTIMATE_RE = re.compile(
-    r"\b(?:estimat\w*|inferred|imputed|not (?:an? )?exact|isn'?t exact|can'?t be exact|"
+    r"\b(?:estimat\w*|est\.|inferred|imputed|not (?:an? )?exact|isn'?t exact|can'?t be exact|"
     r"not (?:directly )?measured|not an? measured)",
     re.IGNORECASE,
 )
@@ -88,7 +88,9 @@ COVERAGE_RE = re.compile(
     re.IGNORECASE,
 )
 NO_DATA_RE = re.compile(
-    r"\b(?:no data|no (?:views?|records?|activity|watch(?:ing)? history) (?:recorded |yet |"
+    r"\b(?:no data|no (?:watch(?:ing)? )?(?:time|minutes|activity|views?|data) (?:is |was |has "
+    r"been |have been )?(?:recorded|logged)|"
+    r"no (?:views?|records?|activity|watch(?:ing)? history) (?:recorded |yet |"
     r"for|logged|on)|no (?:watch )?(?:events?|views?|data|records?|activity) (?:for|on|today|"
     r"recorded|yet|logged)|(?:data|history|export) (?:ends?|stops?|finishes) (?:on|at)|"
     r"not (?:yet )?(?:in the (?:data|export|history)|available|included|"
@@ -103,7 +105,15 @@ NO_DATA_RE = re.compile(
 MONTHS = ["january", "february", "march", "april", "may", "june", "july", "august",
           "september", "october", "november", "december"]  # fmt: skip
 DAYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
-_MONTH_ALT = "|".join(m[:3] + r"(?:" + m[3:] + r")?\.?" for m in MONTHS)
+
+
+def _month_re(month: str) -> str:
+    """A month name or its abbreviation ("Sep", "Sept", "Sep."), no capture group."""
+    rest = "t|tember" if month == "september" else month[3:]
+    return month[:3] + r"(?:" + rest + r")?\.?"
+
+
+_MONTH_ALT = "|".join(_month_re(m) for m in MONTHS)
 DATE_RES = [
     re.compile(r"\b\d{4}-\d{2}-\d{2}(?:[ T]\d{2}:\d{2}(?::\d{2})?)?\b"),
     re.compile(rf"\b\d{{1,2}}(?:st|nd|rd|th)?\s+(?:{_MONTH_ALT})(?:,?\s+\d{{4}})?\b", re.I),
@@ -156,8 +166,12 @@ def normalise_text(text: str) -> str:
 
 
 def strip_dates_and_times(text: str) -> str:
-    """Blank out dates, times, years and "N tables"-style counts (same length: offsets hold)."""
+    """Blank out date ranges, dates, times, years and "N tables"-style counts (same length:
+    offsets hold). A range is blanked whole, so the 9 in "Mon 9 - Sun 15 Nov" is not a number;
+    2000 is a leap year, so a missing year never rejects 29 Feb."""
     out = text
+    for m, _, _ in _date_ranges(text, 2000):
+        out = out[: m.start()] + " " * (m.end() - m.start()) + out[m.end() :]
     for pattern in [*DATE_RES, TIME_RE, YEAR_RE, NOT_AN_ANSWER_RE]:
         out = pattern.sub(lambda m: " " * len(m.group(0)), out)
     return out
@@ -425,7 +439,7 @@ def derived_values(result: ResultTable) -> list[float]:
     return [v for v, _ in derivations(result)]
 
 
-_MON = r"(?P<{name}>" + "|".join(m[:3] + "(?:" + m[3:] + r")?\.?" for m in MONTHS) + ")"
+_MON = r"(?P<{name}>" + _MONTH_ALT + ")"
 _WD = r"(?:(?:mon|tue|tues|wed|thu|thur|thurs|fri|sat|sun)(?:day|nesday|sday|urday)?,?\s+)?"
 _SEP = r"\s*(?:-|to|through|until|thru)\s*"
 RANGE_RES = [
@@ -437,9 +451,9 @@ RANGE_RES = [
         rf"{_WD}(?P<d2>\d{{1,2}})\s+{_MON.format(name='m2')}(?:\s+(?P<y2>\d{{4}}))?",
         re.I,
     ),
-    # 10-16 Nov (2026)
+    # 10-16 Nov (2026), (Mon) 9 - (Sun) 15 Nov (2026)
     re.compile(
-        rf"\b(?P<d1>\d{{1,2}})\s*-\s*(?P<d2>\d{{1,2}})\s+{_MON.format(name='m2')}"
+        rf"\b{_WD}(?P<d1>\d{{1,2}}){_SEP}{_WD}(?P<d2>\d{{1,2}})\s+{_MON.format(name='m2')}"
         rf"(?:\s+(?P<y2>\d{{4}}))?",
         re.I,
     ),
@@ -456,10 +470,9 @@ def _month_number(token: str) -> int:
     return [m[:3] for m in MONTHS].index(token.lower()[:3]) + 1
 
 
-def stated_date_ranges(text: str, today: date) -> list[tuple[date, date]]:
-    """Explicit date ranges an answer states ("2026-11-09 to 2026-11-15", "10-16 Nov 2026",
-    "Mon 9 Nov to Sun 15 Nov", "Nov 10-16"). Missing years default to ``today``'s year."""
-    found: list[tuple[date, date]] = []
+def _date_ranges(text: str, year: int) -> list[tuple[re.Match[str], date, date]]:
+    """Every valid range match in ``text``; a missing year defaults to ``year``."""
+    found = []
     for pattern in RANGE_RES:
         for m in pattern.finditer(text):
             g = m.groupdict()
@@ -469,13 +482,24 @@ def stated_date_ranges(text: str, today: date) -> list[tuple[date, date]]:
                 else:
                     m2 = _month_number(g["m2"])
                     m1 = _month_number(g["m1"]) if g.get("m1") else m2
-                    y2 = int(g["y2"]) if g.get("y2") else today.year
+                    y2 = int(g["y2"]) if g.get("y2") else year
                     y1 = int(g["y1"]) if g.get("y1") else y2
                     start, end = date(y1, m1, int(g["d1"])), date(y2, m2, int(g["d2"]))
             except (ValueError, KeyError):
                 continue
-            if start <= end and (start, end) not in found:
-                found.append((start, end))
+            if start <= end:
+                found.append((m, start, end))
+    return found
+
+
+def stated_date_ranges(text: str, today: date) -> list[tuple[date, date]]:
+    """Explicit date ranges an answer states ("2026-11-09 to 2026-11-15", "10-16 Nov 2026",
+    "Mon 9 Nov to Sun 15 Nov", "Mon 9 - Sun 15 Nov", "Nov 10-16"). Missing years default to
+    ``today``'s year."""
+    found: list[tuple[date, date]] = []
+    for _, start, end in _date_ranges(text, today.year):
+        if (start, end) not in found:
+            found.append((start, end))
     return found
 
 
@@ -573,8 +597,7 @@ def derived_match(
 
 def _date_patterns(iso: str) -> list[re.Pattern[str]]:
     d = date.fromisoformat(iso[:10])
-    month = MONTHS[d.month - 1]
-    mon = rf"{month[:3]}(?:{month[3:]})?\.?"
+    mon = _month_re(MONTHS[d.month - 1])
     day = rf"0?{d.day}(?:st|nd|rd|th)?"
     return [
         re.compile(rf"\b{d.isoformat()}\b"),
