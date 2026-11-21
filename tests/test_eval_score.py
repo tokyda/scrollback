@@ -529,6 +529,61 @@ def test_weekday_day_range_is_blanked_before_grounding() -> None:
     assert not s.passed and s.fabricated == [490.0]
 
 
+# Sonnet E1 q060 r2: per-hour totals with the is_late_night flag.
+Q060_HOURS = [
+    [0, True, 624, 359.8], [1, True, 630, 346.3], [2, True, 402, 228.9], [3, True, 212, 114.4],
+    [4, True, 87, 38.1], [5, False, 137, 79.9], [6, False, 220, 111.5], [7, False, 406, 214.3],
+    [8, False, 455, 256.0], [9, False, 267, 161.3], [10, False, 235, 142.0],
+    [11, False, 216, 122.4], [12, False, 469, 262.7], [13, False, 650, 355.4],
+    [14, False, 511, 298.5], [15, False, 392, 215.8], [16, False, 421, 233.7],
+    [17, False, 461, 265.1], [18, False, 710, 369.0], [19, False, 781, 456.4],
+    [20, False, 752, 403.9], [21, False, 1010, 523.9], [22, False, 963, 533.9],
+    [23, False, 874, 468.5],
+]  # fmt: skip
+Q060_COLS = ["local_hour", "is_late_night", "views", "mins"]
+Q060_R2_TEXT = (
+    "You spend about 1,090 minutes (about 18 hours) on TikTok between midnight and 5am. That "
+    "is roughly 17% of your total watch time (about 6,560 minutes) and 1,955 of your 11,885 "
+    "views (16%). Across the roughly 170 days of history, it works out to about 6 minutes a "
+    "night."
+)
+
+
+def test_group_share_of_a_flagged_total_is_execution() -> None:
+    # 17% = sum(mins where is_late_night) / sum(mins), the watch-time reading.
+    s = run("q060", Q060_R2_TEXT, Q060_HOURS, Q060_COLS)
+    assert s.passed and s.execution and not s.execution_strict
+
+
+def test_group_share_needs_the_share_in_the_text() -> None:
+    text = "Late night is about 1,090 minutes, mostly between midnight and 2am."
+    assert not run("q060", text, Q060_HOURS, Q060_COLS).execution
+
+
+def test_hour_labels_are_not_percentages() -> None:
+    # Without the flag column, the hour 17 (0.17) and 16 (0.16) used to match the shares.
+    rows = [[h, v] for h, _, v, _ in Q060_HOURS]
+    s = run("q060", Q060_R2_TEXT, rows, ["local_hour", "views"])
+    assert not s.execution and not s.passed
+
+
+def test_whole_number_cell_is_not_a_rounded_ratio() -> None:
+    # A 0 (e.g. min(local_hour) of the late-night group) used to match any share below 0.5.
+    rows = [[False, 5, 23, 9930], [True, 0, 4, 1955]]
+    s = run("q060", "About 17% of your viewing is late at night.", rows,
+            ["is_late_night", "min_h", "max_h", "views"])  # fmt: skip
+    assert not s.execution
+    # The real share cell, as a percentage with decimals, still matches.
+    assert run("q060", Q060_R2_TEXT, [[16.6, 6561.4]], ["pct_of_watch", "total"]).passed
+
+
+def test_label_columns() -> None:
+    from scrollback.evals.score import ResultTable, label_columns
+
+    assert label_columns(ResultTable(Q060_COLS, Q060_HOURS)) == {0}
+    assert label_columns(ResultTable(["d", "v"], [[1, 5], [2, 9]])) == set()  # < 3 rows
+
+
 # --------------------------------------------------------------------------- range sums
 
 Q034_ROWS = [

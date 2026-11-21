@@ -242,11 +242,25 @@ def _within(
 
 
 def numeric_match(
-    gold: float, candidate: float, unit: str, tolerance: float, decimals: int | None = None
+    gold: float,
+    candidate: float,
+    unit: str,
+    tolerance: float,
+    decimals: int | None = None,
+    scaled: bool = True,
 ) -> bool:
-    """A query-result value (any supported scale) equals ``gold`` within tolerance/rounding."""
+    """A query-result value equals ``gold`` within tolerance/rounding, at any supported scale
+    (only unscaled when ``scaled`` is False).
+
+    A whole-number cell gets no rounding slack against a ratio: 0 or 1 is not a rounded share,
+    and with the usual half-unit slack it would match every share below or above one half.
+    """
     d = _decimals_of(candidate) if decimals is None else decimals
-    return any(_within(gold, candidate, f, d, tolerance) for f in _scales(unit))
+    scales = _scales(unit) if scaled else [1.0]
+    if unit == "ratio" and d == 0:
+        tol = max(tolerance, 1e-9)
+        return any(abs(candidate * f - gold) <= tol + 1e-12 for f in scales)
+    return any(_within(gold, candidate, f, d, tolerance) for f in scales)
 
 
 def text_number_match(gold: float, n: TextNumber, unit: str, tolerance: float) -> bool:
@@ -288,7 +302,9 @@ def _dow_name(value: Any) -> str | None:
     return None
 
 
-def value_match(gold: Any, candidate: Any, unit: str, tolerance: float) -> bool:
+def value_match(
+    gold: Any, candidate: Any, unit: str, tolerance: float, scaled: bool = True
+) -> bool:
     if unit == "date":
         return _to_date_str(gold) is not None and _to_date_str(gold) == _to_date_str(candidate)
     if unit == "dow":
@@ -304,7 +320,7 @@ def value_match(gold: Any, candidate: Any, unit: str, tolerance: float) -> bool:
     g, c = _as_float(gold), _as_float(candidate)
     if g is None or c is None:
         return False
-    return numeric_match(g, c, unit, tolerance)
+    return numeric_match(g, c, unit, tolerance, scaled=scaled)
 
 
 # --------------------------------------------------------------------------- result matching
@@ -314,6 +330,25 @@ def value_match(gold: Any, candidate: Any, unit: str, tolerance: float) -> bool:
 class ResultTable:
     columns: list[str]
     rows: list[list[Any]]
+
+
+def label_columns(result: ResultTable) -> set[int]:
+    """Columns that label rows rather than measure them: whole numbers, at least 3 rows, all
+    distinct and together a run of consecutive integers (hour 0-23, day of week 1-7, rank).
+    Their cells still match unscaled (hour 21 for "which hour"), but are never rescaled, so
+    hour 17 is not read as 17% of a share."""
+    labels: set[int] = set()
+    rows = result.rows[:DERIVE_MAX_ROWS]
+    if len(rows) < 3:
+        return labels
+    for j in range(len(result.columns)):
+        values = [row[j] if j < len(row) else None for row in rows]
+        if not all(isinstance(v, int) and not isinstance(v, bool) for v in values):
+            continue
+        ints = [int(v) for v in values if v is not None]
+        if len(set(ints)) == len(ints) and max(ints) - min(ints) + 1 == len(ints):
+            labels.add(j)
+    return labels
 
 
 def _rows_match(gold_row: list[Any], cand_row: list[Any], mapping: tuple[int, ...],
@@ -331,7 +366,11 @@ def table_match(q: Question, gold: GoldAnswer, result: ResultTable) -> bool:
         return False
     if q.answer_type == "scalar":
         first = result.rows[0]
-        return any(value_match(gold.scalar, v, units[0], q.tolerance) for v in first)
+        labels = label_columns(result)
+        return any(
+            value_match(gold.scalar, v, units[0], q.tolerance, scaled=j not in labels)
+            for j, v in enumerate(first)
+        )
     if q.answer_type == "table" and len(gold.rows) == 1 and _long_format_match(q, gold, result):
         return True
     for mapping in permutations(range(len(result.columns)), k):
@@ -547,6 +586,45 @@ def range_sum_match(
     return False
 
 
+def _flag_columns(result: ResultTable) -> list[int]:
+    """Boolean group columns (is_late_night), or whole-number columns holding only 0 and 1."""
+    rows = result.rows[:DERIVE_MAX_ROWS]
+    flags = []
+    for j in range(len(result.columns)):
+        values = [row[j] if j < len(row) else None for row in rows]
+        booleans = all(isinstance(v, bool) for v in values) and len(set(values)) == 2
+        zero_one = all(type(v) is int for v in values) and set(values) == {0, 1}
+        if booleans or zero_one:
+            flags.append(j)
+    return flags
+
+
+def group_shares(result: ResultTable) -> list[float]:
+    """Shares of a column total held by one side of a flag column, as in a GROUP BY
+    is_late_night result: sum(col where flag) / sum(col). Few candidates per result (two per
+    flag and numeric column), and ``derived_match`` also needs the text to state the share."""
+    grid = _numeric_grid(result)
+    rows = result.rows[:DERIVE_MAX_ROWS]
+    labels = label_columns(result)
+    shares: list[float] = []
+    flags = _flag_columns(result)
+    for fj in flags:
+        for j in range(len(result.columns)):
+            if j == fj or j in labels or j in flags:
+                continue
+            column = [grid[i][j] if j < len(grid[i]) else None for i in range(len(grid))]
+            if any(v is None for v in column):
+                continue
+            total = float(sum(v for v in column if v is not None))
+            if total <= 0:
+                continue
+            for side in {bool(row[fj]) for row in rows}:
+                part = sum(v for v, row in zip(column, rows, strict=True)
+                           if v is not None and bool(row[fj]) == side)  # fmt: skip
+                shares.append(part / total)
+    return shares
+
+
 def _stated(value: float, text_nums: list[TextNumber], unit: str, tolerance: float) -> bool:
     units = (unit, "number") if unit != "number" else ("number",)
     return any(text_number_match(value, n, u, tolerance) for n in text_nums for u in units)
@@ -565,11 +643,16 @@ def derived_match(
     derived value *and* every cell it was computed from. So "Saturday 293 + Sunday 186 =
     about 479 min" counts, while two unrelated cells whose difference happens to equal the
     gold (8.1 - 3.9 = 4.2 vs 4.18) do not. A sum over many dated rows also counts when the
-    answer states the total and its date range (``range_sum_match``).
+    answer states the total and its date range (``range_sum_match``). A share of a group
+    (``group_shares``) counts when the text states it.
     """
     if q.answer_type not in ("scalar", "table") or len(gold.rows) != 1:
         return False
-    cells = [v for row in _numeric_grid(result) for v in row if v is not None]
+    labels = label_columns(result)
+    cells = [
+        (v, j not in labels) for row in _numeric_grid(result) for j, v in enumerate(row)
+        if v is not None
+    ]  # fmt: skip
     derived = derivations(result)
     for value, unit in zip(gold.rows[0], q.units, strict=True):
         g = _as_float(value)
@@ -577,7 +660,7 @@ def derived_match(
             if not any(value_match(value, c, unit, q.tolerance) for r in result.rows for c in r):
                 return False
             continue
-        if any(numeric_match(g, c, unit, q.tolerance) for c in cells):
+        if any(numeric_match(g, c, unit, q.tolerance, scaled=s) for c, s in cells):
             continue
         if any(
             numeric_match(g, d, unit, q.tolerance, decimals=6)
@@ -587,6 +670,12 @@ def derived_match(
         ):
             continue
         if range_sum_match(g, unit, q.tolerance, result, ranges or [], text_nums):
+            continue
+        if unit == "ratio" and any(
+            numeric_match(g, sh, unit, q.tolerance, decimals=6)
+            and _stated(sh, text_nums, unit, q.tolerance)
+            for sh in group_shares(result)
+        ):
             continue
         return False
     return True
