@@ -17,10 +17,18 @@ SAMPLE_EXPORT = REPO_ROOT / "data" / "sample" / "user_data_tiktok.json"
 
 
 def repo_settings(**metric_overrides: int) -> Settings:
-    """Repo config.yaml, ignoring the developer's .env and environment."""
+    """Repo config.yaml, ignoring the developer's .env and environment, with the synthetic
+    parameters pinned: timezone and metrics come from ``eval/questions.yaml`` ``params`` (the
+    values the synthetic data and eval gold use), not from config.yaml, which is tuned for the
+    owner's real export (DESIGN §4.3)."""
+    from scrollback.evals.questions import load_questions
+
     settings = load_config(
         REPO_ROOT / "config.yaml", env_file=REPO_ROOT / "no-such.env", environ={}
     )
+    pinned = load_questions().params
+    settings.timezone = pinned.timezone.model_copy()
+    settings.metrics = pinned.metrics.model_copy()
     if metric_overrides:
         settings.metrics = settings.metrics.model_copy(update=metric_overrides)
     return settings
