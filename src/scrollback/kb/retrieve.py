@@ -7,6 +7,8 @@ reciprocal-rank fusion (RRF, ``score = sum(1 / (kb.rrf_k + rank))``):
 - **keyword match**: BM25 over the chunk's title, text and keywords. Keywords (metric names,
   labels, synonyms, column names) count ``KEYWORD_WEIGHT`` times, so "screen time" finds
   ``est_watch_minutes`` through its synonym list. Identifiers are also split on ``_``.
+  Pure numbers are not tokens: a chunk's numbers are example values (dates, seconds), not
+  vocabulary, and a year in a worked example otherwise matched every dated question.
 
 A chunk that matches no query token and is outside the top ``DENSE_ONLY_DEPTH`` of the
 embedding ranking is not returned, so a nonsense query returns little rather than k
@@ -46,7 +48,7 @@ def tokens(text: str) -> list[str]:
     for word in re.findall(r"[a-z0-9_]+", text.lower()):
         parts = [p for p in word.split("_") if p]
         for tok in {word, *parts} if len(parts) > 1 else {word}:
-            if tok not in STOPWORDS and len(tok) > 1:
+            if tok not in STOPWORDS and len(tok) > 1 and not tok.isdigit():
                 out.append(tok)
     return out
 

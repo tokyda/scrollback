@@ -77,6 +77,10 @@ def test_tokens_split_identifiers() -> None:
     assert set(tokens("est_watch_sec per day")) == {"est_watch_sec", "est", "watch", "sec", "per",
                                                      "day"}  # fmt: skip
     assert tokens("what is the") == []
+    # Numbers are example values, not vocabulary: dates and seconds don't match keywords.
+    assert set(tokens("views on 2026-03-06, 180 s cap, active_days_7d")) == {
+        "views", "cap", "active_days_7d", "active", "days", "7d"
+    }  # fmt: skip
 
 
 def test_synonyms_find_the_metric(kb_settings: Settings) -> None:
