@@ -93,8 +93,8 @@ The hard part isn't the chatbot. It's making the answers **trustworthy**: consis
 | Transformations | dbt-core + dbt-duckdb | layered models, built-in tests, lineage docs |
 | SQL validation | sqlglot | parse, enforce read-only, rewrite LIMIT |
 | LLM | Anthropic SDK behind a thin `LLMClient` interface, model set from env | swappable provider |
-| Embeddings | sentence-transformers (`BAAI/bge-small-en-v1.5`), local | free, offline, private |
-| Vector store | DuckDB table + `array_cosine_similarity` | one store, no extra infra |
+| Embeddings | fastembed (`BAAI/bge-small-en-v1.5`, ONNX), local *(changed from sentence-transformers, owner decision 2026-11-20: no torch dependency)* | free, offline, private |
+| Vector store | a separate DuckDB file (`paths.kb_index`, git-ignored); ~40 chunks are scored in memory with numpy *(changed from `array_cosine_similarity` in the warehouse: one warehouse per eval anchor, and the agent's warehouse connection is read-only)* | one store, no extra infra |
 | Charts | matplotlib → PNG | works in CLI, API and Telegram |
 | CLI | typer | |
 | API | FastAPI + uvicorn | |
@@ -333,16 +333,28 @@ Implemented in `src/scrollback/agent/loop.py` on the Messages API (manual loop; 
 
 | Tool | Input | Output | Notes |
 |---|---|---|---|
-| `search_knowledge` | `query`, `k` | top-k chunks (metrics, docs, examples) | hybrid: embedding similarity + keyword match on synonyms |
+| `search_knowledge` | `query` | top-k chunks (metrics, docs, table descriptions; examples from E3) | hybrid: embedding similarity + keyword match on synonyms. *As built: k is `llm.retrieval_k` (6), a config value, not a model choice, so experiments control it* |
 | `describe_table` | `table` | columns, types, descriptions, 3 sample rows | marts only |
 | `query_metric` | `metric`, `grain`, `start`, `end`, `filters`, `group_by` | rows + compiled SQL | compiles from `metrics.yml`; the preferred path |
 | `run_sql` | `sql` | rows (≤ 200), column names, row count, or error | read-only guard below |
 | `make_chart` | `result_id`, `kind` (line/bar), `x`, `y`, `title` | `chart_id` (PNG under `charts/`) | charts a real `run_sql` result *(changed from model-typed `rows`: cheaper, and the model can't chart invented numbers)* |
 | `final_answer` | `text`, `result_ids[]`, `metrics_used[]`, `assumptions[]`, `chart_id` | — | ends the loop; unknown ids are returned as an error to fix |
 
-**v0 (E0 baseline)** has only `describe_table`, `run_sql`, `make_chart` and `final_answer`. All four use strict JSON schemas and are validated again in code. `search_knowledge` and `query_metric` arrive in Phase 5.
+**v0 (E0 baseline)** has only `describe_table`, `run_sql`, `make_chart` and `final_answer`. All four use strict JSON schemas and are validated again in code. `search_knowledge` arrives in Phase 5; `query_metric` is a stretch item (§7.5).
 - `describe_table` returns columns, types and a row count. Column and table descriptions are behind `agent.describe_include_descriptions` (off in E0, on from E1). In `aggregate_only` mode it shows sample rows only for `agg_*`/`dim_*`, and column statistics for `fct_*` (§4.6).
 - `run_sql` results carry a `result_id` (`r1`, `r2`, …). Errors come back as `[rule_code] message` with `is_error`.
+- **`search_knowledge` (as built, Phase 5).** Off unless `agent.search_knowledge` is on, and then it is listed first. Chunks (`kb/chunks.py`):
+  - one per metric in `metrics.yml` (definition, SQL, caveat text, synonyms);
+  - one per `##` section of each glossary doc, plus its intro when it has one;
+  - one per mart from `_marts.yml`;
+  - examples from `knowledge/examples.yml` (E3).
+
+  `agent.kb_sources` picks which sources a run may see. E2a uses `[metrics, docs, tables]`; E3 adds `examples`; E6 adds `cannot_answer`, the sections of `cannot_answer.md`. Retrieval (`kb/retrieve.py`) fuses two rankings with reciprocal-rank fusion (`kb.rrf_k` = 60):
+  - cosine similarity of bge-small embeddings, with BGE's query instruction on the query;
+  - BM25 over title, text and keywords. Keywords count three times, and identifiers are split on `_`. A chunk's keywords are its own names: a metric's name, label and synonyms; a table's name and column names; a glossary section's heading. *(Changed 2026-11-21: glossary sections also took every backticked identifier in their body as a keyword, so a section naming many metrics matched almost any query. Measured on dev with E2a's sources, recall@6 stayed 79.3% (40 → 39 questions with everything found; q074 gained the caveats section, q093 lost it), and the "sessions that cross midnight" section, the one crowding results, appeared in 28 top-6 lists where it isn't expected, down from 29. The crowding came mainly from the year in its worked example's dates matching dates in questions.)* **Pure numbers are not keyword tokens** (owner decision 2026-11-21): a chunk's numbers are example values, not vocabulary. Measured the same way: recall@6 79.3% → 81.6% (42/58 fully found; q071, q074 and q075 gain the watch-time caveats section, no losses; the categories at 100% stay there), and the crowding section's unexpected top-6 appearances 28 → 23.
+
+  A chunk that matches no query token and isn't in the embedding top 3 is dropped. Chunk text keeps `{param}` placeholders, which are filled from the run's settings when returned. The index stores a hash of the chunk texts and the model, and it is rebuilt when either changes (`scrollback kb index`, `kb search`). Tests and CI use a deterministic offline hashing embedder (`kb.embedding_model: hashing`).
+- **Prompt and tool must agree.** Loading a prompt that mentions `search_knowledge` while the tool is off, or the reverse, fails (`PromptToolMismatchError`).
 
 ### 6.3 SQL guard (`run_sql`)
 - Parse with sqlglot (DuckDB dialect). Reject anything that isn't a single `SELECT`/`WITH`.
@@ -374,6 +386,8 @@ Implemented in `src/scrollback/agent/sql_guard.py`. Every rejection has a stable
 
 **`system_v1.md` (E0) is deliberately minimal:** role, the four tools, the mart table names (no descriptions), "base every number on a run_sql result and cite its result_ids", the `aggregate_only` rule when it's on, relative dates resolved against the supplied today with Monday–Sunday weeks and the range stated in `assumptions`, ambiguity handling, "fix failing queries", and "lead with the number". It contains **no** metric definitions, glossary content, estimate caveats or refusal rules; those are what E1–E6 add and measure. The full target rule set is below.
 
+**`system_v2.md` (E2b)** = `system_v1_search.md` + the lookup rule. **`system_v3.md` (E6a, E6b)** = v2 + three rules, appended to its Rules list: say when a number is an estimate and why in a few words; if the data can't answer, say so in the first sentence and name what's missing (no guessing; a related number the data has may follow, labelled); a day or period with no rows outside the data's first and last dates is unknown, not zero. Tests check each version is exactly its parent plus its rules.
+
 - Always resolve metric definitions through `search_knowledge` before computing anything.
 - Prefer `query_metric`, and fall back to `run_sql` for anything it can't express.
 - Resolve relative dates ("last week") against the supplied `today` and timezone. State the resolved range in `assumptions`. Weeks run Monday to Sunday.
@@ -399,14 +413,15 @@ Every run writes one JSON line to `traces/` and a row to `agent_traces` in DuckD
 
 Implemented in `src/scrollback/tracing.py`:
 - **JSONL:** `traces/YYYY-MM-DD.jsonl`, one line per run, written for every status including failures.
-- **Each record:** `trace_id`, `today`, `local_tz`, the model requested and the models that served, `prompt_version`, and a snapshot of the non-secret config (llm, agent, metric params, timezones). Per LLM call: step, stop reason, input/output/cache-read/cache-write tokens, estimated cost, latency, text, tool names and request ID. Per tool call: input, duration, error code, a capped copy of the output, and metadata (the executed SQL, `result_id`, row count, chart path). Plus the final answer with `sql_used`, status and total latency.
+- **Each record:** `trace_id`, `today`, `local_tz`, the model requested and the models that served, `prompt_version`, `system_prompt_sha256` (the SHA-256 of the rendered system prompt), and a snapshot of the non-secret config (llm, agent, metric params, timezones). Per LLM call: step, stop reason, input/output/cache-read/cache-write tokens, estimated cost, latency, text, tool names and request ID. Per tool call: input, duration, error code, a capped copy of the output, and metadata (the executed SQL, `result_id`, row count, chart path). Plus the final answer with `sql_used`, status and total latency.
 - **Cost** is estimated from a dated per-model price table (`agent/pricing.py`) applied to each call's usage and serving model; an unknown model gives `null`, not a guess.
 - **Writing `agent_traces`:** the agent's read-only connection is closed before the row is written through a separate write connection. If the warehouse is locked, the JSONL line is still written and the CLI warns.
 - **Privacy:** traces contain aggregated query results and live only in git-ignored places. They never contain secrets; a test plants a fake key and checks both stores.
 - `agent_traces` isn't a mart, so the agent can't query it.
+- *(Changed in Phase 5: `prompt_version` became text and `system_prompt_sha256` was added. A table written before that is migrated in place on the next write: the column type changes to VARCHAR and old rows keep their version, with no hash.)*
 
 ### 6.7 Config and versioning
-- The prompt lives in `src/scrollback/agent/prompts/system_v{N}.md`, and the version is recorded in traces and eval runs.
+- The prompt lives in `src/scrollback/agent/prompts/system_v{version}.md`, and the version is recorded in traces and eval runs. **One prompt version is one exact text** (owner decision 2026-11-21): `agent.prompt_version` is a string (`"1"`, `"1_search"`, `"2"`, `"3"`), a published file is never edited, and every trace and eval run's `config.json` records `system_prompt_sha256` of the rendered prompt, so two runs with the same version can be checked for identical prompts.
 - Model, effort (default `medium`), max steps, retrieval k and tool on/off flags all come from `config.yaml` and env, so experiments are config diffs, not code diffs. *(Changed: there's no `temperature`. Current Claude models reject sampling parameters, and from API version 2026-10-21 every model does; `effort` controls depth and spend instead, and §7.4's `--repeat 3` covers run-to-run variance. A config that still sets `temperature` fails validation.)*
 - Default model: `claude-sonnet-5-5` at `medium` effort for the E0 baseline. Comparing with `claude-opus-5-5` is E7.
 
@@ -447,7 +462,7 @@ Gold answers are computed by running `gold_sql` against the **synthetic dataset 
   - `likely_failure` (a hint for label suggestion);
   - `expect_empty`.
 - **`answer_type: no_data`** *(added)*, `trap` only. The right answer is "there's no data for that" (e.g. "today" when the export ends yesterday). It passes only if the answer says so, and **any** stated amount, including 0, fails, because unknown isn't zero (§4.4 `dim_date` coverage).
-- **Ambiguous-reading policy.** Alternatives exist only in the `ambiguous` category. When a review finds that a question elsewhere has more than one reasonable reading, it **moves to `ambiguous` with every reasonable reading accepted**, rather than being reworded after the fact (q056 "watch more": watch time 6.09× or videos 5.73×; q082 "last Monday" asked on a Friday). A reasonable reading found later is added as another alternative (q060 "at night": 10pm–6am). An ambiguous answer must match one reading in both its result and its text, and must state its assumptions.
+- **Ambiguous-reading policy.** Alternatives exist only in the `ambiguous` category. When a review finds that a question elsewhere has more than one reasonable reading, it **moves to `ambiguous` with every reasonable reading accepted**, rather than being reworded after the fact (q056 "watch more": watch time 6.09× or videos 5.73×; q082 "last Monday" asked on a Friday). A reasonable reading found later is added as another alternative (q060 "at night": 10pm–6am; and, after the Haiku review on 2026-11-21, the night share of estimated *watch time* as well as of views, for the same four windows, accepted by the owner as a reading they would have taken before seeing answers). An ambiguous answer must match one reading in both its result and its text, and must state its assumptions.
 - **Ties:** ranking and top-N golds were checked for ties at their cutoff (none at review, 2026-11-20). Ties below the cutoff don't matter, because a top-N answer is scored on its first N rows only. If a future gold has a tie at the cutoff, every tied answer must be listed as an alternative.
 - **Round 2** *(added 2026-11-20, after E0 scored ~95%)*: 20 harder questions (q077–q096, 13 dev / 7 test), where no single column gives the answer away. They cover relative windows the marts don't encode (week before last, last full week, this quarter, same weekday last week, past fortnight), session statistics with no column (median, share by session start hour, sessions per *active* day, longest by estimate vs span), runs of inactive days, an imputed last view, "exactly" traps and two more no-proxy refusals. The set is now 96 questions (64 dev / 32 test).
 - **Unanswerable questions have no reasonable proxy in the data.** No search terms or gaps can stand in for the answer, so a refusal is the only right answer.
@@ -469,23 +484,27 @@ An optional LLM-as-judge scores answer clarity (1–5) as a **secondary** metric
 
 **As built** (`evals/score.py`). The rules below supersede the summary table above where they differ.
 - **Which result is scored.** Execution is judged on the results `final_answer` cites; any one match passes. A correct answer that cites no result fails execution and is labelled `answer_misreport` (E-1 q001).
-  - *Tables:* every gold column must map to a distinct result column (names ignored, extra columns allowed). Rows compare as a set (`table`) or as an ordered prefix (`ordered_table`, so extra rows below a top-N are fine). A one-row gold also matches a result that lists its values in different rows, e.g. a `GROUP BY is_weekend`.
+  - *Tables:* every gold column must map to a distinct result column (names ignored, extra columns allowed). Rows compare as a set (`table`) or as an ordered prefix (`ordered_table`, so extra rows below a top-N are fine). A one-row gold also matches a result that lists its values in different rows, e.g. a `GROUP BY is_weekend`. It also matches when its values are each in their own cell **across the cited results** of the run (the minutes from one query, the date from another), but only if the answer text states every gold value too. *(Added 2026-11-22, owner decision, after E2b q087 r1: "26 September … about 34.8 minutes" with the minutes in r1 and the start timestamp in r2. Rescoring all nine runs flipped only that run.)*
   - *Scalars:* the gold value must appear in the result's first row.
 - **Text.** Every gold value must be stated, with numbers judged by rounding at their printed precision ("~103" for 102.74).
-  - Dates, years, times and "N tables/queries" are never read as answer numbers.
-  - Dates, hours of day and days of week match in common spellings.
+  - Dates, date ranges, years, times and "N tables/queries" are never read as answer numbers. A range is blanked whole, so the 9 in "Mon 9 – Sun 15 Nov 2026" isn't a number.
+  - Dates, hours of day and days of week match in common spellings ("26 Sep", "26 Sept", "Sept 26").
   - A ratio also matches as a percentage.
   - Seconds, minutes and hours convert into each other: in SQL results freely, but in text only when a unit word follows the number, and a bare integer never matches a scaled gold.
   - A `wrong_values` number fails the answer only if the answer **leads with it**, i.e. states it before the first unambiguous mention of the gold value it competes with (same column unit), or never states the gold. A number matching both is ignored. *(Changed after the E0 review: "11,521 different videos, from 11,885 total views" is labelled context and passes; "the longest ran 62 min… estimated 35 min" leads with the wrong definition and fails.)*
-- **Execution has two levels.** `execution_strict` means the gold value is literally a cell of a cited result. `execution` (used for pass) also accepts a gold value derived from a cited result by simple arithmetic: a contiguous range sum of a column, +, −, × or ÷ of two cells in the same row, or the difference or ratio of two cells in the same column. A derived value counts **only when the answer shows the arithmetic**: the text states the derived value and every cell it was computed from. **Range sums over dated rows** have their own rule. If the answer states a total and a date range (in its text or assumptions, e.g. "2026-11-09 to 2026-11-15", "10–16 Nov 2026", "Mon 9 Nov to Sun 15 Nov"), the scorer sums only the cited rows whose date falls inside that range, and the sum must match both the stated total and the gold. Both levels are reported. *(Changed after the E0 review, tightened after E-1, then given the range-sum rule by owner decision on 2026-11-20. "Sat 293 + Sun 186 ≈ 479 min" counts. "This week 189 min vs last week 273 min" with "This week = 2026-11-16 to 2026-11-20" counts. Two unrelated cells that happen to differ by the gold value (E-1 q044: 8.1 − 3.9 = 4.2 vs 4.18) don't count, and neither does a total matching the gold whose stated range sums to something else.)*
+- **Execution has two levels.** `execution_strict` means the gold value is literally a cell of a cited result. `execution` (used for pass) also accepts a gold value derived from a cited result by simple arithmetic: a contiguous range sum of a column, +, −, × or ÷ of two cells in the same row, or the difference or ratio of two cells in the same column. A derived value counts **only when the answer shows the arithmetic**: the text states the derived value and every cell it was computed from. **Range sums over dated rows** have their own rule. If the answer states a total and a date range (in its text or assumptions, e.g. "2026-11-09 to 2026-11-15", "10–16 Nov 2026", "Mon 9 Nov to Sun 15 Nov"), the scorer sums only the cited rows whose date falls inside that range, and the sum must match both the stated total and the gold. **Shares of a group** also count: for a result with a flag column (a boolean, or whole numbers that are only 0 and 1, as in `GROUP BY is_late_night`), the share of a numeric column's total on one side of the flag counts when the text states it. Both levels are reported.
+  - *Cells that aren't values.* A whole-number cell gets no rounding slack against a ratio gold (a 0 or 1 isn't a rounded share; with half-unit slack it matched every share). A **row-label column** (whole numbers, at least 3 rows, all distinct, a run of consecutive integers: hour of day, day of week, rank) is never rescaled, so hour 17 isn't read as 17%. *(Added 2026-11-21 after the Haiku review: q060's execution check had passed in every run that cited an hourly table, through the hour 0, 16 or 17. Removing that coincidence would have failed correct answers that state the late-night share of watch time from per-hour totals, hence the group-share rule. Net effect on the committed runs: no q060 change in E1. Sonnet E0 q060 r3 passes the scorer on the watch-time reading, but the owner overrode it back to `answer_misreport`: it computes over views (1,955 / 11,885 = 16.4%), so the watch-time match is a coincidence. The owner accepted both rules on 2026-11-21.)*
+
+  *(Changed after the E0 review, tightened after E-1, then given the range-sum rule by owner decision on 2026-11-20. "Sat 293 + Sun 186 ≈ 479 min" counts. "This week 189 min vs last week 273 min" with "This week = 2026-11-16 to 2026-11-20" counts. Two unrelated cells that happen to differ by the gold value (E-1 q044: 8.1 − 3.9 = 4.2 vs 4.18) don't count, and neither does a total matching the gold whose stated range sums to something else.)*
 - **Pass rules:**
   - `unanswerable`: with no numbers stated, a refusal phrase anywhere passes. With numbers stated, the answer must **lead with a refusal** (a refusal phrase in the first sentence, which itself states no number), and every later number must be **grounded** in a run_sql result from that run: a cell, simple arithmetic as in execution scoring, or the result's row count. Ungrounded numbers fail, and so does a hedged guess like "I can't know exactly, but you probably watched 40 min". *(Changed after the E0 re-baseline review, fix D: a clear refusal followed by real, labelled context numbers is a correct refusal. Values returned by describe_table (row counts, column statistics, sample cells) also count as grounded, by owner decision after E-1.)*
-  - `no_data`: says there's no data (including "no watch events for today" and "the data ends on…") and states no amount *for that day*. "0 watch events for today" fails: unknown isn't zero. Numbers in a sentence clearly about another day ("yesterday", "that day", "the day before", another date) and not about today don't count. *(Changed after the E0 review: "no data for today; yesterday you watched 103 min" passes; "you watched 0 minutes" fails.)*
-  - `trap`: execution ∧ answer ∧ caveat (estimate or coverage phrases).
+  - `no_data`: says there's no data (including "no watch events for today", "no watch time is recorded for today", "no TikTok views are recorded for today" (one word may come before the noun; added after E2a, 2026-11-21), "no TikTok views for today" (added after E2b, 2026-11-22; the coverage caveat takes the same word) and "the data ends on…") and states no amount *for that day*. "0 watch events for today" fails: unknown isn't zero. Numbers in a sentence clearly about another day ("yesterday", "that day", "the day before", another date) and not about today don't count. *(Changed after the E0 review: "no data for today; yesterday you watched 103 min" passes; "you watched 0 minutes" fails.)*
+  - `trap`: execution ∧ answer ∧ caveat (estimate or coverage phrases; "est." counts as "estimated", owner decision 2026-11-21).
   - `ambiguous`: execution ∧ answer **on the same reading** ∧ non-empty `assumptions`.
   - everything else: execution ∧ answer.
 
   `metric_selection` and caveats on non-trap estimate questions are reported, not required.
+- **Strong caveat** *(added 2026-11-21, owner decision; reported only, never part of pass)*: the answer says the number is an estimate **and** gives the reason: the gaps between views, that only start times are logged, no duration, the cap, the imputed last view, or pauses. "Roughly" and "approximately" are rounding words, not caveats; "this is an estimate" or "based on per-view watch-time estimates" is a plain caveat without a reason. The two parts may be in different sentences. Reported for traps and for all estimate questions. Tests use real E0/E1 answer texts; adding it flipped no runs. *(E1 showed that the plain caveat check is easy to satisfy by labelling a number "estimated", so the stronger version shows whether the agent explains the estimate.)*
 - **Checking the scorer.** An oracle mock agent (runs the gold SQL, states the result) must score 100% end to end in the tests.
 
 ### 7.3 Bad-case taxonomy
@@ -509,6 +528,7 @@ Every failed question gets one primary label: auto-suggested from the trace, the
 
   *(The E0 review showed the first version missed the first two kinds.)*
 - **The label file** lists one entry per failed (question, repeat), with `suggested`, `reason`, `suspect_scoring` and an empty `label` to confirm. `scrollback eval report <run>` uses confirmed labels when present.
+- **Owner overrides** (added 2026-11-21). When the scorer's verdict is right by its rules but wrong on reading the answer, the owner can reverse it for one (question, repeat): an `overrides` entry in the label file with `passed`, a `label` when it fails, and a `reason`. `eval rescore` applies it, keeps the scorer's verdict as `passed_scored` in the record, and counts the override in every summary. Overrides are for coincidences the rules can't see; a pattern that recurs gets a scoring rule instead. The only one so far: Sonnet E0 q060 r3, which states "about 17%" computed over views (1,955 / 11,885 = 16.4%) and so matches the watch-time share only by coincidence.
 - **Review practice** (Phase 4):
   - Every failure is read by hand. Genuine agent failures are reported separately from suspected scoring false negatives and from question-design problems.
   - Only the owner confirms labels. Suggested labels are heuristics, and for an ablation they can be wrong across the board: E-1's date-literal rule suggested `wrong_time_window` for 56 runs, which were relabelled from the answers.
@@ -528,8 +548,21 @@ Every failed question gets one primary label: auto-suggested from the trace, the
   - `--app-config` replaces the global `--config` for this command, since `--config` names the experiment.
 - **`scrollback eval rescore <run>`** re-scores a finished run from its saved answers and cited results (up to 200 rows each) with the current questions and scorer. It makes no API calls. The first re-score keeps `results.original.jsonl`. Changes are always reported against the original scoring (`rescored_to_pass` / `rescored_to_fail` in the label file), and confirmed labels and notes carry over.
 - **Report:** accuracy is mean (min–max) over repeats. Per-category accuracy is shown for **dev only**; the held-out **test** split is reported overall only, since it has too few questions per category. The report also covers sub-scores, efficiency, cost, the bad-case distribution, every failure with its label and reason, per-question pass counts and flaky questions.
-- `scrollback eval report <run_a> <run_b>` produces markdown with overall and per-category accuracy, the bad-case distribution, the questions that regressed or improved, and cost and latency.
+- `scrollback eval report <run_a> <run_b> [--split dev|test|all]` produces markdown with overall and per-category accuracy, the questions that regressed or improved, the sub-scores (including the strong caveat) and efficiency (steps, tool calls, tool errors, tokens, latency, cost per run and total). The comparison is summarised from both runs' records, so `--split dev` compares a dev-only run with the dev half of a full run on equal terms. *(Changed 2026-11-21: it used to compare the saved summaries, so a dev-only run's cost was set against a full run's.)*
 - Each config is run with `--repeat 3`, and the mean ± spread is reported, because LLM output varies even at temperature 0.
+- **Retrieval recall (Phase 5, reported only).** Each question carries `expected_knowledge`: the chunk ids a good search should find. They are written from the definitions by rule, not from retrieval output:
+  - each expected metric's chunk;
+  - the sessions section that separates session length from the span, for session-length questions;
+  - the midnight-crossing section where sessions are dated by their start;
+  - the estimate caveat or method sections for estimate traps;
+  - coverage for partial or missing days;
+  - `agg_daily` for per-calendar-day averages;
+  - the table where one column is the crux;
+  - the cannot-answer sections for unanswerable questions.
+
+  Only expected chunks within the run's `kb_sources` count, so unanswerable questions have no recall before E6. Two measures:
+  - **offline** `scrollback eval retrieval [--k] [--split dev] [--experiment]` searches with each question's own text: recall@k per category on dev, overall only on test. No API calls.
+  - **per run**, the union of the chunks the agent's own `search_knowledge` calls returned, scored against `expected_knowledge` (`kb_recall`). Reported with the share of runs that searched at all (`kb_searched`) and searches per run.
 
 ### 7.5 Planned experiment ladder
 Each step is one config. Results go into the README table.
@@ -539,16 +572,56 @@ Each step is one config. Results go into the README table.
 | E-1 | **warehouse ablation**: the E0 agent and prompt, but only the staging views (`stg_*`) may be queried (`agent.tables: staging`); no sessions, watch-time estimates, flags or zero-filled spine | quantifies what the data modelling alone contributes (E0 − E-1) |
 | E0 | schema only, `run_sql` only | baseline |
 | E1 | + table and column descriptions (`describe_include_descriptions: true`) | fewer hallucinated columns |
-| E2 | + metrics glossary via RAG | fewer wrong metric definitions |
-| E3 | + few-shot examples via RAG | better time-window and session SQL |
-| E4 | + richer structured SQL errors: the valid tables and columns, did-you-mean suggestions for unknown names, and a short fix hint per guard rule | fewer unrecovered SQL errors |
-| E5 | + `query_metric` semantic-layer tool | biggest jump on metric questions, fewer tokens |
-| E6 | + "cannot answer" doc + refusal rules (and the estimate-caveat rule) | fewer failed refusals, check over-refusal |
-| E7 | model swap (small vs large) | the cost/accuracy tradeoff |
+| E2a | + `search_knowledge` tool over the metrics, glossary and table descriptions (hybrid retrieval); prompt v1 with only its tool list extended by the new tool, no new rule | does the agent look definitions up unprompted, and do fewer definitions go wrong |
+| E2b | + the rule "look up the definition of any metric before computing it" (`system_v2.md`) | fewer wrong metric definitions than E2a |
+| ~~E3~~ | ~~+ few-shot examples via RAG~~ *(skipped, see below)* | — |
+| ~~E4~~ | ~~+ richer structured SQL errors~~ *(cut, see below)* | — |
+| ~~E5~~ | ~~+ `query_metric` semantic-layer tool~~ *(moved to the stretch backlog, see below)* | — |
+| E6a | + caveat, refusal and "unknown isn't zero" rules, as `system_v3.md`; built on E2b, same knowledge sources | fewer failed refusals and missing caveats, check over-refusal |
+| E6b | + the "cannot answer" doc in the knowledge index (`kb_sources` adds `cannot_answer`) | the rules work better with the doc to retrieve; check that its chunks don't crowd out others |
+| ~~E7~~ | ~~model swap at the end~~ *(moved to the base of the ladder, see below)* | — |
 
 *(E-1 added, 2026-11-20, after E0 scored ~95%: much of E0's strength appears to come from the marts encoding the definitions as columns (`est_watch_sec`, `is_binge`, `is_late_night`, `is_active`). E-1 measures that directly. The SQL guard, `describe_table` and the prompt's table list all follow `agent.tables`. In the staging scope no table counts as pre-aggregated, so every query must aggregate.)*
 
 *(E4 changed, 2026-11-20: basic self-correction, where the error goes back to the model with up to `sql_max_retries` = 2 retries, is already part of the E0 baseline, so E4 now measures richer error content instead. E0's errors are the guard's rule code plus DuckDB's or the guard's message.)*
+
+*(E4 cut, 2026-11-20, owner decision at the start of Phase 5: E0 has no `sql_error_unrecovered` and no `hallucinated_table_or_column` failures in 288 runs, so richer error messages have nothing to fix and could only move tokens and steps. The ladder spends its runs on the failures that exist. E4 can come back if a later config produces SQL-error failures.)*
+
+*(E3 skipped, 2026-11-22, owner decision: no headroom. E2b passes 191 of 192 dev runs (99.5%). The only failure left is q072's "0 minutes" for a day with no data, which is a refusal failure, not a SQL one. The relative-date failures examples were meant to fix (q019, q080) and q052's rounding pass 3/3 in E2b, so examples could only move tokens and steps, and writing them carries a leak risk that the overlap check would only partly control. E3 can come back if the test split or a real export shows SQL-pattern failures.)*
+
+*(E6 split into E6a and E6b, 2026-11-22, owner decision: one change per step, so the rules' effect is measured apart from the doc's. Offline recall@6 on dev with the `cannot_answer` source added shows the reason. Unanswerable questions come into scope at 16.7%, but ranking falls from 100% to 70% and trap from 86.1% to 76.4%, as its chunks crowd others out.)*
+
+*(E5 moved to the stretch backlog, 2026-11-22, owner decision: for the same reason, a `query_metric` tool has no dev failures left to fix. It stays in the design (§6.2) as a stretch item.)*
+
+**Model swap at the base (owner decision 2026-11-21).** E1 on Sonnet scored 99.5% on dev (one failing run in 192; `eval/reports/e01_descriptions.md`), so later steps can't show accuracy gains on Sonnet. The model swap therefore moves from the end of the ladder to its base:
+1. **E0-haiku** and **E1-haiku**: the E0 and E1 configs with `model: claude-haiku-5-5`, dev split, reported against Sonnet E0 and E1.
+2. If E1-haiku has real headroom (dev below about 93%), E2a → E6 run **on Haiku**, under the ladder rules below. Accuracy is the primary measure, with tokens, steps and recall@k alongside.
+3. **Sonnet's final config is E1.** Sonnet is re-run with a later step only if the Haiku results suggest that step would help it.
+4. **Final:** the best Haiku config and Sonnet E1 each run once on the test split.
+
+Opus is no longer on the ladder.
+
+**Result (2026-11-21, `eval/reports/e00_e01_haiku.md`):** E0-haiku 90.1% and E1-haiku 97.9% (95.3–100) on dev, against Sonnet E0 91.7% and E1 99.5%; $0.0008 per question on Haiku against $0.0105 on Sonnet. E1-haiku is above the ~93% headroom threshold, but **the owner chose to run E2a → E6 on Haiku anyway**, so the RAG steps are measured. They are expected to show mostly in tokens, steps, recall@k and the strong-caveat sub-score: 4 failing runs are left (q019 ×2, q052, q072).
+
+**Done when, for Haiku** (owner decisions 2026-11-21):
+- **Met at E1-haiku:** the mean dev pass rate is within about 2 points of Sonnet E1 (97.9% vs 99.5%), with cost per question reported next to Sonnet's ($0.0008 vs $0.0105).
+- **From E2a on, each step is judged on:**
+  - no dev accuracy regression beyond repeat variance against the previous config (its best repeat not below the previous config's worst);
+  - recall@k (offline, and per run from the agent's own searches);
+  - tokens and cost per question;
+  - which of E1-haiku's 4 remaining failures it fixes (q019 r2/r3, q052 r3, q072 r3), and whether it breaks anything that passed.
+- *Replaced:* "the best Haiku config beats E1-haiku beyond repeat variance (its worst repeat above E1-haiku's best)". It couldn't be met, since E1-haiku has a 100% repeat.
+
+**Ladder rules (Phase 5, owner decisions 2026-11-20, 2026-11-21):**
+- **One experiment, one change.** Each config differs from the previous one by a single change. E2 is split into E2a (tool available) and E2b (plus the lookup rule), so the rule's effect is measured apart from the tool's.
+- **Cumulative.** Each step builds on the previous config. A step is dropped from later configs only if its dev pass rate is worse than the previous config's beyond repeat variance (its best repeat below the previous config's worst).
+- **Dev only while iterating.** The test split runs once, on the final config.
+- **Prompt versions:** `system_v1.md` is never edited; E2b adds `system_v2.md`, E6a adds `system_v3.md`.
+- **Done when** (for Sonnet; replaces "beats E0 on execution accuracy", since E0's execution score is already 99.2% and its failures are in the answer text):
+  - the best config's mean dev pass rate is above E0's best dev repeat, and its worst dev repeat is at least E0's dev mean;
+  - the session-length cluster (dev: q023, q042, q084, q087) passes at least 10 of its 12 dev runs;
+  - tokens per question are reported next to accuracy;
+  - the final test pass rate is at least E0's 96.9% (E0's only test failures are q062 × 3, so test can gain at most 3.1 points).
 
 ---
 
@@ -631,12 +704,12 @@ scrollback/
 │   ├── ingest/{detect.py, parse.py, load.py}
 │   ├── synth/generator.py
 │   ├── warehouse/{db.py, dbt_runner.py, inspect.py}
-│   ├── kb/{index.py, retrieve.py}
+│   ├── kb/{chunks.py, index.py, retrieve.py}
 │   ├── semantic/{metrics.py, compile.py}  # metrics.yml schema + loader; → SQL compiler (Phase 5)
 │   ├── agent/{loop.py, tools.py, sql_guard.py, llm.py, prompts/}
 │   ├── charts.py
 │   ├── tracing.py
-│   ├── evals/{questions.py, warehouses.py, gold.py, score.py, run.py, labels.py, report.py}
+│   ├── evals/{questions.py, warehouses.py, gold.py, score.py, run.py, labels.py, report.py, retrieval.py}
 │   ├── monitor/{anomaly.py, digest.py}
 │   ├── api/app.py
 │   └── bot/telegram_bot.py

@@ -31,7 +31,7 @@ CREATE TABLE IF NOT EXISTS agent_traces (
     local_tz VARCHAR NOT NULL,
     model VARCHAR NOT NULL,
     models_served VARCHAR NOT NULL,
-    prompt_version INTEGER NOT NULL,
+    prompt_version VARCHAR NOT NULL,
     status VARCHAR NOT NULL,
     steps INTEGER NOT NULL,
     n_tool_calls INTEGER NOT NULL,
@@ -46,9 +46,31 @@ CREATE TABLE IF NOT EXISTS agent_traces (
     llm_calls JSON NOT NULL,
     tool_calls JSON NOT NULL,
     config JSON NOT NULL,
-    error VARCHAR
+    error VARCHAR,
+    system_prompt_sha256 VARCHAR
 )
 """
+AGENT_TRACES_COLUMNS = (
+    "trace_id, started_at, question, today, local_tz, model, models_served, prompt_version, "
+    "status, steps, n_tool_calls, n_tool_errors, input_tokens, output_tokens, "
+    "cache_read_tokens, cache_write_tokens, cost_usd, latency_ms, final_answer, llm_calls, "
+    "tool_calls, config, error, system_prompt_sha256"
+)
+
+
+def migrate_agent_traces(con: duckdb.DuckDBPyConnection) -> None:
+    """Bring an agent_traces table from before Phase 5 up to date: prompt_version becomes text
+    ("1", "1_search") and system_prompt_sha256 is added. Existing rows keep their values."""
+    types = dict(
+        con.execute(
+            "SELECT column_name, data_type FROM information_schema.columns "
+            "WHERE table_name = 'agent_traces'"
+        ).fetchall()
+    )
+    if types.get("prompt_version") not in (None, "VARCHAR"):
+        con.execute("ALTER TABLE agent_traces ALTER prompt_version TYPE VARCHAR")
+    if "system_prompt_sha256" not in types:
+        con.execute("ALTER TABLE agent_traces ADD COLUMN system_prompt_sha256 VARCHAR")
 
 
 def new_trace_id() -> str:
@@ -91,7 +113,7 @@ class Trace:
     today: str
     local_tz: str
     model: str
-    prompt_version: int
+    prompt_version: str
     config: dict[str, Any]
     status: str = "running"
     final_answer: dict[str, Any] | None = None
@@ -99,6 +121,7 @@ class Trace:
     tool_calls: list[ToolCallTrace] = field(default_factory=list)
     latency_ms: float = 0.0
     error: str | None = None
+    system_prompt_sha256: str = ""
 
     @property
     def steps(self) -> int:
@@ -150,10 +173,11 @@ def write_db(trace: Trace, db_path: Path) -> None:
     con = duckdb.connect(str(db_path))
     try:
         con.execute(AGENT_TRACES_DDL)
+        migrate_agent_traces(con)
         tokens = trace.tokens()
         con.execute(
-            "INSERT INTO agent_traces VALUES "
-            "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            f"INSERT INTO agent_traces ({AGENT_TRACES_COLUMNS}) VALUES "
+            "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             [
                 trace.trace_id,
                 trace.started_at,
@@ -178,6 +202,7 @@ def write_db(trace: Trace, db_path: Path) -> None:
                 json.dumps([asdict(t) for t in trace.tool_calls], default=str),
                 json.dumps(trace.config, default=str),
                 trace.error,
+                trace.system_prompt_sha256,
             ],
         )
     finally:

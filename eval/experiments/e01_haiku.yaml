@@ -1,0 +1,15 @@
+# E1-haiku (DESIGN §7.5): E1 (E0 + table and column descriptions) on Haiku.
+# One change from e01_descriptions: model claude-sonnet-5-5 -> claude-haiku-5-5;
+# one change from e00_haiku: describe_include_descriptions false -> true.
+name: e01_haiku
+description: "E1-haiku: E0 + describe_table descriptions, on Haiku 5.5 at medium effort"
+overrides:
+  llm:
+    model: claude-haiku-5-5
+    effort: medium
+  agent:
+    prompt_version: 1
+    result_mode: aggregate_only
+    describe_include_descriptions: true
+    sql_max_retries: 2
+    max_steps: 8

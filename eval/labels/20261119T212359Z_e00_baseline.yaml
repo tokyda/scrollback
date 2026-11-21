@@ -33,6 +33,16 @@ failures:
   suspect_scoring: 'leads with wrong-definition value 62.03 but also states the gold value: check that
     the wrong value is the headline, not labelled context'
   label: wrong_metric_definition
+- question: q060
+  repeat: 1
+  category: ambiguous
+  split: dev
+  suggested: aggregation_error
+  reason: result does not match gold
+  suspect_scoring: text states the gold value but no cited result matched
+  label: answer_misreport
+  note: states 17% but cites an hourly table with 20 of 24 hours, which cannot give it; it passed before
+    2026-11-21 only through the hour-label coincidence (owner, 2026-11-21)
 - question: q062
   repeat: 1
   category: ambiguous
@@ -95,6 +105,16 @@ failures:
   suspect_scoring: 'leads with wrong-definition value 62.03 but also states the gold value: check that
     the wrong value is the headline, not labelled context'
   label: wrong_metric_definition
+- question: q060
+  repeat: 3
+  category: ambiguous
+  split: dev
+  suggested: aggregation_error
+  reason: result does not match gold
+  suspect_scoring: text states the gold value but no cited result matched
+  label: answer_misreport
+  note: states 17% but cites an hourly table with 20 of 24 hours, which cannot give it; it passed before
+    2026-11-21 only through the hour-label coincidence (owner, 2026-11-21)
 - question: q062
   repeat: 3
   category: ambiguous
@@ -243,4 +263,14 @@ rescored_to_pass:
   before: false
   after: true
   old_label: failed_refusal
-rescored_to_fail: []
+rescored_to_fail:
+- question: q060
+  repeat: 1
+  before: true
+  after: false
+  old_label: null
+- question: q060
+  repeat: 3
+  before: true
+  after: false
+  old_label: null

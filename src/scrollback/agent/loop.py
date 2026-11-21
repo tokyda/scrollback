@@ -11,6 +11,7 @@ Only ``answered`` carries an answer; every other status ends without inventing a
 
 from __future__ import annotations
 
+import hashlib
 import time
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, date, datetime
@@ -54,15 +55,32 @@ class AgentResult:
     results: dict[str, QueryResult] = field(default_factory=dict)  # every successful run_sql
 
 
+class PromptToolMismatchError(ValueError):
+    """The prompt and the tool list disagree about search_knowledge."""
+
+
 def load_system_prompt(settings: Settings) -> str:
     version = settings.agent.prompt_version
     path = PROMPTS_DIR / f"system_v{version}.md"
     if not path.exists():
         raise FileNotFoundError(f"prompt version {version} not found: {path.name}")
     rule = AGGREGATE_RULE if settings.agent.result_mode == "aggregate_only" else ""
-    return Template(path.read_text(encoding="utf-8")).substitute(
+    text = Template(path.read_text(encoding="utf-8")).substitute(
         tables="\n".join(f"- {t}" for t in agent_tables(settings)), result_mode_rule=rule
     )
+    mentions = "search_knowledge" in text
+    if mentions != settings.agent.search_knowledge:
+        state = "on" if settings.agent.search_knowledge else "off"
+        says = "mentions" if mentions else "does not mention"
+        raise PromptToolMismatchError(
+            f"prompt {path.name} {says} search_knowledge, but agent.search_knowledge is {state}"
+        )
+    return text
+
+
+def prompt_sha256(system: str) -> str:
+    """SHA-256 of the rendered system prompt, recorded in every trace and eval run."""
+    return hashlib.sha256(system.encode("utf-8")).hexdigest()
 
 
 def local_today(settings: Settings) -> date:
@@ -112,6 +130,7 @@ def run_agent(
     )
     started = time.perf_counter()
     system = load_system_prompt(settings)
+    trace.system_prompt_sha256 = prompt_sha256(system)
     tools = tool_schemas(settings)
     messages: list[dict[str, Any]] = [
         {"role": "user", "content": user_message(question, today, tz, want_chart)}

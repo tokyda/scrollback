@@ -13,6 +13,8 @@ paths:
   traces_dir: traces
   eval_runs_dir: eval/runs
   charts_dir: charts
+  kb_index: data/kb/knowledge.duckdb   # search_knowledge index (git-ignored, rebuilt when stale)
+  kb_models: data/kb/models            # embedding model cache (git-ignored)
 
 # Watch-time estimation, session and data-quality parameters (DESIGN §4.3, §4.4, §5).
 # This is the single source of truth: `scrollback build` passes them to dbt as --vars and
@@ -46,3 +48,10 @@ agent:
   # E0 baseline switches (DESIGN §7.5). E1 turns descriptions on.
   describe_include_descriptions: false
   describe_sample_rows: 3
+  # Phase 5 ladder (DESIGN §7.5): search_knowledge arrives in E2a.
+  search_knowledge: false
+  kb_sources: [metrics, docs, tables]   # E3 adds examples, E6 adds cannot_answer
+
+kb:
+  embedding_model: BAAI/bge-small-en-v1.5   # local, via fastembed
+  rrf_k: 60

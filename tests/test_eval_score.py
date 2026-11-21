@@ -468,6 +468,184 @@ def test_widened_no_data_pattern() -> None:
     assert not s.passed and s.fabricated == [0.0]
 
 
+def test_no_watch_time_recorded_is_a_no_data_statement() -> None:
+    # E0-haiku q072 r1: says no watch time is recorded for today and gives yesterday's amount.
+    text = (
+        "No watch time is recorded for today (2026-11-20) yet. The latest view in the data is "
+        "2026-11-19 at 19:46 local, so today's data hasn't loaded or you haven't watched "
+        "anything since then. For reference, yesterday (2026-11-19) had 167 views and about "
+        "102.7 estimated minutes of watch time."
+    )
+    rows = [["2026-11-18", 36, 22.5], ["2026-11-19", 167, 102.7]]
+    assert run("q072", text, rows, ["local_date", "views", "est_watch_minutes"]).passed
+    zero = "No watch time is recorded for today: 0 minutes so far."
+    assert not run("q072", zero).passed
+
+
+def test_no_tiktok_views_are_recorded_is_a_no_data_statement() -> None:
+    # E2a q072 r2: one word before the noun ("TikTok views") and "are" as the verb.
+    text = (
+        "No TikTok views are recorded for today (Fri 2026-11-20), so there is no watch time to "
+        "report. The export's last view is 2026-11-19 at 19:46 local. That day's estimated watch "
+        "time was about 102.7 minutes across 167 views. Today may simply be missing from the "
+        "export rather than a true zero, so this may be worth rechecking after the next data load."
+    )
+    rows = [["2026-11-18", 36, 22.5], ["2026-11-19", 167, 102.7]]
+    assert run("q072", text, rows, ["local_date", "views", "est_watch_minutes"]).passed
+    zero = "No TikTok views are recorded for today, so today's watch time is 0 minutes."
+    assert not run("q072", zero).passed
+
+
+def test_no_tiktok_views_for_today_says_no_data() -> None:
+    # E2b q072 r3: "no TikTok views for today" is a no-data statement (and so the caveat), but
+    # the run still fails because it then gives today 0 minutes (fix C).
+    text = (
+        "The export has no TikTok views for today (2026-11-20), so the estimated watch time for "
+        "today is 0 minutes. The latest view in the data is 2026-11-19 at 19:46 local time. The "
+        "export may simply not include today yet. For reference, yesterday (2026-11-19) was "
+        "about 103 minutes (102.7) across 167 views.\n\nThis is an estimate. The export has no "
+        "durations, so watch time is inferred from gaps between views."
+    )
+    rows = [["2026-11-18", 36, 22.5], ["2026-11-19", 167, 102.7]]
+    cols = ["local_date", "views", "est_watch_minutes"]
+    s = run("q072", text, rows, cols)
+    assert s.caveat and not s.passed and s.fabricated == [0.0]
+    without_zero = text.replace(", so the estimated watch time for today is 0 minutes", "")
+    assert run("q072", without_zero, rows, cols).passed
+
+
+Q087_E2B_R1 = (
+    "Your longest session in September 2026 started on Saturday 26 September 2026 at 22:13 "
+    "(local time) and lasted about 34.8 minutes (estimated watch time)."
+)
+
+
+def _q087_two_results(text: str, cite: list[str]) -> Score:
+    results = {
+        "r1": ResultTable(["longest_session_min", "sessions_in_sep"], [[34.783333, 96]]),
+        "r2": ResultTable(["start_of_longest", "min_start"],
+                          [["2026-09-26T22:13:21", "2026-09-26T22:13:21"]]),
+    }  # fmt: skip
+    out = AgentOutput(status="answered", text=text, result_ids=cite, assumptions=["Sep 2026"],
+                      results=results)  # fmt: skip
+    return score(QSET.get("q087"), gold("q087"), out)
+
+
+def test_one_row_gold_across_cited_results() -> None:
+    # E2b q087 r1: the minutes are in r1 and the date (as a timestamp) in r2.
+    s = _q087_two_results(Q087_E2B_R1, ["r1", "r2"])
+    assert s.passed and s.execution_strict
+    # Safeguard (owner, 2026-11-22): every gold value must also be stated in the text.
+    no_date = "Your longest session in September 2026 lasted about 34.8 minutes."
+    s = _q087_two_results(no_date, ["r1", "r2"])
+    assert not s.passed and not s.execution
+    # Only cited results count: the date in an uncited r2 doesn't help.
+    s = _q087_two_results(Q087_E2B_R1, ["r1"])
+    assert not s.passed and not s.execution
+
+
+def test_sept_is_a_date() -> None:
+    # E1-haiku q087 r1: "26 Sept" for 2026-09-26.
+    text = (
+        "Your longest session in September 2026 started on 26 Sept at 22:13 and was about "
+        "34.8 minutes of estimated watch time (48 views). Measured by wall-clock span from "
+        "first to last view, the longest September session was 75.6 minutes, which is a "
+        "different measure and may be a different session."
+    )
+    rows = [["2026-09-26T22:13:21", 48, 34.783333]]
+    s = run("q087", text, rows, ["session_start", "views_in_that_session", "watch_min"])
+    assert s.passed
+    assert text_states("on 26 Sept.", "2026-09-26", "date", 0)
+    assert text_states("on Sept 26", "2026-09-26", "date", 0)
+    assert not text_states("on 26 Sept", "2026-09-25", "date", 0)
+
+
+def test_est_dot_is_an_estimate_word() -> None:
+    # E1-haiku q075 r2 (trap): "60.2 est. watch minutes".
+    text = (
+        "About 60 minutes (60.2 est. watch minutes) of TikTok on Sunday 15 November 2026, "
+        "across 102 views in 6 sessions. The longest session was about 35 minutes."
+    )
+    rows = [["2026-11-15", 7, 102, 60.225, 6, 34.708333]]
+    cols = ["local_date", "dow", "views", "est_watch_min", "sessions", "longest_session_min"]
+    s = run("q075", text, rows, cols)
+    assert s.passed and s.caveat
+    assert not run("q075", text.replace(" est.", ""), rows, cols).passed
+    for word in ("best.", "interest.", "rest."):
+        assert not run("q075", f"About 60 minutes, the {word}", rows, cols).caveat
+
+
+def test_weekday_day_range_is_blanked_before_grounding() -> None:
+    # E1-haiku q065 r1 (unanswerable): the 9 in "Mon 9 - Sun 15 Nov 2026" is a date.
+    text = (
+        "I can't count ads: the warehouse has no field that marks a view as an ad. fct_views "
+        "records each view by video_id with timing and session fields only, and none of the "
+        "other tables flag ads. The closest figure I can give is total views last week: 480 "
+        "views across 466 distinct videos (Mon 9 \u2013 Sun 15 Nov 2026). That includes "
+        "everything you watched, so it is an upper bound on what you could have seen as ads, "
+        "not an ad count."
+    )
+    s = run("q065", text, [[480, 466]], ["views_last_week", "distinct_videos"])
+    assert s.passed and s.fabricated == []
+    s = run("q065", text.replace("480 views", "490 views"), [[480, 466]])
+    assert not s.passed and s.fabricated == [490.0]
+
+
+# Sonnet E1 q060 r2: per-hour totals with the is_late_night flag.
+Q060_HOURS = [
+    [0, True, 624, 359.8], [1, True, 630, 346.3], [2, True, 402, 228.9], [3, True, 212, 114.4],
+    [4, True, 87, 38.1], [5, False, 137, 79.9], [6, False, 220, 111.5], [7, False, 406, 214.3],
+    [8, False, 455, 256.0], [9, False, 267, 161.3], [10, False, 235, 142.0],
+    [11, False, 216, 122.4], [12, False, 469, 262.7], [13, False, 650, 355.4],
+    [14, False, 511, 298.5], [15, False, 392, 215.8], [16, False, 421, 233.7],
+    [17, False, 461, 265.1], [18, False, 710, 369.0], [19, False, 781, 456.4],
+    [20, False, 752, 403.9], [21, False, 1010, 523.9], [22, False, 963, 533.9],
+    [23, False, 874, 468.5],
+]  # fmt: skip
+Q060_COLS = ["local_hour", "is_late_night", "views", "mins"]
+Q060_R2_TEXT = (
+    "You spend about 1,090 minutes (about 18 hours) on TikTok between midnight and 5am. That "
+    "is roughly 17% of your total watch time (about 6,560 minutes) and 1,955 of your 11,885 "
+    "views (16%). Across the roughly 170 days of history, it works out to about 6 minutes a "
+    "night."
+)
+
+
+def test_group_share_of_a_flagged_total_is_execution() -> None:
+    # 17% = sum(mins where is_late_night) / sum(mins), the watch-time reading.
+    s = run("q060", Q060_R2_TEXT, Q060_HOURS, Q060_COLS)
+    assert s.passed and s.execution and not s.execution_strict
+
+
+def test_group_share_needs_the_share_in_the_text() -> None:
+    text = "Late night is about 1,090 minutes, mostly between midnight and 2am."
+    assert not run("q060", text, Q060_HOURS, Q060_COLS).execution
+
+
+def test_hour_labels_are_not_percentages() -> None:
+    # Without the flag column, the hour 17 (0.17) and 16 (0.16) used to match the shares.
+    rows = [[h, v] for h, _, v, _ in Q060_HOURS]
+    s = run("q060", Q060_R2_TEXT, rows, ["local_hour", "views"])
+    assert not s.execution and not s.passed
+
+
+def test_whole_number_cell_is_not_a_rounded_ratio() -> None:
+    # A 0 (e.g. min(local_hour) of the late-night group) used to match any share below 0.5.
+    rows = [[False, 5, 23, 9930], [True, 0, 4, 1955]]
+    s = run("q060", "About 17% of your viewing is late at night.", rows,
+            ["is_late_night", "min_h", "max_h", "views"])  # fmt: skip
+    assert not s.execution
+    # The real share cell, as a percentage with decimals, still matches.
+    assert run("q060", Q060_R2_TEXT, [[16.6, 6561.4]], ["pct_of_watch", "total"]).passed
+
+
+def test_label_columns() -> None:
+    from scrollback.evals.score import ResultTable, label_columns
+
+    assert label_columns(ResultTable(Q060_COLS, Q060_HOURS)) == {0}
+    assert label_columns(ResultTable(["d", "v"], [[1, 5], [2, 9]])) == set()  # < 3 rows
+
+
 # --------------------------------------------------------------------------- range sums
 
 Q034_ROWS = [
@@ -528,6 +706,9 @@ def test_range_sum_e1_q059_r2_passes() -> None:
         ("from Mon 9 Nov to Sun 15 Nov", [("2026-11-09", "2026-11-15")]),
         ("Nov 2-8, 2026", [("2026-11-02", "2026-11-08")]),
         ("28 Oct to 3 Nov", [("2026-10-28", "2026-11-03")]),
+        ("(Mon 9 - Sun 15 Nov 2026)", [("2026-11-09", "2026-11-15")]),
+        ("26 Sept to 2 Oct", [("2026-09-26", "2026-10-02")]),
+        ("Sept 1-7", [("2026-09-01", "2026-09-07")]),
         ("on 2026-11-09 only", []),
     ],
 )
@@ -538,3 +719,75 @@ def test_stated_date_ranges(text: str, expected: list[tuple[str, str]]) -> None:
 
     got = stated_date_ranges(text, date(2026, 11, 20))
     assert [(a.isoformat(), b.isoformat()) for a, b in got] == expected
+
+
+# --------------------------------------------------------------------------- strong caveat
+# Real answer texts from the E0 (20261119T222732Z) and E1 (20261120T050523Z) dev runs.
+
+STRONG_CAVEATS = [
+    "This is an estimate based on the gaps between views.",  # E0 q013
+    "It's an estimate, because watch time is inferred from the gaps between views.",  # E1 q007
+    "That's an estimate based on view timing.",  # E0 q017
+    "This is an estimate, not an exact timer. The data only has view timestamps, so watch time "
+    "per video is inferred from the gaps between views.",  # E0 q070
+    "This is an estimate, not an exact figure: the data only has view start times, so watch time "
+    "comes from the gaps between views (capped), and the last view in each session is imputed.",
+    "About 18.5 seconds (estimated). The data has no exact watch duration, so this is an "
+    "estimate.",  # E0 q093
+    "It was the final view of its session, so the figure is the median of the other estimates "
+    "in that session, not a measured time.",  # E1 q093
+    "If you meant one video, the longest was 3.0 minutes, which is the cap on the watch-time "
+    "estimate.",  # E0 q073
+    "TikTok doesn't log watch duration, so it's inferred from the gaps between views.",  # E1 q070
+]
+
+WEAK_CAVEATS = [
+    "This is an estimate.",  # E0 q071
+    "This is estimated watch time.",  # E0 q075
+    "It's an estimate built from per-view watch-time estimates.",  # E1 q071
+    "This is an estimate based on per-view watch estimates, not a measured screen-on time.",
+    "This is an estimate, not a measured screen-time figure.",  # E1 q075
+    "It is an estimate, not an exact figure.",  # E1 q074
+    "About 60 minutes (≈1 hour) of estimated TikTok watch time on Sunday 15 Nov 2026. That was "
+    "102 views across 6 sessions.",  # E1 q075 r3
+    "You watched about 293 minutes (roughly 4.9 hours) on Saturday 24 October 2026.",  # no caveat
+    "Your longest single sessions start time was 22:13, with 48 views.",  # "start time" alone
+]
+
+
+@pytest.mark.parametrize("text", STRONG_CAVEATS)
+def test_strong_caveat_states_estimate_and_reason(text: str) -> None:
+    from scrollback.evals.score import (
+        ESTIMATE_REASON_RE,
+        STRONG_ESTIMATE_RE,
+        normalise_text,
+    )
+
+    t = normalise_text(text)
+    assert STRONG_ESTIMATE_RE.search(t) and ESTIMATE_REASON_RE.search(t)
+
+
+@pytest.mark.parametrize("text", WEAK_CAVEATS)
+def test_weak_caveat_is_not_strong(text: str) -> None:
+    from scrollback.evals.score import (
+        ESTIMATE_REASON_RE,
+        STRONG_ESTIMATE_RE,
+        normalise_text,
+    )
+
+    t = normalise_text(text)
+    assert not (STRONG_ESTIMATE_RE.search(t) and ESTIMATE_REASON_RE.search(t))
+
+
+def test_strong_caveat_is_reported_not_required() -> None:
+    weak = run("q071", "About 24.9 hours in October 2026. This is an estimate.", [[1492.725]])
+    assert weak.passed and weak.caveat and weak.caveat_strong is False
+    strong = run(
+        "q071",
+        "About 24.9 hours in October 2026. This is an estimate based on the gaps between views.",
+        [[1492.725]],
+    )
+    assert strong.passed and strong.caveat_strong is True
+    # A strong caveat never rescues a missing number.
+    wrong = run("q071", "About 30 hours, estimated from the gaps between views.", [[1800.0]])
+    assert wrong.caveat_strong and not wrong.passed

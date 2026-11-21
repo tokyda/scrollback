@@ -3,6 +3,7 @@ data/raw/*
 !data/raw/.gitkeep
 data/warehouse/*
 !data/warehouse/.gitkeep
+data/kb/
 *.duckdb
 *.duckdb.wal
 .env

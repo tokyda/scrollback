@@ -6,6 +6,9 @@ negatives (a regex or matcher misfire rather than an agent mistake) so they are 
 from genuine agent failures.
 
 Hand-confirmed labels live in ``eval/labels/<run_id>.yaml``: set ``label`` on each failure.
+An ``overrides`` list in the same file records an owner decision that reverses the scorer for
+one (question, repeat): ``passed``, a ``label`` when it fails, and a ``reason``. ``eval
+rescore`` applies it and keeps the scorer's own verdict as ``passed_scored``.
 """
 
 from __future__ import annotations
@@ -150,4 +153,20 @@ def load_confirmed(path: Path) -> dict[tuple[str, int], dict[str, Any]]:
             if f["label"] not in LABELS:
                 raise ValueError(f"{f['question']}: unknown label {f['label']!r}")
             out[(f["question"], int(f["repeat"]))] = f
+    return out
+
+
+def load_overrides(path: Path) -> dict[tuple[str, int], dict[str, Any]]:
+    """(question, repeat) -> owner override of the scorer's pass/fail verdict."""
+    if not path.exists():
+        return {}
+    doc = yaml.safe_load(path.read_text()) or {}
+    out = {}
+    for o in doc.get("overrides") or []:
+        key = f"{o.get('question')} r{o.get('repeat')}"
+        if not isinstance(o.get("passed"), bool) or not o.get("reason"):
+            raise ValueError(f"override {key}: needs `passed` (true/false) and a `reason`")
+        if not o["passed"] and o.get("label") not in LABELS:
+            raise ValueError(f"override {key}: a fail needs a taxonomy `label`")
+        out[(o["question"], int(o["repeat"]))] = o
     return out

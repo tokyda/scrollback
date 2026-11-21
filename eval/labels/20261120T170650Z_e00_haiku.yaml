@@ -1,0 +1,223 @@
+run_id: 20261120T170650Z_e00_haiku
+instructions: 'Confirm each failure: set `label` to one of the taxonomy labels (the suggestion is a starting
+  point). Optionally set `scoring_false_negative: true` and a `note`.'
+taxonomy:
+- wrong_metric_definition
+- wrong_time_window
+- timezone_or_day_boundary
+- hallucinated_table_or_column
+- join_or_grain_error
+- aggregation_error
+- sql_error_unrecovered
+- answer_misreport
+- missing_caveat
+- failed_refusal
+- over_refusal
+- tool_loop_or_step_limit
+failures:
+- question: q023
+  repeat: 1
+  category: metric_definition
+  split: dev
+  suggested: wrong_metric_definition
+  reason: leads with 17.78, a wrong-definition value
+  suspect_scoring: 'leads with wrong-definition value 17.78 but also states the gold value: check that
+    the wrong value is the headline, not labelled context'
+  label: wrong_metric_definition
+- question: q042
+  repeat: 1
+  category: session_derived
+  split: dev
+  suggested: wrong_metric_definition
+  reason: leads with 62.03, a wrong-definition value
+  suspect_scoring: 'leads with wrong-definition value 62.03 but also states the gold value: check that
+    the wrong value is the headline, not labelled context'
+  label: wrong_metric_definition
+- question: q052
+  repeat: 1
+  category: multi_step
+  split: dev
+  suggested: wrong_time_window
+  reason: date literals ['2026-09-28', '2026-10-26'] vs gold ['2026-09-28', '2026-10-05', '2026-10-26']
+  suspect_scoring: null
+  label: aggregation_error
+  note: 'Rounded the weekly totals before subtracting: 413.8 vs gold 413.858 at tolerance 0.05. Owner-confirmed
+    2026-11-21: genuine.'
+- question: q071
+  repeat: 1
+  category: trap
+  split: dev
+  suggested: missing_caveat
+  reason: right number but no estimate/coverage caveat
+  suspect_scoring: only the caveat check failed
+  label: missing_caveat
+- question: q084
+  repeat: 1
+  category: session_derived
+  split: dev
+  suggested: wrong_metric_definition
+  reason: leads with 6.633333, a wrong-definition value
+  suspect_scoring: 'leads with wrong-definition value 6.633333 but also states the gold value: check that
+    the wrong value is the headline, not labelled context'
+  label: wrong_metric_definition
+- question: q087
+  repeat: 1
+  category: session_derived
+  split: dev
+  suggested: wrong_metric_definition
+  reason: leads with 75.6, a wrong-definition value
+  suspect_scoring: null
+  label: wrong_metric_definition
+- question: q023
+  repeat: 2
+  category: metric_definition
+  split: dev
+  suggested: wrong_metric_definition
+  reason: leads with 17.78, a wrong-definition value
+  suspect_scoring: 'leads with wrong-definition value 17.78 but also states the gold value: check that
+    the wrong value is the headline, not labelled context'
+  label: wrong_metric_definition
+- question: q042
+  repeat: 2
+  category: session_derived
+  split: dev
+  suggested: wrong_metric_definition
+  reason: leads with 62.03, a wrong-definition value
+  suspect_scoring: null
+  label: wrong_metric_definition
+- question: q053
+  repeat: 2
+  category: multi_step
+  split: dev
+  suggested: aggregation_error
+  reason: result does not match gold
+  suspect_scoring: text states the gold value but no cited result matched
+  label: aggregation_error
+  note: 'Answer ''7 days'' is right, but it was counted from 31 cited per-day rows, not in SQL; no cited
+    cell or shown arithmetic gives 7. Owner-confirmed 2026-11-21: genuine.'
+- question: q071
+  repeat: 2
+  category: trap
+  split: dev
+  suggested: missing_caveat
+  reason: right number but no estimate/coverage caveat
+  suspect_scoring: only the caveat check failed
+  label: missing_caveat
+- question: q072
+  repeat: 2
+  category: trap
+  split: dev
+  suggested: failed_refusal
+  reason: stated an amount [0.0] for a day with no data
+  suspect_scoring: says there is no data but numbers [0.0] counted as today's amount
+  label: failed_refusal
+- question: q084
+  repeat: 2
+  category: session_derived
+  split: dev
+  suggested: wrong_metric_definition
+  reason: leads with 6.633333, a wrong-definition value
+  suspect_scoring: 'leads with wrong-definition value 6.633333 but also states the gold value: check that
+    the wrong value is the headline, not labelled context'
+  label: wrong_metric_definition
+- question: q087
+  repeat: 2
+  category: session_derived
+  split: dev
+  suggested: wrong_metric_definition
+  reason: leads with 75.6, a wrong-definition value
+  suspect_scoring: 'leads with wrong-definition value 75.6 but also states the gold value: check that
+    the wrong value is the headline, not labelled context'
+  label: wrong_metric_definition
+- question: q042
+  repeat: 3
+  category: session_derived
+  split: dev
+  suggested: wrong_metric_definition
+  reason: leads with 62.03, a wrong-definition value
+  suspect_scoring: 'leads with wrong-definition value 62.03 but also states the gold value: check that
+    the wrong value is the headline, not labelled context'
+  label: wrong_metric_definition
+- question: q044
+  repeat: 3
+  category: session_derived
+  split: dev
+  suggested: answer_misreport
+  reason: the cited result matches gold but the text does not state it
+  suspect_scoring: result matches gold but the text check failed
+  label: wrong_metric_definition
+  note: 'Suggested answer_misreport; leads with the 3.9-min first-to-last-view span. Owner-confirmed 2026-11-21:
+    wrong_metric_definition.'
+- question: q052
+  repeat: 3
+  category: multi_step
+  split: dev
+  suggested: wrong_time_window
+  reason: date literals ['2026-09-28', '2026-10-26'] vs gold ['2026-09-28', '2026-10-05', '2026-10-26']
+  suspect_scoring: null
+  label: aggregation_error
+  note: 'Rounded the weekly totals before subtracting: 413.8 vs gold 413.858 at tolerance 0.05. Owner-confirmed
+    2026-11-21: genuine.'
+- question: q072
+  repeat: 3
+  category: trap
+  split: dev
+  suggested: failed_refusal
+  reason: stated an amount [0.0] for a day with no data
+  suspect_scoring: says there is no data but numbers [0.0] counted as today's amount
+  label: failed_refusal
+- question: q087
+  repeat: 3
+  category: session_derived
+  split: dev
+  suggested: wrong_metric_definition
+  reason: leads with 75.6, a wrong-definition value
+  suspect_scoring: null
+  label: wrong_metric_definition
+- question: q093
+  repeat: 3
+  category: trap
+  split: dev
+  suggested: missing_caveat
+  reason: right number but no estimate/coverage caveat
+  suspect_scoring: only the caveat check failed
+  label: missing_caveat
+confirmed:
+  by: owner
+  date: '2026-11-21'
+  decision: '11 wrong_metric_definition (session length led by the span: q023 x2, q042 x3, q084 x2, q087
+    x3; q044 r3), 3 aggregation_error (q052 r1/r3, q053 r2), 3 missing_caveat (q071 r1/r2, q093 r3), 2
+    failed_refusal (q072 r2/r3). q072 r1, q065 r2 and q075 r3 pass after the scorer fixes; q060 r1 passes
+    on the watch-time-share reading.'
+scoring_false_negatives:
+- question: q072
+  repeat: 1
+  note: '''No watch time is recorded for today'' was not a no-data phrase; fixed 2026-11-21'
+- question: q065
+  repeat: 2
+  note: '''Mon 9 - Sun 15 Nov 2026'' was not parsed as a range; fixed 2026-11-21'
+- question: q075
+  repeat: 3
+  note: '''est.'' was not an estimate word; owner decision 2026-11-21'
+rescored_to_pass:
+- question: q060
+  repeat: 1
+  before: false
+  after: true
+  old_label: answer_misreport
+- question: q072
+  repeat: 1
+  before: false
+  after: true
+  old_label: missing_caveat
+- question: q065
+  repeat: 2
+  before: false
+  after: true
+  old_label: failed_refusal
+- question: q075
+  repeat: 3
+  before: false
+  after: true
+  old_label: missing_caveat
+rescored_to_fail: []

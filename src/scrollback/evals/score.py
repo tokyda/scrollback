@@ -6,6 +6,8 @@ Scores per question run:
   metric_sel   metrics_used contains expected_metrics (reported only; E0 uses free text)
   refusal      unanswerable: refused, with no made-up number
   caveat       says the number is an estimate / the data is partial or missing
+  caveat_strong  says it is an estimate AND why (gaps between views, start times only, no
+               duration, the cap, the imputed last view, pauses). Reported only.
   assumptions  ambiguous: assumptions[] is non-empty
 
 ``passed``:
@@ -49,17 +51,37 @@ REFUSAL_RE = re.compile(
     re.IGNORECASE,
 )
 ESTIMATE_RE = re.compile(
-    r"\b(?:estimat\w*|approximat\w*|roughly|not exact\w*|isn'?t exact|no exact|"
+    r"\b(?:estimat\w*|est\.|approximat\w*|roughly|not exact\w*|isn'?t exact|no exact|"
     r"can'?t be exact|not (?:directly )?measured|inferred|capped|cap(?:s|ped)? at|"
     r"cap of|upper (?:bound|limit)|based on (?:the )?(?:gaps?|time between|timing)|"
     r"gaps? between|only records? (?:when|the start)|(?:doesn|does not)'?t? record how long|"
     r"no (?:watch(?:-| )?)?duration|true duration|actual duration)",
     re.IGNORECASE,
 )
+# Strong caveat (reported only, DESIGN §7.2): an estimate statement plus a reason. "Roughly" and
+# "approximately" are rounding words, not caveats, and "based on per-view watch-time estimates"
+# or "not a measured screen time" restate the estimate without saying why.
+STRONG_ESTIMATE_RE = re.compile(
+    r"\b(?:estimat\w*|est\.|inferred|imputed|not (?:an? )?exact|isn'?t exact|can'?t be exact|"
+    r"not (?:directly )?measured|not an? measured)",
+    re.IGNORECASE,
+)
+ESTIMATE_REASON_RE = re.compile(
+    r"\b(?:gaps? between|time between (?:views|videos)|(?:view|start) (?:timestamps?|times|"
+    r"timing)|timestamps|only (?:has|have|records?|logs?|keeps?|stores?)\b.{0,40}?"
+    r"(?:start|when|timestamp)|(?:doesn'?t|does not|don'?t|do not|never) (?:log|record|track|"
+    r"store|include|have|say) (?:how long|(?:the |any )?(?:watch )?(?:duration|length))|"
+    r"no (?:exact |true |actual |real )?(?:watch(?:-| )?)?durations?|"
+    r"(?:true|actual|real) durations?|capped|caps? (?:at|of|per|on)|\d+[- ]?(?:s|sec|second) cap|"
+    r"paus(?:e|es|ed|ing)\b|background play|last (?:view|video)\b.{0,60}?(?:imputed|typical|"
+    r"median|default|assumed)|median of the other)",
+    re.IGNORECASE,
+)
 COVERAGE_RE = re.compile(
-    r"\b(?:no data|no views? (?:recorded|yet|for)|not (?:yet )?(?:in the|available|included|"
-    r"covered)|(?:data|history|export|records?) (?:only )?(?:starts?|begins?|covers?|ends?|"
-    r"runs?|goes back)|only (?:covers?|goes back|starts?|from|since)|partial|incomplete|"
+    r"\b(?:no data|no (?:[a-z]+ )?views? (?:recorded|yet|for)|"
+    r"not (?:yet )?(?:in the|available|included|covered)|"
+    r"(?:data|history|export|records?) (?:only )?(?:starts?|begins?|covers?|ends?|runs?|"
+    r"goes back)|only (?:covers?|goes back|starts?|from|since)|partial|incomplete|"
     r"latest (?:data|date|record|day)|most recent (?:data|day|date)|up to yesterday|"
     r"through yesterday|before (?:the )?(?:history|data|export)|earliest|first (?:day|date) "
     r"(?:of|in) (?:the )?(?:data|history)|hasn'?t been (?:exported|loaded|recorded)|"
@@ -67,7 +89,9 @@ COVERAGE_RE = re.compile(
     re.IGNORECASE,
 )
 NO_DATA_RE = re.compile(
-    r"\b(?:no data|no (?:views?|records?|activity|watch(?:ing)? history) (?:recorded |yet |"
+    r"\b(?:no data|no (?:[a-z]+ )?(?:watch(?:ing)? )?(?:time|minutes|activity|views?|data) "
+    r"(?:is |are |was |were |has been |have been )?(?:recorded|logged)|"
+    r"no (?:[a-z]+ )?(?:views?|records?|activity|watch(?:ing)? history) (?:recorded |yet |"
     r"for|logged|on)|no (?:watch )?(?:events?|views?|data|records?|activity) (?:for|on|today|"
     r"recorded|yet|logged)|(?:data|history|export) (?:ends?|stops?|finishes) (?:on|at)|"
     r"not (?:yet )?(?:in the (?:data|export|history)|available|included|"
@@ -82,7 +106,15 @@ NO_DATA_RE = re.compile(
 MONTHS = ["january", "february", "march", "april", "may", "june", "july", "august",
           "september", "october", "november", "december"]  # fmt: skip
 DAYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
-_MONTH_ALT = "|".join(m[:3] + r"(?:" + m[3:] + r")?\.?" for m in MONTHS)
+
+
+def _month_re(month: str) -> str:
+    """A month name or its abbreviation ("Sep", "Sept", "Sep."), no capture group."""
+    rest = "t|tember" if month == "september" else month[3:]
+    return month[:3] + r"(?:" + rest + r")?\.?"
+
+
+_MONTH_ALT = "|".join(_month_re(m) for m in MONTHS)
 DATE_RES = [
     re.compile(r"\b\d{4}-\d{2}-\d{2}(?:[ T]\d{2}:\d{2}(?::\d{2})?)?\b"),
     re.compile(rf"\b\d{{1,2}}(?:st|nd|rd|th)?\s+(?:{_MONTH_ALT})(?:,?\s+\d{{4}})?\b", re.I),
@@ -135,8 +167,12 @@ def normalise_text(text: str) -> str:
 
 
 def strip_dates_and_times(text: str) -> str:
-    """Blank out dates, times, years and "N tables"-style counts (same length: offsets hold)."""
+    """Blank out date ranges, dates, times, years and "N tables"-style counts (same length:
+    offsets hold). A range is blanked whole, so the 9 in "Mon 9 - Sun 15 Nov" is not a number;
+    2000 is a leap year, so a missing year never rejects 29 Feb."""
     out = text
+    for m, _, _ in _date_ranges(text, 2000):
+        out = out[: m.start()] + " " * (m.end() - m.start()) + out[m.end() :]
     for pattern in [*DATE_RES, TIME_RE, YEAR_RE, NOT_AN_ANSWER_RE]:
         out = pattern.sub(lambda m: " " * len(m.group(0)), out)
     return out
@@ -207,11 +243,25 @@ def _within(
 
 
 def numeric_match(
-    gold: float, candidate: float, unit: str, tolerance: float, decimals: int | None = None
+    gold: float,
+    candidate: float,
+    unit: str,
+    tolerance: float,
+    decimals: int | None = None,
+    scaled: bool = True,
 ) -> bool:
-    """A query-result value (any supported scale) equals ``gold`` within tolerance/rounding."""
+    """A query-result value equals ``gold`` within tolerance/rounding, at any supported scale
+    (only unscaled when ``scaled`` is False).
+
+    A whole-number cell gets no rounding slack against a ratio: 0 or 1 is not a rounded share,
+    and with the usual half-unit slack it would match every share below or above one half.
+    """
     d = _decimals_of(candidate) if decimals is None else decimals
-    return any(_within(gold, candidate, f, d, tolerance) for f in _scales(unit))
+    scales = _scales(unit) if scaled else [1.0]
+    if unit == "ratio" and d == 0:
+        tol = max(tolerance, 1e-9)
+        return any(abs(candidate * f - gold) <= tol + 1e-12 for f in scales)
+    return any(_within(gold, candidate, f, d, tolerance) for f in scales)
 
 
 def text_number_match(gold: float, n: TextNumber, unit: str, tolerance: float) -> bool:
@@ -253,7 +303,9 @@ def _dow_name(value: Any) -> str | None:
     return None
 
 
-def value_match(gold: Any, candidate: Any, unit: str, tolerance: float) -> bool:
+def value_match(
+    gold: Any, candidate: Any, unit: str, tolerance: float, scaled: bool = True
+) -> bool:
     if unit == "date":
         return _to_date_str(gold) is not None and _to_date_str(gold) == _to_date_str(candidate)
     if unit == "dow":
@@ -269,7 +321,7 @@ def value_match(gold: Any, candidate: Any, unit: str, tolerance: float) -> bool:
     g, c = _as_float(gold), _as_float(candidate)
     if g is None or c is None:
         return False
-    return numeric_match(g, c, unit, tolerance)
+    return numeric_match(g, c, unit, tolerance, scaled=scaled)
 
 
 # --------------------------------------------------------------------------- result matching
@@ -279,6 +331,25 @@ def value_match(gold: Any, candidate: Any, unit: str, tolerance: float) -> bool:
 class ResultTable:
     columns: list[str]
     rows: list[list[Any]]
+
+
+def label_columns(result: ResultTable) -> set[int]:
+    """Columns that label rows rather than measure them: whole numbers, at least 3 rows, all
+    distinct and together a run of consecutive integers (hour 0-23, day of week 1-7, rank).
+    Their cells still match unscaled (hour 21 for "which hour"), but are never rescaled, so
+    hour 17 is not read as 17% of a share."""
+    labels: set[int] = set()
+    rows = result.rows[:DERIVE_MAX_ROWS]
+    if len(rows) < 3:
+        return labels
+    for j in range(len(result.columns)):
+        values = [row[j] if j < len(row) else None for row in rows]
+        if not all(isinstance(v, int) and not isinstance(v, bool) for v in values):
+            continue
+        ints = [int(v) for v in values if v is not None]
+        if len(set(ints)) == len(ints) and max(ints) - min(ints) + 1 == len(ints):
+            labels.add(j)
+    return labels
 
 
 def _rows_match(gold_row: list[Any], cand_row: list[Any], mapping: tuple[int, ...],
@@ -296,7 +367,11 @@ def table_match(q: Question, gold: GoldAnswer, result: ResultTable) -> bool:
         return False
     if q.answer_type == "scalar":
         first = result.rows[0]
-        return any(value_match(gold.scalar, v, units[0], q.tolerance) for v in first)
+        labels = label_columns(result)
+        return any(
+            value_match(gold.scalar, v, units[0], q.tolerance, scaled=j not in labels)
+            for j, v in enumerate(first)
+        )
     if q.answer_type == "table" and len(gold.rows) == 1 and _long_format_match(q, gold, result):
         return True
     for mapping in permutations(range(len(result.columns)), k):
@@ -338,6 +413,18 @@ def _long_format_match(q: Question, gold: GoldAnswer, result: ResultTable) -> bo
             return False
         used.add(hit)
     return True
+
+
+def cross_result_match(q: Question, gold: GoldAnswer, cited: list[ResultTable]) -> bool:
+    """A one-row table gold whose values are each in their own cell, spread over the cited
+    results of one run (minutes from one query, the date from another). Owner decision
+    2026-11-22 (E2b q087 r1): it counts only when the answer text also states every gold
+    value, which the caller checks, so a value that merely sits in some cited result can't
+    pass on its own."""
+    if q.answer_type != "table" or len(gold.rows) != 1 or len(cited) < 2:
+        return False
+    merged = ResultTable(columns=["_"], rows=[row for r in cited for row in r.rows])
+    return _long_format_match(q, gold, merged)
 
 
 DERIVE_MAX_ROWS = 100
@@ -404,7 +491,7 @@ def derived_values(result: ResultTable) -> list[float]:
     return [v for v, _ in derivations(result)]
 
 
-_MON = r"(?P<{name}>" + "|".join(m[:3] + "(?:" + m[3:] + r")?\.?" for m in MONTHS) + ")"
+_MON = r"(?P<{name}>" + _MONTH_ALT + ")"
 _WD = r"(?:(?:mon|tue|tues|wed|thu|thur|thurs|fri|sat|sun)(?:day|nesday|sday|urday)?,?\s+)?"
 _SEP = r"\s*(?:-|to|through|until|thru)\s*"
 RANGE_RES = [
@@ -416,9 +503,9 @@ RANGE_RES = [
         rf"{_WD}(?P<d2>\d{{1,2}})\s+{_MON.format(name='m2')}(?:\s+(?P<y2>\d{{4}}))?",
         re.I,
     ),
-    # 10-16 Nov (2026)
+    # 10-16 Nov (2026), (Mon) 9 - (Sun) 15 Nov (2026)
     re.compile(
-        rf"\b(?P<d1>\d{{1,2}})\s*-\s*(?P<d2>\d{{1,2}})\s+{_MON.format(name='m2')}"
+        rf"\b{_WD}(?P<d1>\d{{1,2}}){_SEP}{_WD}(?P<d2>\d{{1,2}})\s+{_MON.format(name='m2')}"
         rf"(?:\s+(?P<y2>\d{{4}}))?",
         re.I,
     ),
@@ -435,10 +522,9 @@ def _month_number(token: str) -> int:
     return [m[:3] for m in MONTHS].index(token.lower()[:3]) + 1
 
 
-def stated_date_ranges(text: str, today: date) -> list[tuple[date, date]]:
-    """Explicit date ranges an answer states ("2026-11-09 to 2026-11-15", "10-16 Nov 2026",
-    "Mon 9 Nov to Sun 15 Nov", "Nov 10-16"). Missing years default to ``today``'s year."""
-    found: list[tuple[date, date]] = []
+def _date_ranges(text: str, year: int) -> list[tuple[re.Match[str], date, date]]:
+    """Every valid range match in ``text``; a missing year defaults to ``year``."""
+    found = []
     for pattern in RANGE_RES:
         for m in pattern.finditer(text):
             g = m.groupdict()
@@ -448,13 +534,24 @@ def stated_date_ranges(text: str, today: date) -> list[tuple[date, date]]:
                 else:
                     m2 = _month_number(g["m2"])
                     m1 = _month_number(g["m1"]) if g.get("m1") else m2
-                    y2 = int(g["y2"]) if g.get("y2") else today.year
+                    y2 = int(g["y2"]) if g.get("y2") else year
                     y1 = int(g["y1"]) if g.get("y1") else y2
                     start, end = date(y1, m1, int(g["d1"])), date(y2, m2, int(g["d2"]))
             except (ValueError, KeyError):
                 continue
-            if start <= end and (start, end) not in found:
-                found.append((start, end))
+            if start <= end:
+                found.append((m, start, end))
+    return found
+
+
+def stated_date_ranges(text: str, today: date) -> list[tuple[date, date]]:
+    """Explicit date ranges an answer states ("2026-11-09 to 2026-11-15", "10-16 Nov 2026",
+    "Mon 9 Nov to Sun 15 Nov", "Mon 9 - Sun 15 Nov", "Nov 10-16"). Missing years default to
+    ``today``'s year."""
+    found: list[tuple[date, date]] = []
+    for _, start, end in _date_ranges(text, today.year):
+        if (start, end) not in found:
+            found.append((start, end))
     return found
 
 
@@ -502,6 +599,45 @@ def range_sum_match(
     return False
 
 
+def _flag_columns(result: ResultTable) -> list[int]:
+    """Boolean group columns (is_late_night), or whole-number columns holding only 0 and 1."""
+    rows = result.rows[:DERIVE_MAX_ROWS]
+    flags = []
+    for j in range(len(result.columns)):
+        values = [row[j] if j < len(row) else None for row in rows]
+        booleans = all(isinstance(v, bool) for v in values) and len(set(values)) == 2
+        zero_one = all(type(v) is int for v in values) and set(values) == {0, 1}
+        if booleans or zero_one:
+            flags.append(j)
+    return flags
+
+
+def group_shares(result: ResultTable) -> list[float]:
+    """Shares of a column total held by one side of a flag column, as in a GROUP BY
+    is_late_night result: sum(col where flag) / sum(col). Few candidates per result (two per
+    flag and numeric column), and ``derived_match`` also needs the text to state the share."""
+    grid = _numeric_grid(result)
+    rows = result.rows[:DERIVE_MAX_ROWS]
+    labels = label_columns(result)
+    shares: list[float] = []
+    flags = _flag_columns(result)
+    for fj in flags:
+        for j in range(len(result.columns)):
+            if j == fj or j in labels or j in flags:
+                continue
+            column = [grid[i][j] if j < len(grid[i]) else None for i in range(len(grid))]
+            if any(v is None for v in column):
+                continue
+            total = float(sum(v for v in column if v is not None))
+            if total <= 0:
+                continue
+            for side in {bool(row[fj]) for row in rows}:
+                part = sum(v for v, row in zip(column, rows, strict=True)
+                           if v is not None and bool(row[fj]) == side)  # fmt: skip
+                shares.append(part / total)
+    return shares
+
+
 def _stated(value: float, text_nums: list[TextNumber], unit: str, tolerance: float) -> bool:
     units = (unit, "number") if unit != "number" else ("number",)
     return any(text_number_match(value, n, u, tolerance) for n in text_nums for u in units)
@@ -520,11 +656,16 @@ def derived_match(
     derived value *and* every cell it was computed from. So "Saturday 293 + Sunday 186 =
     about 479 min" counts, while two unrelated cells whose difference happens to equal the
     gold (8.1 - 3.9 = 4.2 vs 4.18) do not. A sum over many dated rows also counts when the
-    answer states the total and its date range (``range_sum_match``).
+    answer states the total and its date range (``range_sum_match``). A share of a group
+    (``group_shares``) counts when the text states it.
     """
     if q.answer_type not in ("scalar", "table") or len(gold.rows) != 1:
         return False
-    cells = [v for row in _numeric_grid(result) for v in row if v is not None]
+    labels = label_columns(result)
+    cells = [
+        (v, j not in labels) for row in _numeric_grid(result) for j, v in enumerate(row)
+        if v is not None
+    ]  # fmt: skip
     derived = derivations(result)
     for value, unit in zip(gold.rows[0], q.units, strict=True):
         g = _as_float(value)
@@ -532,7 +673,7 @@ def derived_match(
             if not any(value_match(value, c, unit, q.tolerance) for r in result.rows for c in r):
                 return False
             continue
-        if any(numeric_match(g, c, unit, q.tolerance) for c in cells):
+        if any(numeric_match(g, c, unit, q.tolerance, scaled=s) for c, s in cells):
             continue
         if any(
             numeric_match(g, d, unit, q.tolerance, decimals=6)
@@ -543,6 +684,12 @@ def derived_match(
             continue
         if range_sum_match(g, unit, q.tolerance, result, ranges or [], text_nums):
             continue
+        if unit == "ratio" and any(
+            numeric_match(g, sh, unit, q.tolerance, decimals=6)
+            and _stated(sh, text_nums, unit, q.tolerance)
+            for sh in group_shares(result)
+        ):
+            continue
         return False
     return True
 
@@ -552,8 +699,7 @@ def derived_match(
 
 def _date_patterns(iso: str) -> list[re.Pattern[str]]:
     d = date.fromisoformat(iso[:10])
-    month = MONTHS[d.month - 1]
-    mon = rf"{month[:3]}(?:{month[3:]})?\.?"
+    mon = _month_re(MONTHS[d.month - 1])
     day = rf"0?{d.day}(?:st|nd|rd|th)?"
     return [
         re.compile(rf"\b{d.isoformat()}\b"),
@@ -772,6 +918,7 @@ class Score:
     metric_selection: bool | None = None
     refusal: bool | None = None
     caveat: bool | None = None
+    caveat_strong: bool | None = None  # estimate + reason; reported only
     assumptions: bool | None = None
     reading: int | None = None  # 0 = gold, 1.. = alternative index
     wrong_value: float | None = None
@@ -787,6 +934,7 @@ def _norm_metric(name: str) -> str:
 def score(q: Question, gold: QuestionGold, out: AgentOutput) -> Score:
     text = normalise_text(out.text or "")
     caveat = bool(ESTIMATE_RE.search(text) or COVERAGE_RE.search(text))
+    strong = bool(STRONG_ESTIMATE_RE.search(text) and ESTIMATE_REASON_RE.search(text))
     refused = bool(REFUSAL_RE.search(text))
     metric_sel = None
     if q.expected_metrics:
@@ -795,15 +943,17 @@ def score(q: Question, gold: QuestionGold, out: AgentOutput) -> Score:
 
     if out.status != "answered":
         return Score(passed=False, execution=False, answer=False, metric_selection=metric_sel,
-                     caveat=False, notes=[f"status {out.status}"])  # fmt: skip
+                     caveat=False, caveat_strong=False,
+                     notes=[f"status {out.status}"])  # fmt: skip
 
     if q.answer_type == "refusal":
         ungrounded = refusal_ungrounded_numbers(
             text, q.question, list((out.all_results or out.results).values()), out.tool_values
         )
         ok = refused and ungrounded == []
-        return Score(passed=ok, refusal=ok, caveat=caveat, refused=refused,
-                     fabricated=ungrounded or [], metric_selection=None)  # fmt: skip
+        return Score(passed=ok, refusal=ok, caveat=caveat, caveat_strong=strong,
+                     refused=refused, fabricated=ungrounded or [],
+                     metric_selection=None)  # fmt: skip
 
     if q.answer_type == "no_data":
         says_no_data = bool(NO_DATA_RE.search(text))
@@ -812,8 +962,8 @@ def score(q: Question, gold: QuestionGold, out: AgentOutput) -> Score:
         notes = [] if says_no_data else ["does not say there is no data"]
         if amounts:
             notes.append(f"states an amount {amounts}")
-        return Score(passed=ok, refusal=ok, caveat=says_no_data, refused=refused,
-                     fabricated=amounts, notes=notes)  # fmt: skip
+        return Score(passed=ok, refusal=ok, caveat=says_no_data, caveat_strong=strong,
+                     refused=refused, fabricated=amounts, notes=notes)  # fmt: skip
 
     readings = gold.all()
     text_nums = numbers_in(text)
@@ -827,9 +977,6 @@ def score(q: Question, gold: QuestionGold, out: AgentOutput) -> Score:
     reading_idx: int | None = None
     exec_reading: int | None = None
     for idx, g in enumerate(readings):
-        strict_ok = any(table_match(q, g, r) for r in cited)
-        execution_strict = execution_strict or strict_ok
-        exec_ok = strict_ok or any(derived_match(q, g, r, text_nums, ranges) for r in cited)
         values = [g.scalar] if q.answer_type == "scalar" else [v for row in g.rows for v in row]
         units = (
             [q.units[0]]
@@ -838,6 +985,11 @@ def score(q: Question, gold: QuestionGold, out: AgentOutput) -> Score:
         )
         text_ok = all(text_states(text, v, u, q.tolerance)
                       for v, u in zip(values, units, strict=True))  # fmt: skip
+        strict_ok = any(table_match(q, g, r) for r in cited) or (
+            text_ok and cross_result_match(q, g, cited)
+        )
+        execution_strict = execution_strict or strict_ok
+        exec_ok = strict_ok or any(derived_match(q, g, r, text_nums, ranges) for r in cited)
         if exec_ok and exec_reading is None:
             exec_reading = idx
         if exec_ok and text_ok:
@@ -872,6 +1024,7 @@ def score(q: Question, gold: QuestionGold, out: AgentOutput) -> Score:
         gold_stated=gold_stated,
         metric_selection=metric_sel,
         caveat=caveat,
+        caveat_strong=strong,
         assumptions=has_assumptions if q.category == "ambiguous" else None,
         reading=reading_idx,
         wrong_value=wrong,

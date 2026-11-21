@@ -159,14 +159,33 @@ def test_compare_runs(oracle_run: Path, tmp_path: Path) -> None:
     b = json.loads((run_dir / "summary.json").read_text())
     text = compare(a, b)
     assert "Regressed (2): q001 1/1->0/1, q002 1/1->0/1" in text
+    assert "| strong caveat (traps, reported only) |" in text
+    assert "| tokens |" in text and "| cost per run ($) |" in text
+
+
+def test_cli_compare_one_split(oracle_run: Path, tmp_path: Path) -> None:
+    wrong = run_eval(
+        E0, QSET, base=repo_settings(), llm_factory=lambda s: WrongLLM(), split="all",
+        repeat=1, workers=1, only=["q001", "q004"], runs_dir=tmp_path / "r",
+        labels_dir=tmp_path / "l",
+    )  # fmt: skip
+    result = CliRunner().invoke(
+        app, ["eval", "report", str(oracle_run), str(wrong), "--split", "dev"]
+    )
+    assert result.exit_code == 0, result.output
+    assert "(dev split only)" in result.output
+    # q004 is a test question, so it is left out of a dev-only comparison.
+    assert "Regressed (1): q001 1/1->0/1" in result.output
+    assert "| test | n/a | n/a |" in result.output
+    bad = CliRunner().invoke(app, ["eval", "report", str(oracle_run), str(wrong), "--split", "x"])
+    assert bad.exit_code == 2
 
 
 def test_experiment_settings() -> None:
     settings = experiment_settings(repo_settings(), E0, QSET)
     assert settings.llm.model == "claude-sonnet-5-5" and settings.llm.effort == "medium"
-    assert (
-        settings.agent.prompt_version == 1 and settings.agent.describe_include_descriptions is False
-    )
+    assert settings.agent.prompt_version == "1"
+    assert settings.agent.describe_include_descriptions is False
     assert settings.timezone.local_tz == "Asia/Singapore"
     bad = Experiment(name="x", description="x", overrides={"metrics": {"view_cap_sec": 1}})
     with pytest.raises(ValueError, match="may only override"):
@@ -231,3 +250,92 @@ def test_rescore_is_stable_and_keeps_labels(tmp_path: Path) -> None:
     assert doc["failures"][0]["label"] == "aggregation_error"
     assert (run_dir / "results.original.jsonl").exists()
     assert len(load_records(run_dir)) == 2
+
+
+def test_rescore_applies_owner_override(tmp_path: Path) -> None:
+    from scrollback.evals.run import rescore_run
+
+    labels_dir = tmp_path / "labels"
+    run_dir = run_eval(
+        E0, QSET, base=repo_settings(), llm_factory=lambda s: OracleLLM(), split="all",
+        repeat=1, workers=1, only=["q001"], runs_dir=tmp_path / "runs", labels_dir=labels_dir,
+    )  # fmt: skip
+    assert load_records(run_dir)[0]["passed"]
+    label_path = labels_dir / f"{run_dir.name}.yaml"
+    doc = yaml.safe_load(label_path.read_text()) or {}
+    reason = "the text computes a different metric; the match is a coincidence"
+    doc["overrides"] = [{"question": "q001", "repeat": 1, "passed": False,
+                         "label": "answer_misreport", "reason": reason}]  # fmt: skip
+    label_path.write_text(yaml.safe_dump(doc))
+
+    for _ in range(2):
+        result = rescore_run(run_dir, QSET, base=repo_settings(), labels_dir=labels_dir)
+    rec = load_records(run_dir)[0]
+    assert not rec["passed"] and rec["passed_scored"] and rec["override"] == reason
+    assert result["summary"]["accuracy"]["overall"]["mean"] == 0
+    doc = yaml.safe_load(label_path.read_text())
+    assert doc["overrides"][0]["reason"] == reason  # kept across re-scores
+    (failure,) = doc["failures"]
+    assert failure["label"] == "answer_misreport" and "owner override" in failure["note"]
+
+    doc["overrides"][0]["label"] = None
+    label_path.write_text(yaml.safe_dump(doc))
+    with pytest.raises(ValueError, match="needs a taxonomy"):
+        rescore_run(run_dir, QSET, base=repo_settings(), labels_dir=labels_dir)
+
+
+def test_cli_rescore_dev_only_run(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from scrollback.evals import run as run_module
+
+    run_dir = run_eval(
+        E0, QSET, base=repo_settings(), llm_factory=lambda s: OracleLLM(), split="dev",
+        repeat=1, workers=1, only=["q071"], runs_dir=tmp_path / "r", labels_dir=tmp_path / "l",
+    )  # fmt: skip
+    monkeypatch.setattr(run_module, "DEFAULT_LABELS_DIR", tmp_path / "l")
+    result = CliRunner().invoke(app, ["eval", "rescore", str(run_dir)])
+    assert result.exit_code == 0, result.output
+    assert "test n/a" in result.output
+    rec = load_records(run_dir)[0]
+    assert "caveat_strong" in rec["scores"]
+
+
+class SearchingOracle(OracleLLM):
+    """Searches the knowledge base with the question first, then answers like the oracle."""
+
+    model = "mock-searching"
+
+    def complete(
+        self, *, system: str, messages: list[dict[str, Any]], tools: list[dict[str, Any]]
+    ) -> LLMResponse:
+        q = _question_for(messages)
+        if len(messages) == 1:
+            return mock_turn(("search_knowledge", {"query": q.question}))
+        trimmed = [messages[0], *messages[3:]]  # hide the search turn from the oracle
+        return super().complete(system=system, messages=trimmed, tools=tools)
+
+
+def test_search_run_records_retrieval(tmp_path: Path) -> None:
+    from scrollback.evals.run import Experiment
+
+    base = repo_settings()
+    base.paths = base.paths.model_copy(update={"kb_index": tmp_path / "kb.duckdb"})
+    base.kb = base.kb.model_copy(update={"embedding_model": "hashing"})
+    exp = Experiment.model_validate({
+        "name": "e02a_test", "description": "search on",
+        "overrides": {"agent": {"prompt_version": "1_search", "search_knowledge": True}},
+    })  # fmt: skip
+    run_dir = run_eval(
+        exp, QSET, base=base, llm_factory=lambda s: SearchingOracle(), split="dev", repeat=1,
+        workers=1, only=["q001", "q023", "q063"], runs_dir=tmp_path / "runs",
+        labels_dir=tmp_path / "labels",
+    )  # fmt: skip
+    records = {r["question"]: r for r in load_records(run_dir)}
+    assert all(r["search_available"] and r["kb_searches"] == 1 for r in records.values())
+    assert records["q001"]["retrieved"] and isinstance(records["q001"]["kb_recall"], float)
+    assert records["q063"]["kb_recall"] is None  # its knowledge is the E6 cannot_answer doc
+    summary = json.loads((run_dir / "summary.json").read_text())
+    assert summary["sub_scores"]["kb_searched"] == 1.0
+    assert summary["sub_scores"]["kb_recall"] is not None
+    assert summary["efficiency"]["kb_searches"] == 1.0
+    config = json.loads((run_dir / "config.json").read_text())
+    assert len(config["system_prompt_sha256"]) == 64

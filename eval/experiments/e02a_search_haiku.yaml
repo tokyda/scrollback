@@ -1,0 +1,20 @@
+# E2a on Haiku (DESIGN §7.5): E1-haiku + the search_knowledge tool.
+# One change from e01_haiku: search_knowledge on, with the prompt that lists it.
+# system_v1_search.md is system_v1.md plus that one tool line and no new rule; a prompt that
+# disagrees with the tool switch fails to load. Sources: metrics, glossary docs (with the
+# 2026-11-21 sessions.md edit, 2fa833a) and table descriptions; no examples, no
+# "cannot answer" doc. k = llm.retrieval_k = 6.
+name: e02a_search_haiku
+description: "E2a on Haiku: E1-haiku + search_knowledge (prompt v1 + one tool line)"
+overrides:
+  llm:
+    model: claude-haiku-5-5
+    effort: medium
+  agent:
+    prompt_version: "1_search"
+    result_mode: aggregate_only
+    describe_include_descriptions: true
+    search_knowledge: true
+    kb_sources: [metrics, docs, tables]
+    sql_max_retries: 2
+    max_steps: 8

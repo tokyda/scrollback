@@ -1,0 +1,14 @@
+# E0-haiku (DESIGN §7.5, model swap at the base of the ladder): the E0 baseline on Haiku.
+# One change from e00_baseline: model claude-sonnet-5-5 -> claude-haiku-5-5.
+name: e00_haiku
+description: "E0-haiku: E0 baseline (schema only, prompt v1) on Haiku 5.5 at medium effort"
+overrides:
+  llm:
+    model: claude-haiku-5-5
+    effort: medium
+  agent:
+    prompt_version: 1
+    result_mode: aggregate_only
+    describe_include_descriptions: false
+    sql_max_retries: 2
+    max_steps: 8

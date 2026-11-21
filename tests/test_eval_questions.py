@@ -172,3 +172,16 @@ def test_snapshot_drift(tmp_path: Path) -> None:
     assert snapshot_drift(changed, path) == ["q001: gold differs from snapshot"]
     assert "no gold snapshot" in snapshot_drift(golds, tmp_path / "missing.json")[0]
     assert json.loads(path.read_text())["q001"]["gold"]["rows"] == [[1]]
+
+
+def test_expected_knowledge_ids_exist() -> None:
+    from scrollback.kb.chunks import all_chunks
+
+    ids = {c.id for c in all_chunks()}
+    qset = load_questions()
+    unknown = [(q.id, e) for q in qset.questions for e in q.expected_knowledge if e not in ids]
+    assert unknown == []
+    assert all(q.expected_knowledge for q in qset.questions)
+    for q in qset.questions:
+        for m in q.expected_metrics:
+            assert f"metric:{m}" in q.expected_knowledge, q.id

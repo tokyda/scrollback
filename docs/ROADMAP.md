@@ -63,16 +63,22 @@ Build scope by phase. Each phase ends with a "Done when" check. See `docs/DESIGN
 
 ## Phase 5: RAG and optimisation ladder
 - [ ] Knowledge indexer: chunks `metrics.yml`, docs, `schema.yml` and examples → embeddings in DuckDB
-- [ ] `search_knowledge` with hybrid retrieval (embeddings + synonym/keyword match)
-- [ ] `knowledge/examples.yml` few-shot pairs + overlap check against the eval set
-- [ ] SQL error self-correction (max 2 retries)
-- [ ] Semantic compiler `metrics.yml → SQL` + `query_metric` tool
+- [x] `search_knowledge` with hybrid retrieval (embeddings + synonym/keyword match): fastembed bge-small + BM25, RRF; `kb index`, `kb search`
+- [ ] ~~`knowledge/examples.yml` few-shot pairs + overlap check against the eval set~~ *(E3 skipped, owner decision 2026-11-22: no headroom; DESIGN §7.5)*
+- [x] SQL error self-correction (max 2 retries) *(already part of the E0 baseline, DESIGN §6.3)*
+- [ ] ~~Semantic compiler `metrics.yml → SQL` + `query_metric` tool~~ *(moved to the stretch backlog, 2026-11-22)*
 - [ ] Refusal and caveat rules in the prompt
-- [ ] Run experiments **E1–E7** (§7.5); compare reports after each
-- [ ] Retrieval eval: for each question, is the right metric or doc in the top k (recall@k)
-- [ ] README results table: accuracy, bad-case mix, tokens and latency per experiment
+- [x] **E1** on Sonnet (dev 99.5% vs E0 91.7%; `eval/reports/e01_descriptions.md`); E1 is Sonnet's final config
+- [x] **E0-haiku** and **E1-haiku** on dev (model swap moved to the base of the ladder, §7.5): 90.1% and 97.9% (Sonnet E1 99.5%) at $0.0008 vs $0.0105 per question; `eval/reports/e00_e01_haiku.md`
+- [x] **E2a** (98.4% dev after the no-data fix; re-run on the new retrieval as E2a′, 98.4%) and **E2b** (99.5% after the cross-result scorer fix; `eval/reports/e02b_lookup_rule_haiku.md`) on Haiku
+- [x] **E6a** on Haiku, built on E2b (`system_v3.md` rules only; done: 99.0%, q072 fixed; `eval/reports/e06a_refusal_rules_haiku.md`), then **E6b** (+ the `cannot_answer` doc in the index; done: 99.5%; `eval/reports/e06b_cannot_answer_haiku.md`); split owner decision 2026-11-22, §7.5. E3 skipped and E5 moved to stretch (owner decision 2026-11-22); E4 cut
+- [x] Final: best Haiku config (E6b) and Sonnet E1 on the test split: 100% and 99.0% (E0 96.9%); `eval/reports/final_test.md`
+- [x] *(added)* Scorer fixes from the Haiku review ("Sept", weekday date ranges, "est.", a no-data phrase, ratio and row-label cells, group shares) and q060's watch-time reading (§7.2)
+- [x] *(added)* Strong-caveat sub-score (estimate + reason; reported only, §7.2) and `eval report a b --split`
+- [x] Retrieval eval: for each question, is the right metric or doc in the top k (recall@k) *(run on dev 2026-11-21 with E2a's sources: recall@6 79.3%; `eval/reports/e02a_search_haiku.md`)*
+- [x] README results table: accuracy, bad-case mix, tokens and latency per experiment
 
-**Done when:** the best config beats E0 by a clear margin on execution accuracy, and every gain is linked to a run report.
+**Done when:** for Haiku, within ~2 points of Sonnet E1 with cost per question side by side (met at E1-haiku), and from E2a on each step shows no dev regression beyond repeat variance, with recall@k, tokens/cost per question and the remaining failures it fixes reported; for Sonnet, the best config's mean dev pass rate is above E0's best dev repeat and its worst dev repeat is at least E0's dev mean; the dev session-length cluster (q023, q042, q084, q087) passes at least 10 of 12 runs; the final test pass rate is at least E0's 96.9%; tokens per question are reported; and every gain is linked to a run report (DESIGN §7.5).
 
 ## Phase 6: Telegram bot
 - [ ] Telegram bot: free-text questions, chart as photo, "Show SQL" button, allowed chat IDs only
@@ -104,3 +110,5 @@ Build scope by phase. Each phase ends with a "Done when" check. See `docs/DESIGN
 - Multi-turn conversation memory with follow-ups ("and the week before?")
 - Clarifying questions for ambiguous queries in interactive mode, with their own eval category
 - Cost guardrails: per-day token budget, cheap-model routing for simple questions
+- `query_metric` semantic-layer tool (`metrics.yml → SQL`), formerly ladder step E5 (DESIGN §7.5)
+- Deterministic relative-date resolver tool, e.g. `resolve_dates("last weekend", today)` → start/end dates, so the agent doesn't do calendar arithmetic itself. Motivated by q019: Haiku reads "last weekend" on a Monday as the weekend before last in some runs (E1-haiku r2/r3, E6a r1/r3)

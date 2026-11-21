@@ -38,6 +38,7 @@ questions:
     gold_sql: SELECT count(*) FROM fct_views
     units: [count]
     expected_metrics: [views]
+    expected_knowledge: [metric:views]
 
   - id: q002
     question: How many videos have I liked in total?
@@ -50,6 +51,7 @@ questions:
     gold_sql: SELECT count(*) FROM fct_likes
     units: [count]
     expected_metrics: [likes]
+    expected_knowledge: [metric:likes]
 
   - id: q003
     question: How many different videos have I watched?
@@ -62,6 +64,7 @@ questions:
     gold_sql: SELECT count(DISTINCT video_id) FROM fct_views
     units: [count]
     expected_metrics: [unique_videos]
+    expected_knowledge: [metric:unique_videos]
     wrong_values: [11885]
     likely_failure: wrong_metric_definition
 
@@ -76,6 +79,7 @@ questions:
     gold_sql: SELECT count(*) FROM fct_searches
     units: [count]
     expected_metrics: [searches]
+    expected_knowledge: [metric:searches]
 
   - id: q005
     question: On how many days have I used TikTok?
@@ -88,6 +92,7 @@ questions:
     gold_sql: SELECT count(DISTINCT local_date) FROM fct_views
     units: [count]
     expected_metrics: [active_days]
+    expected_knowledge: [metric:active_days]
     wrong_values: [180]
     likely_failure: wrong_metric_definition
 
@@ -102,6 +107,7 @@ questions:
     gold_sql: SELECT count(*) FROM fct_sessions
     units: [count]
     expected_metrics: [sessions]
+    expected_knowledge: [metric:sessions]
 
   # ------------------------------------------------------------------------- time_window
   - id: q007
@@ -118,6 +124,7 @@ questions:
     units: [minutes]
     tolerance: 0.05
     expected_metrics: [est_watch_minutes]
+    expected_knowledge: [metric:est_watch_minutes]
 
   - id: q008
     question: How many videos did I watch between 1 and 15 August 2026?
@@ -132,6 +139,7 @@ questions:
       WHERE local_date BETWEEN DATE '2026-08-01' AND DATE '2026-08-15'
     units: [count]
     expected_metrics: [views]
+    expected_knowledge: [metric:views]
     likely_failure: wrong_time_window
 
   - id: q009
@@ -147,6 +155,7 @@ questions:
       WHERE local_date BETWEEN DATE '2026-09-01' AND DATE '2026-09-30'
     units: [count]
     expected_metrics: [likes]
+    expected_knowledge: [metric:likes]
 
   - id: q010
     question: How many minutes did I watch on Saturday 24 October 2026?
@@ -161,6 +170,7 @@ questions:
     units: [minutes]
     tolerance: 0.05
     expected_metrics: [est_watch_minutes]
+    expected_knowledge: [metric:est_watch_minutes]
 
   - id: q011
     question: How many searches did I make from Monday 2 November to Sunday 8 November 2026?
@@ -175,6 +185,7 @@ questions:
       WHERE local_date BETWEEN DATE '2026-11-02' AND DATE '2026-11-08'
     units: [count]
     expected_metrics: [searches]
+    expected_knowledge: [metric:searches]
 
   - id: q012
     question: How many videos did I watch in June 2026?
@@ -189,6 +200,7 @@ questions:
       WHERE local_date BETWEEN DATE '2026-06-01' AND DATE '2026-06-30'
     units: [count]
     expected_metrics: [views]
+    expected_knowledge: [metric:views]
 
   # ------------------------------------------------------------------------- relative_date
   - id: q013
@@ -205,6 +217,7 @@ questions:
     units: [minutes]
     tolerance: 0.05
     expected_metrics: [est_watch_minutes]
+    expected_knowledge: [metric:est_watch_minutes]
     likely_failure: wrong_time_window
 
   - id: q014
@@ -218,6 +231,7 @@ questions:
     gold_sql: SELECT count(*) FROM fct_views WHERE local_date = DATE '2026-11-15'
     units: [count]
     expected_metrics: [views]
+    expected_knowledge: [metric:views]
     likely_failure: wrong_time_window
 
   - id: q015
@@ -231,6 +245,7 @@ questions:
     gold_sql: SELECT count(*) FROM fct_views WHERE local_date = DATE '2026-11-16'
     units: [count]
     expected_metrics: [views]
+    expected_knowledge: [metric:views]
     likely_failure: wrong_time_window
 
   - id: q016
@@ -246,6 +261,7 @@ questions:
     units: [minutes]
     tolerance: 0.05
     expected_metrics: [est_watch_minutes]
+    expected_knowledge: [metric:est_watch_minutes]
     likely_failure: wrong_time_window
 
   - id: q017
@@ -262,6 +278,7 @@ questions:
     units: [minutes]
     tolerance: 0.05
     expected_metrics: [est_watch_minutes]
+    expected_knowledge: [metric:est_watch_minutes]
     likely_failure: wrong_time_window
 
   - id: q018
@@ -277,6 +294,7 @@ questions:
       WHERE local_date BETWEEN DATE '2026-10-26' AND DATE '2026-11-01'
     units: [count]
     expected_metrics: [sessions]
+    expected_knowledge: [metric:sessions, doc:timezone_and_day_boundary#sessions-that-cross-midnight]
     likely_failure: wrong_time_window
 
   - id: q019
@@ -293,6 +311,7 @@ questions:
     units: [minutes]
     tolerance: 0.05
     expected_metrics: [est_watch_minutes]
+    expected_knowledge: [metric:est_watch_minutes]
     likely_failure: wrong_time_window
 
   - id: q020
@@ -308,6 +327,7 @@ questions:
       WHERE local_date BETWEEN DATE '2026-09-01' AND DATE '2026-09-30'
     units: [count]
     expected_metrics: [views]
+    expected_knowledge: [metric:views]
     likely_failure: wrong_time_window
 
   - id: q021
@@ -323,6 +343,7 @@ questions:
     units: [minutes]
     tolerance: 0.05
     expected_metrics: [est_watch_minutes]
+    expected_knowledge: [metric:est_watch_minutes]
     likely_failure: wrong_time_window
 
   # ------------------------------------------------------------------------- metric_definition
@@ -340,6 +361,7 @@ questions:
     units: [ratio]
     tolerance: 0.005
     expected_metrics: [late_night_share]
+    expected_knowledge: [metric:late_night_share]
     wrong_values: [0.2948, 0.1775]
     likely_failure: wrong_metric_definition
 
@@ -357,6 +379,7 @@ questions:
     units: [minutes]
     tolerance: 0.05
     expected_metrics: [avg_session_minutes]
+    expected_knowledge: [metric:avg_session_minutes, doc:sessions#things-to-keep-in-mind]
     wrong_values: [17.78]
     likely_failure: wrong_metric_definition
 
@@ -371,6 +394,7 @@ questions:
     gold_sql: SELECT count(*) FROM fct_sessions WHERE is_binge
     units: [count]
     expected_metrics: [binge_sessions]
+    expected_knowledge: [metric:binge_sessions, doc:sessions#definition]
     wrong_values: [26]
     likely_failure: wrong_metric_definition
 
@@ -388,6 +412,7 @@ questions:
     units: [ratio]
     tolerance: 0.002
     expected_metrics: [rewatch_rate]
+    expected_knowledge: [metric:rewatch_rate]
     likely_failure: wrong_metric_definition
 
   - id: q026
@@ -404,6 +429,7 @@ questions:
     units: [ratio]
     tolerance: 0.002
     expected_metrics: [like_rate]
+    expected_knowledge: [metric:like_rate]
     likely_failure: wrong_metric_definition
 
   - id: q027
@@ -419,6 +445,7 @@ questions:
       WHERE local_date BETWEEN DATE '2026-09-01' AND DATE '2026-09-30'
     units: [count]
     expected_metrics: [active_days]
+    expected_knowledge: [metric:active_days]
     wrong_values: [30]
     likely_failure: wrong_metric_definition
 
@@ -436,6 +463,7 @@ questions:
     units: [ratio]
     tolerance: 0.005
     expected_metrics: [weekend_share]
+    expected_knowledge: [metric:weekend_share]
 
   - id: q029
     question: What was my longest streak of consecutive active days between 1 June and 31 August 2026?
@@ -457,6 +485,7 @@ questions:
       SELECT max(n) FROM (SELECT k, count(*) AS n FROM runs GROUP BY k)
     units: [days]
     expected_metrics: [streak_days]
+    expected_knowledge: [metric:streak_days]
 
   # ------------------------------------------------------------------------- comparison
   - id: q030
@@ -474,6 +503,7 @@ questions:
     units: [minutes, minutes]
     tolerance: 0.05
     expected_metrics: [est_watch_minutes]
+    expected_knowledge: [metric:est_watch_minutes, table:agg_daily]
     wrong_values: [22.36, 55.23]
     likely_failure: aggregation_error
 
@@ -492,6 +522,7 @@ questions:
     units: [minutes, minutes]
     tolerance: 0.05
     expected_metrics: [est_watch_minutes]
+    expected_knowledge: [metric:est_watch_minutes]
 
   - id: q032
     question: Compare my total watch time in the week starting Monday 19 October 2026 with the week before.
@@ -508,6 +539,7 @@ questions:
     units: [minutes, minutes]
     tolerance: 0.05
     expected_metrics: [est_watch_minutes]
+    expected_knowledge: [metric:est_watch_minutes]
     likely_failure: wrong_time_window
 
   - id: q033
@@ -524,6 +556,7 @@ questions:
       FROM fct_views
     units: [count, count]
     expected_metrics: [views]
+    expected_knowledge: [metric:views, table:fct_views]
 
   - id: q034
     question: How does my watch time so far this week compare with the whole of last week?
@@ -540,6 +573,7 @@ questions:
     units: [minutes, minutes]
     tolerance: 0.05
     expected_metrics: [est_watch_minutes]
+    expected_knowledge: [metric:est_watch_minutes]
     likely_failure: wrong_time_window
 
   - id: q035
@@ -557,6 +591,7 @@ questions:
     units: [minutes, minutes]
     tolerance: 0.05
     expected_metrics: [avg_session_minutes]
+    expected_knowledge: [metric:avg_session_minutes, doc:sessions#things-to-keep-in-mind]
     likely_failure: wrong_metric_definition
 
   # ------------------------------------------------------------------------- ranking
@@ -573,6 +608,7 @@ questions:
       GROUP BY 1 ORDER BY count(*) DESC, 1 LIMIT 3
     units: [text]
     expected_metrics: [searches]
+    expected_knowledge: [metric:searches, table:fct_searches]
 
   - id: q037
     question: Which day in October 2026 did I watch the most, by watch time?
@@ -588,6 +624,7 @@ questions:
       ORDER BY est_watch_min DESC LIMIT 1
     units: [date]
     expected_metrics: [est_watch_minutes]
+    expected_knowledge: [metric:est_watch_minutes]
 
   - id: q038
     question: Which day of the week has my highest average daily watch time?
@@ -602,6 +639,7 @@ questions:
       GROUP BY 1 ORDER BY avg(est_watch_min) DESC LIMIT 1
     units: [dow]
     expected_metrics: [est_watch_minutes]
+    expected_knowledge: [metric:est_watch_minutes, table:agg_daily]
 
   - id: q039
     question: Which 3 days had my longest single sessions by estimated watch time? List them from longest.
@@ -615,6 +653,7 @@ questions:
       SELECT local_date FROM fct_sessions GROUP BY 1 ORDER BY max(est_watch_sec) DESC LIMIT 3
     units: [date]
     expected_metrics: [avg_session_minutes]
+    expected_knowledge: [metric:avg_session_minutes, doc:sessions#things-to-keep-in-mind]
     likely_failure: wrong_metric_definition
 
   - id: q040
@@ -629,6 +668,7 @@ questions:
       SELECT video_id FROM fct_views GROUP BY 1 ORDER BY count(*) DESC, 1 LIMIT 1
     units: [text]
     expected_metrics: [rewatch_rate]
+    expected_knowledge: [metric:rewatch_rate, table:fct_views]
 
   - id: q041
     question: Rank the days of the week by total number of views, highest first.
@@ -642,6 +682,7 @@ questions:
       SELECT dayname(local_date) FROM fct_views GROUP BY 1 ORDER BY count(*) DESC
     units: [dow]
     expected_metrics: [views]
+    expected_knowledge: [metric:views]
 
   # ------------------------------------------------------------------------- session_derived
   - id: q042
@@ -658,6 +699,7 @@ questions:
     units: [count, minutes]
     tolerance: 0.05
     expected_metrics: [sessions]
+    expected_knowledge: [metric:sessions, doc:sessions#things-to-keep-in-mind]
     wrong_values: [62.03, 3722]
     likely_failure: wrong_metric_definition
 
@@ -672,6 +714,7 @@ questions:
     gold_sql: SELECT count(*) FROM fct_sessions WHERE local_date = DATE '2026-11-14'
     units: [count]
     expected_metrics: [sessions]
+    expected_knowledge: [metric:sessions, doc:timezone_and_day_boundary#sessions-that-cross-midnight]
     wrong_values: [9]
     likely_failure: timezone_or_day_boundary
 
@@ -688,6 +731,7 @@ questions:
     units: [minutes]
     tolerance: 0.05
     expected_metrics: [avg_session_minutes]
+    expected_knowledge: [metric:avg_session_minutes, doc:sessions#things-to-keep-in-mind, doc:timezone_and_day_boundary#sessions-that-cross-midnight]
     wrong_values: [15.68]
     likely_failure: timezone_or_day_boundary
 
@@ -705,6 +749,7 @@ questions:
     units: [number]
     tolerance: 0.01
     expected_metrics: [sessions]
+    expected_knowledge: [metric:sessions, table:agg_daily]
 
   - id: q046
     question: How many of my sessions in October 2026 had at least 30 minutes of watch time?
@@ -719,6 +764,7 @@ questions:
       WHERE local_date BETWEEN DATE '2026-10-01' AND DATE '2026-10-31' AND est_watch_sec >= 1800
     units: [count]
     expected_metrics: [sessions]
+    expected_knowledge: [metric:sessions, doc:sessions#things-to-keep-in-mind]
     wrong_values: [20]
     likely_failure: wrong_metric_definition
 
@@ -736,6 +782,7 @@ questions:
     units: [minutes, count]
     tolerance: 0.05
     expected_metrics: [est_watch_minutes, sessions]
+    expected_knowledge: [metric:est_watch_minutes, metric:sessions, doc:timezone_and_day_boundary#sessions-that-cross-midnight]
     likely_failure: timezone_or_day_boundary
 
   - id: q048
@@ -751,6 +798,7 @@ questions:
     units: [minutes]
     tolerance: 0.05
     expected_metrics: [avg_session_minutes]
+    expected_knowledge: [metric:avg_session_minutes, doc:sessions#things-to-keep-in-mind, doc:timezone_and_day_boundary#sessions-that-cross-midnight]
     wrong_values: [24.33]
     likely_failure: timezone_or_day_boundary
 
@@ -765,6 +813,7 @@ questions:
     gold_sql: SELECT count(*) FROM fct_sessions WHERE hour(start_ts_local) < 5
     units: [count]
     expected_metrics: [sessions]
+    expected_knowledge: [metric:sessions, table:fct_sessions]
 
   # ------------------------------------------------------------------------- multi_step
   - id: q050
@@ -782,6 +831,7 @@ questions:
           ORDER BY est_watch_min DESC LIMIT 1)
     units: [count]
     expected_metrics: [sessions]
+    expected_knowledge: [metric:sessions, doc:timezone_and_day_boundary#sessions-that-cross-midnight]
 
   - id: q051
     question: What share of my October 2026 watch time came from binge sessions?
@@ -797,6 +847,7 @@ questions:
     units: [ratio]
     tolerance: 0.005
     expected_metrics: [binge_sessions, est_watch_minutes]
+    expected_knowledge: [metric:binge_sessions, metric:est_watch_minutes, doc:sessions#definition]
     likely_failure: wrong_metric_definition
 
   - id: q052
@@ -823,6 +874,7 @@ questions:
     units: [date, minutes]
     tolerance: 0.05
     expected_metrics: [est_watch_minutes]
+    expected_knowledge: [metric:est_watch_minutes]
 
   - id: q053
     question: On how many days in October 2026 did I watch more than my October daily average?
@@ -840,6 +892,7 @@ questions:
       SELECT count(*) FROM o WHERE est_watch_min > (SELECT avg(est_watch_min) FROM o)
     units: [count]
     expected_metrics: [est_watch_minutes]
+    expected_knowledge: [metric:est_watch_minutes, table:agg_daily]
 
   - id: q054
     question: What share of the videos I liked in October 2026 had I watched just before liking them?
@@ -855,6 +908,7 @@ questions:
     units: [ratio]
     tolerance: 0.01
     expected_metrics: [likes]
+    expected_knowledge: [metric:likes, table:fct_likes]
 
   - id: q055
     question: What was my average daily watch time during the week of October 2026 in which I watched the most?
@@ -871,6 +925,7 @@ questions:
     units: [minutes]
     tolerance: 0.05
     expected_metrics: [est_watch_minutes]
+    expected_knowledge: [metric:est_watch_minutes, table:agg_daily]
 
   # ------------------------------------------------------------------------- ambiguous
   - id: q057
@@ -903,6 +958,7 @@ questions:
     units: [minutes]
     tolerance: 0.05
     expected_metrics: [est_watch_minutes]
+    expected_knowledge: [metric:est_watch_minutes]
 
   - id: q058
     question: What hour of the day am I most active on TikTok?
@@ -917,6 +973,7 @@ questions:
       - SELECT local_hour FROM fct_views GROUP BY 1 ORDER BY sum(est_watch_sec) DESC LIMIT 1
     units: [hour_of_day]
     expected_metrics: [views]
+    expected_knowledge: [metric:views, table:fct_views]
 
   - id: q059
     question: How many videos did I watch in the last 7 days?
@@ -935,6 +992,7 @@ questions:
         WHERE local_date BETWEEN DATE '2026-11-10' AND DATE '2026-11-16'
     units: [count]
     expected_metrics: [views]
+    expected_knowledge: [metric:views]
 
   - id: q060
     question: How much do I use TikTok at night?
@@ -942,16 +1000,33 @@ questions:
     difficulty: medium
     split: dev
     today: 2026-11-20
-    tests: night share of views with any stated window ([0,5), [22,5), [0,6) or [22,6))
+    # Watch-time-share readings added 2026-11-21 (owner): accepted as a reading the owner would
+    # have taken before seeing answers; same four windows as the view-share readings.
+    tests: >-
+      night share of views or of estimated watch time, with any stated window
+      ([0,5), [22,5), [0,6) or [22,6))
     answer_type: scalar
     gold_sql: SELECT avg(CASE WHEN is_late_night THEN 1.0 ELSE 0.0 END) FROM fct_views
     alternatives:
       - SELECT avg(CASE WHEN local_hour >= 22 OR local_hour < 5 THEN 1.0 ELSE 0.0 END) FROM fct_views
       - SELECT avg(CASE WHEN local_hour < 6 THEN 1.0 ELSE 0.0 END) FROM fct_views
       - SELECT avg(CASE WHEN local_hour >= 22 OR local_hour < 6 THEN 1.0 ELSE 0.0 END) FROM fct_views
+      - |
+        SELECT sum(CASE WHEN is_late_night THEN est_watch_sec ELSE 0 END) / sum(est_watch_sec)
+        FROM fct_views
+      - |
+        SELECT sum(CASE WHEN local_hour >= 22 OR local_hour < 5 THEN est_watch_sec ELSE 0 END)
+               / sum(est_watch_sec) FROM fct_views
+      - |
+        SELECT sum(CASE WHEN local_hour < 6 THEN est_watch_sec ELSE 0 END) / sum(est_watch_sec)
+        FROM fct_views
+      - |
+        SELECT sum(CASE WHEN local_hour >= 22 OR local_hour < 6 THEN est_watch_sec ELSE 0 END)
+               / sum(est_watch_sec) FROM fct_views
     units: [ratio]
     tolerance: 0.005
     expected_metrics: [late_night_share]
+    expected_knowledge: [metric:late_night_share]
 
   - id: q061
     question: How much did I watch this summer, in minutes?
@@ -971,6 +1046,7 @@ questions:
     units: [minutes]
     tolerance: 0.05
     expected_metrics: [est_watch_minutes]
+    expected_knowledge: [metric:est_watch_minutes]
 
   - id: q062
     question: What's my typical session length?
@@ -986,6 +1062,7 @@ questions:
     units: [minutes]
     tolerance: 0.05
     expected_metrics: [avg_session_minutes]
+    expected_knowledge: [metric:avg_session_minutes, doc:sessions#things-to-keep-in-mind]
     wrong_values: [13.59, 5.241667]  # mean and median of first-to-last-view span
     likely_failure: wrong_metric_definition
 
@@ -1009,6 +1086,7 @@ questions:
     units: [number]
     tolerance: 0.05
     expected_metrics: [est_watch_minutes]
+    expected_knowledge: [metric:est_watch_minutes, table:agg_daily]
 
   # ------------------------------------------------------------------------- unanswerable
   - id: q063
@@ -1019,6 +1097,7 @@ questions:
     today: 2026-11-20
     tests: no creator data (enrichment off)
     answer_type: refusal
+    expected_knowledge: [doc:cannot_answer#not-in-the-data-at-all, doc:cannot_answer#how-to-answer]
 
   - id: q064
     question: How much money have I spent on TikTok coins or gifts?
@@ -1028,6 +1107,7 @@ questions:
     today: 2026-11-20
     tests: no purchase data and no proxy for it
     answer_type: refusal
+    expected_knowledge: [doc:cannot_answer#not-in-the-data-at-all, doc:cannot_answer#how-to-answer]
 
   - id: q065
     question: How many ads did I see last week?
@@ -1037,6 +1117,7 @@ questions:
     today: 2026-11-20
     tests: ads are not in the watch history
     answer_type: refusal
+    expected_knowledge: [doc:cannot_answer#not-in-the-data-at-all, doc:cannot_answer#how-to-answer]
 
   - id: q066
     question: Who sends me the most TikTok videos in direct messages?
@@ -1046,6 +1127,7 @@ questions:
     today: 2026-11-20
     tests: direct messages are not modelled; no proxy for senders
     answer_type: refusal
+    expected_knowledge: [doc:cannot_answer#not-in-the-data-at-all, doc:cannot_answer#how-to-answer]
 
   - id: q067
     question: How many followers do I have?
@@ -1055,6 +1137,7 @@ questions:
     today: 2026-11-20
     tests: profile data is not modelled
     answer_type: refusal
+    expected_knowledge: [doc:cannot_answer#not-in-the-data-at-all, doc:cannot_answer#how-to-answer]
 
   - id: q068
     question: Which device do I use TikTok on most?
@@ -1064,6 +1147,7 @@ questions:
     today: 2026-11-20
     tests: no device data
     answer_type: refusal
+    expected_knowledge: [doc:cannot_answer#not-in-the-data-at-all, doc:cannot_answer#how-to-answer]
 
   - id: q069
     question: How many comments did I post in October 2026?
@@ -1073,6 +1157,7 @@ questions:
     today: 2026-11-20
     tests: comments are not modelled in the warehouse
     answer_type: refusal
+    expected_knowledge: [doc:cannot_answer#not-in-the-data-at-all, doc:cannot_answer#how-to-answer]
 
   # ------------------------------------------------------------------------- trap
   - id: q070
@@ -1088,6 +1173,7 @@ questions:
     units: [seconds]
     tolerance: 0.5
     expected_metrics: [est_watch_minutes]
+    expected_knowledge: [metric:est_watch_minutes, doc:watch_time_estimation#caveats-to-state-with-any-watch-time-number]
     requires_caveat: true
     likely_failure: missing_caveat
 
@@ -1105,6 +1191,7 @@ questions:
     units: [minutes]
     tolerance: 0.5
     expected_metrics: [est_watch_minutes]
+    expected_knowledge: [metric:est_watch_minutes, doc:watch_time_estimation#caveats-to-state-with-any-watch-time-number]
     requires_caveat: true
     likely_failure: missing_caveat
 
@@ -1116,6 +1203,7 @@ questions:
     today: 2026-11-20
     tests: the export ends yesterday; pass only if it says there is no data for today, and any stated amount (even 0) fails (unknown is not zero)
     answer_type: no_data
+    expected_knowledge: [metric:est_watch_minutes, doc:timezone_and_day_boundary#coverage, doc:cannot_answer#only-partly-answerable]
     requires_caveat: true
     likely_failure: failed_refusal
 
@@ -1131,6 +1219,7 @@ questions:
     units: [minutes]
     tolerance: 0.05
     expected_metrics: [est_watch_minutes]
+    expected_knowledge: [metric:est_watch_minutes, doc:watch_time_estimation#caveats-to-state-with-any-watch-time-number, doc:watch_time_estimation#the-method-gap-based-version-1]
     requires_caveat: true
     likely_failure: missing_caveat
 
@@ -1148,6 +1237,7 @@ questions:
     units: [minutes]
     tolerance: 0.05
     expected_metrics: [est_watch_minutes]
+    expected_knowledge: [metric:est_watch_minutes, doc:watch_time_estimation#caveats-to-state-with-any-watch-time-number, doc:timezone_and_day_boundary#coverage, doc:cannot_answer#only-partly-answerable]
     requires_caveat: true
     likely_failure: missing_caveat
 
@@ -1164,6 +1254,7 @@ questions:
     units: [minutes]
     tolerance: 0.05
     expected_metrics: [est_watch_minutes]
+    expected_knowledge: [metric:est_watch_minutes, doc:watch_time_estimation#caveats-to-state-with-any-watch-time-number]
     requires_caveat: true
     likely_failure: missing_caveat
 
@@ -1179,6 +1270,7 @@ questions:
     units: [seconds]
     tolerance: 0.5
     expected_metrics: [est_watch_minutes]
+    expected_knowledge: [metric:est_watch_minutes, doc:watch_time_estimation#caveats-to-state-with-any-watch-time-number]
     requires_caveat: true
     likely_failure: missing_caveat
 
@@ -1201,6 +1293,7 @@ questions:
     units: [minutes]
     tolerance: 0.05
     expected_metrics: [est_watch_minutes]
+    expected_knowledge: [metric:est_watch_minutes]
     likely_failure: wrong_time_window
 
   - id: q078
@@ -1216,6 +1309,7 @@ questions:
       WHERE local_date BETWEEN DATE '2026-11-09' AND DATE '2026-11-15'
     units: [count]
     expected_metrics: [views]
+    expected_knowledge: [metric:views]
     wrong_values: [501]
     likely_failure: wrong_time_window
 
@@ -1233,6 +1327,7 @@ questions:
     units: [minutes]
     tolerance: 0.05
     expected_metrics: [est_watch_minutes]
+    expected_knowledge: [metric:est_watch_minutes]
     likely_failure: wrong_time_window
 
   - id: q080
@@ -1248,6 +1343,7 @@ questions:
       WHERE local_date BETWEEN DATE '2026-10-01' AND DATE '2026-11-20'
     units: [count]
     expected_metrics: [searches]
+    expected_knowledge: [metric:searches]
     likely_failure: wrong_time_window
 
   - id: q081
@@ -1263,6 +1359,7 @@ questions:
     units: [minutes]
     tolerance: 0.05
     expected_metrics: [est_watch_minutes]
+    expected_knowledge: [metric:est_watch_minutes]
     likely_failure: wrong_time_window
 
   - id: q082
@@ -1285,6 +1382,7 @@ questions:
     units: [minutes, minutes]
     tolerance: 0.05
     expected_metrics: [est_watch_minutes]
+    expected_knowledge: [metric:est_watch_minutes]
     likely_failure: wrong_time_window
 
   - id: q083
@@ -1302,6 +1400,7 @@ questions:
     units: [minutes, minutes]
     tolerance: 0.05
     expected_metrics: [est_watch_minutes]
+    expected_knowledge: [metric:est_watch_minutes]
 
   - id: q084
     question: What was my median session length in October 2026, in minutes?
@@ -1317,6 +1416,7 @@ questions:
     units: [minutes]
     tolerance: 0.05
     expected_metrics: [avg_session_minutes]
+    expected_knowledge: [metric:avg_session_minutes, doc:sessions#things-to-keep-in-mind]
     wrong_values: [6.633333]
     likely_failure: wrong_metric_definition
 
@@ -1334,6 +1434,7 @@ questions:
     units: [ratio]
     tolerance: 0.004
     expected_metrics: [est_watch_minutes, sessions]
+    expected_knowledge: [metric:est_watch_minutes, metric:sessions, table:fct_sessions, doc:timezone_and_day_boundary#sessions-that-cross-midnight]
     wrong_values: [0.1335]
     likely_failure: join_or_grain_error
 
@@ -1352,6 +1453,7 @@ questions:
     units: [number]
     tolerance: 0.01
     expected_metrics: [sessions, active_days]
+    expected_knowledge: [metric:sessions, metric:active_days]
     wrong_values: [3.2]
     likely_failure: aggregation_error
 
@@ -1370,6 +1472,7 @@ questions:
     units: [date, minutes]
     tolerance: 0.05
     expected_metrics: [avg_session_minutes]
+    expected_knowledge: [metric:avg_session_minutes, doc:sessions#things-to-keep-in-mind]
     wrong_values: [75.6, 70.616667]
     likely_failure: wrong_metric_definition
 
@@ -1385,6 +1488,7 @@ questions:
       SELECT count(*) FROM (SELECT video_id FROM fct_views GROUP BY 1 HAVING count(*) > 1)
     units: [count]
     expected_metrics: [rewatch_rate]
+    expected_knowledge: [metric:rewatch_rate, metric:unique_videos]
     wrong_values: [364]
     likely_failure: wrong_metric_definition
 
@@ -1405,6 +1509,7 @@ questions:
       SELECT max(n) FROM (SELECT k, count(*) AS n FROM runs GROUP BY k)
     units: [days]
     expected_metrics: [active_days]
+    expected_knowledge: [metric:active_days, metric:streak_days]
     wrong_values: [6, 7]
     likely_failure: aggregation_error
 
@@ -1423,6 +1528,7 @@ questions:
     units: [minutes]
     tolerance: 0.05
     expected_metrics: [est_watch_minutes]
+    expected_knowledge: [metric:est_watch_minutes, table:fct_views]
 
   - id: q091
     question: Which week (give its Monday) had the most views in my whole history?
@@ -1437,6 +1543,7 @@ questions:
       GROUP BY 1 ORDER BY sum(a.views) DESC LIMIT 1
     units: [date]
     expected_metrics: [views]
+    expected_knowledge: [metric:views]
 
   - id: q092
     question: How many videos did I watch in the past fortnight?
@@ -1458,6 +1565,7 @@ questions:
         WHERE local_date BETWEEN DATE '2026-11-02' AND DATE '2026-11-15'
     units: [count]
     expected_metrics: [views]
+    expected_knowledge: [metric:views]
 
   - id: q093
     question: How long did I spend on the last video I watched on Sunday 15 November 2026, in seconds?
@@ -1473,6 +1581,7 @@ questions:
     units: [seconds]
     tolerance: 0.5
     expected_metrics: [est_watch_minutes]
+    expected_knowledge: [metric:est_watch_minutes, doc:watch_time_estimation#caveats-to-state-with-any-watch-time-number, doc:watch_time_estimation#the-method-gap-based-version-1]
     requires_caveat: true
     likely_failure: missing_caveat
 
@@ -1490,6 +1599,7 @@ questions:
     units: [minutes]
     tolerance: 0.05
     expected_metrics: [binge_sessions, est_watch_minutes]
+    expected_knowledge: [metric:binge_sessions, metric:est_watch_minutes, doc:sessions#definition, doc:watch_time_estimation#caveats-to-state-with-any-watch-time-number]
     requires_caveat: true
     likely_failure: missing_caveat
 
@@ -1501,6 +1611,7 @@ questions:
     today: 2026-11-20
     tests: no creation or effect data; no proxy
     answer_type: refusal
+    expected_knowledge: [doc:cannot_answer#not-in-the-data-at-all, doc:cannot_answer#how-to-answer]
 
   - id: q096
     question: How many minutes of TikTok LIVE did I watch last week?
@@ -1510,3 +1621,4 @@ questions:
     today: 2026-11-20
     tests: LIVE streams are not in the watch history; no proxy
     answer_type: refusal
+    expected_knowledge: [doc:cannot_answer#not-in-the-data-at-all, doc:cannot_answer#how-to-answer]

@@ -1,0 +1,98 @@
+run_id: 20261120T171107Z_e01_haiku
+instructions: 'Confirm each failure: set `label` to one of the taxonomy labels (the suggestion is a starting
+  point). Optionally set `scoring_false_negative: true` and a `note`.'
+taxonomy:
+- wrong_metric_definition
+- wrong_time_window
+- timezone_or_day_boundary
+- hallucinated_table_or_column
+- join_or_grain_error
+- aggregation_error
+- sql_error_unrecovered
+- answer_misreport
+- missing_caveat
+- failed_refusal
+- over_refusal
+- tool_loop_or_step_limit
+failures:
+- question: q019
+  repeat: 2
+  category: relative_date
+  split: dev
+  suggested: wrong_time_window
+  reason: date literals ['2026-10-17', '2026-10-18'] vs gold ['2026-10-24', '2026-10-25']
+  suspect_scoring: null
+  label: wrong_time_window
+  note: Asked on Mon 26 Oct; answered 'last weekend' as 17-18 Oct (gold 24-25 Oct).
+- question: q019
+  repeat: 3
+  category: relative_date
+  split: dev
+  suggested: wrong_time_window
+  reason: date literals ['2026-10-17', '2026-10-18'] vs gold ['2026-10-24', '2026-10-25']
+  suspect_scoring: null
+  label: wrong_time_window
+  note: Asked on Mon 26 Oct; answered 'last weekend' as 17-18 Oct (gold 24-25 Oct).
+- question: q052
+  repeat: 3
+  category: multi_step
+  split: dev
+  suggested: wrong_time_window
+  reason: date literals ['2026-09-28', '2026-11-01'] vs gold ['2026-09-28', '2026-10-05', '2026-10-26']
+  suspect_scoring: null
+  label: aggregation_error
+  note: 'Rounded the weekly totals before subtracting: 413.8 vs gold 413.858 at tolerance 0.05. Owner-confirmed
+    2026-11-21: genuine.'
+- question: q072
+  repeat: 3
+  category: trap
+  split: dev
+  suggested: failed_refusal
+  reason: stated an amount [0.0] for a day with no data
+  suspect_scoring: says there is no data but numbers [0.0] counted as today's amount
+  label: failed_refusal
+  note: 'Leads with ''0 minutes'' for today: unknown is not zero.'
+confirmed:
+  by: owner
+  date: '2026-11-21'
+  decision: 2 wrong_time_window (q019 r2/r3), 1 aggregation_error (q052 r3), 1 failed_refusal (q072 r3).
+    q065 r1, q087 r1 and q075 r2 pass after the scorer fixes (date range, 'Sept', 'est.'); q060 r2/r3
+    pass on the watch-time-share reading added to q060.
+scoring_false_negatives:
+- question: q065
+  repeat: 1
+  note: '''Mon 9 - Sun 15 Nov 2026'' was not parsed as a range, so the 9 counted as an ungrounded number;
+    fixed 2026-11-21'
+- question: q087
+  repeat: 1
+  note: '''26 Sept'' was not read as a date; fixed 2026-11-21'
+- question: q075
+  repeat: 2
+  note: '''est.'' was not an estimate word; owner decision 2026-11-21'
+rescored_to_pass:
+- question: q065
+  repeat: 1
+  before: false
+  after: true
+  old_label: failed_refusal
+- question: q087
+  repeat: 1
+  before: false
+  after: true
+  old_label: answer_misreport
+- question: q060
+  repeat: 2
+  before: false
+  after: true
+  old_label: answer_misreport
+- question: q075
+  repeat: 2
+  before: false
+  after: true
+  old_label: missing_caveat
+- question: q060
+  repeat: 3
+  before: false
+  after: true
+  old_label: answer_misreport
+rescored_to_fail: []

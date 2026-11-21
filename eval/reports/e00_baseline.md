@@ -26,6 +26,14 @@ overall only, because it has too few questions per category to read into.
 | Dev | 91.7% (90.6–92.2) | 51.0% (50.0–51.6) | −40.7 |
 | Test (held out) | 96.9% (96.9–96.9) | 59.4% (59.4–59.4) | −37.5 |
 
+> **Re-scored 2026-11-21** (`eval/reports/e00_e01_haiku.md`, "Scoring changes in this review"): q060
+> gained a watch-time-share reading, and the scorer stopped matching hour labels and
+> whole-number cells as shares. E0 q060 r3 then passed on the watch-time reading, but the
+> owner overrode it back to `answer_misreport` (an `overrides` entry in the label file): the
+> answer computes over views (1,955 / 11,885 = 16.4%), so its match with the watch-time share
+> is a coincidence. **E0 therefore stays at 93.4% overall and 91.7% dev**, test 96.9%, with 19
+> failing runs. E-1 is unchanged.
+
 **The data modelling alone is worth about 40 points of accuracy.** The agent, prompt and model are identical; only the tables it can see differ.
 
 ## Per category (dev)
@@ -70,7 +78,7 @@ E-1 3.01 steps, 3.22 tool calls, 7.3k tokens, 7.0 s, $0.0097.
 |---|---|---|
 | wrong_metric_definition | 15 | q023, q042, q062, q084, q087 (3/3 each) |
 | missing_caveat | 3 | q075 (2/3), q071 (1/3) |
-| answer_misreport | 1 | q060 r3 (16.45% reported as "about 17%") |
+| answer_misreport | 1 | q060 r3 (16.45% of views reported as "about 17%"; the scorer passes it on the watch-time reading since 2026-11-21, overridden by the owner as a coincidence) |
 
 Every E0 definition failure has the same cause: **session length measured as wall-clock span
 (first to last view) instead of estimated watch time**. Examples: "the longest session ran

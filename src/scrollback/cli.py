@@ -453,9 +453,11 @@ def eval_report(
     run_b: Annotated[
         Path | None, typer.Argument(exists=True, file_okay=False, help="Run to compare with.")
     ] = None,
+    split: Annotated[
+        str, typer.Option(help="Compare only this split: dev | test | all (two runs only).")
+    ] = "all",
 ) -> None:
     """Re-render a run's report (using confirmed labels if any), or compare two runs."""
-    import json
 
     from scrollback.evals.labels import load_confirmed
     from scrollback.evals.questions import load_questions
@@ -463,10 +465,18 @@ def eval_report(
     from scrollback.evals.run import DEFAULT_LABELS_DIR, load_records
 
     qset = load_questions()
+    if split not in ("dev", "test", "all"):
+        typer.echo("--split must be dev, test or all", err=True)
+        raise typer.Exit(2)
     if run_b is not None:
-        a = json.loads((run_a / "summary.json").read_text())
-        b = json.loads((run_b / "summary.json").read_text())
-        typer.echo(compare(a, b))
+        # Summarise from the records so both runs cover the same split and current scores.
+        summaries = []
+        for run in (run_a, run_b):
+            recs = [r for r in load_records(run) if split == "all" or r["split"] == split]
+            summ = summarize(recs, qset)
+            summ["run_id"] = run.name
+            summaries.append(summ)
+        typer.echo(compare(summaries[0], summaries[1], split=split))
         return
     records = load_records(run_a)
     summary = summarize(records, qset)
@@ -484,17 +494,50 @@ def eval_rescore(
 ) -> None:
     """Re-score a finished run with the current questions and scorer (no API calls)."""
     from scrollback.evals.questions import load_questions
-    from scrollback.evals.run import rescore_run
+    from scrollback.evals.run import DEFAULT_LABELS_DIR, rescore_run
 
-    result = rescore_run(run, load_questions(), base=_settings(config))
+    result = rescore_run(
+        run, load_questions(), base=_settings(config), labels_dir=DEFAULT_LABELS_DIR
+    )
     for c in result["changed"]:
         arrow = "pass" if c["after"] else "FAIL"
         typer.echo(f"  {c['question']} r{c['repeat']}: -> {arrow} (was {c['old_label']})")
     acc = result["summary"]["accuracy"]
+
+    def pct(key: str) -> str:
+        mean = acc[key]["mean"]
+        return "n/a" if mean is None else f"{mean:.1%}"
+
     typer.echo(
-        f"{len(result['changed'])} runs changed. Overall {acc['overall']['mean']:.1%}, "
-        f"dev {acc['dev']['mean']:.1%}, test {acc['test']['mean']:.1%}"
+        f"{len(result['changed'])} runs changed (against the original scoring). "
+        f"Overall {pct('overall')}, dev {pct('dev')}, test {pct('test')}"
     )
+
+
+@eval_app.command("retrieval")
+def eval_retrieval(
+    k: Annotated[int | None, typer.Option(min=1, help="Top k (default: llm.retrieval_k).")] = None,
+    split: Annotated[str, typer.Option(help="dev | test | all")] = "dev",
+    experiment: Annotated[
+        Path | None, typer.Option(exists=True, help="Use this experiment's kb_sources.")
+    ] = None,
+    show_misses: Annotated[bool, typer.Option("--misses", help="List missed chunks.")] = False,
+    config: ConfigOption = None,
+) -> None:
+    """Offline recall@k: search each question's own text and look for its expected_knowledge.
+    No API calls. Dev by default: the test split is held out."""
+    from scrollback.evals.questions import load_questions
+    from scrollback.evals.retrieval import retrieval_report
+    from scrollback.evals.run import experiment_settings, load_experiment
+
+    if split not in ("dev", "test", "all"):
+        typer.echo("--split must be dev, test or all", err=True)
+        raise typer.Exit(2)
+    qset = load_questions()
+    settings = _settings(config)
+    if experiment is not None:
+        settings = experiment_settings(settings, load_experiment(experiment), qset)
+    typer.echo(retrieval_report(qset, settings, split=split, k=k, show_misses=show_misses))
 
 
 @eval_app.command("import-feedback")
@@ -504,9 +547,42 @@ def eval_import_feedback() -> None:
 
 
 @kb_app.command("index")
-def kb_index() -> None:
-    """Embed metrics, docs, schema and examples into DuckDB."""
-    _not_implemented("kb index", "Phase 5")
+def kb_index(
+    rebuild: Annotated[bool, typer.Option("--rebuild", help="Rebuild even if up to date.")] = False,
+    config: ConfigOption = None,
+) -> None:
+    """Embed metrics, docs, table descriptions and examples into the knowledge index."""
+    from collections import Counter
+
+    from scrollback.kb.index import ensure_index
+
+    settings = _settings(config)
+    index = ensure_index(settings, rebuild=rebuild)
+    by_source = Counter(c.source for c in index.chunks)
+    counts = ", ".join(f"{k} {v}" for k, v in sorted(by_source.items()))
+    typer.echo(
+        f"{len(index.chunks)} chunks ({counts}), model {index.model}, "
+        f"hash {index.content_hash[:12]}, {settings.paths.kb_index.name}"
+    )
+
+
+@kb_app.command("search")
+def kb_search(
+    query: Annotated[str, typer.Argument(help="What to look up.")],
+    k: Annotated[
+        int | None, typer.Option(min=1, help="Chunks to return (default: retrieval_k).")
+    ] = None,
+    show_text: Annotated[bool, typer.Option("--text", help="Print each chunk's text.")] = False,
+    config: ConfigOption = None,
+) -> None:
+    """Search the knowledge base the way search_knowledge does (agent.kb_sources apply)."""
+    from scrollback.kb.retrieve import search
+
+    settings = _settings(config)
+    for hit in search(query, settings, k=k):
+        typer.echo(f"{hit.score:.4f}  {hit.chunk.id}")
+        if show_text:
+            typer.echo("    " + hit.text.replace("\n", "\n    "))
 
 
 @alerts_app.command("check")

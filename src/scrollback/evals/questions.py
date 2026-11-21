@@ -66,6 +66,9 @@ class Question(_Strict):
     units: list[Unit] = Field(default_factory=lambda: list[Unit](["number"]))  # per column
     tolerance: float = Field(0.0, ge=0)  # absolute, in the gold's own units
     expected_metrics: list[str] = Field(default_factory=list)
+    # Knowledge chunk ids a good search should find (recall@k, Phase 5); written from the
+    # definitions, not from retrieval output.
+    expected_knowledge: list[str] = Field(default_factory=list)
     requires_caveat: bool = False
     wrong_values: list[float] = Field(default_factory=list)  # wrong-definition numbers
     likely_failure: Label | None = None  # hint for label suggestion

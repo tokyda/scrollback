@@ -1,0 +1,61 @@
+run_id: 20261121T070131Z_e02a_search_haiku
+instructions: 'Confirm each failure: set `label` to one of the taxonomy labels (the suggestion is a starting
+  point). Optionally set `scoring_false_negative: true` and a `note`.'
+taxonomy:
+- wrong_metric_definition
+- wrong_time_window
+- timezone_or_day_boundary
+- hallucinated_table_or_column
+- join_or_grain_error
+- aggregation_error
+- sql_error_unrecovered
+- answer_misreport
+- missing_caveat
+- failed_refusal
+- over_refusal
+- tool_loop_or_step_limit
+failures:
+- question: q072
+  repeat: 1
+  category: trap
+  split: dev
+  suggested: failed_refusal
+  reason: stated an amount [0.0] for a day with no data
+  suspect_scoring: says there is no data but numbers [0.0] counted as today's amount
+  label: failed_refusal
+  note: '"so the answer is 0 minutes"; unknown is not zero (fix C)'
+- question: q080
+  repeat: 1
+  category: relative_date
+  split: dev
+  suggested: wrong_time_window
+  reason: date literals ['2026-10-01', '2026-11-01'] vs gold ['2026-10-01', '2026-11-20']
+  suspect_scoring: null
+  label: wrong_time_window
+  note: read "since the start of last month" as October only, and said so in its assumptions
+- question: q072
+  repeat: 3
+  category: trap
+  split: dev
+  suggested: failed_refusal
+  reason: stated an amount [0.0] for a day with no data
+  suspect_scoring: says there is no data but numbers [0.0] counted as today's amount
+  label: failed_refusal
+  note: leads with "No data for today", then "today's estimated watch time is 0 minutes so far" (fix C)
+rescored_to_pass:
+- question: q072
+  repeat: 2
+  before: false
+  after: true
+  old_label: missing_caveat
+rescored_to_fail: []
+confirmed:
+  by: owner
+  date: '2026-11-21'
+  decision: 2 failed_refusal (q072 r1/r3, "0 minutes"), 1 wrong_time_window (q080 r1). q072 r2 was a scoring
+    false negative ("No TikTok views are recorded for today"), resolved by widening the no-data phrase.
+scoring_false_negatives:
+- question: q072
+  repeat: 2
+  note: '"No TikTok views are recorded for today ..., so there is no watch time to report" states no amount;
+    passes since the no-data phrase allows one word before the noun and "are" (owner decision 2026-11-21)'

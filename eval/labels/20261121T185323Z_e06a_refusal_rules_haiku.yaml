@@ -1,0 +1,40 @@
+run_id: 20261121T185323Z_e06a_refusal_rules_haiku
+instructions: 'Confirm each failure: set `label` to one of the taxonomy labels (the suggestion is a starting
+  point). Optionally set `scoring_false_negative: true` and a `note`.'
+taxonomy:
+- wrong_metric_definition
+- wrong_time_window
+- timezone_or_day_boundary
+- hallucinated_table_or_column
+- join_or_grain_error
+- aggregation_error
+- sql_error_unrecovered
+- answer_misreport
+- missing_caveat
+- failed_refusal
+- over_refusal
+- tool_loop_or_step_limit
+failures:
+- question: q019
+  repeat: 1
+  category: relative_date
+  split: dev
+  suggested: wrong_time_window
+  reason: date literals ['2026-10-17', '2026-10-18'] vs gold ['2026-10-24', '2026-10-25']
+  suspect_scoring: null
+  label: wrong_time_window
+  note: '"Last weekend = Saturday 2026-10-17 and Sunday 2026-10-18"
+    (gold 24-25 Oct); same misreading as E1-haiku q019 r2/r3'
+- question: q019
+  repeat: 3
+  category: relative_date
+  split: dev
+  suggested: wrong_time_window
+  reason: date literals ['2026-10-17', '2026-10-18'] vs gold ['2026-10-24', '2026-10-25']
+  suspect_scoring: null
+  label: wrong_time_window
+  note: 'same reading, "the Mon-Sun week before today, 2026-10-26"'
+confirmed:
+  by: owner
+  date: '2026-11-22'
+  decision: 2 wrong_time_window (q019 r1/r3, last weekend read as 17-18 Oct).
