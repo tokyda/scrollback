@@ -86,7 +86,7 @@ Build scope by phase. Each phase ends with a "Done when" check. See `docs/DESIGN
 - [x] `/feedback` attaches to the trace; `scrollback eval import-feedback` turns bad feedback into candidate eval questions (git-ignored `eval/candidates/feedback.yaml`)
 - [x] `AGENT_RESULT_MODE=aggregate_only` enforced for real data (the bot refuses to start otherwise)
 - [x] *(added)* `ask` and the bot share `interactive.experiment` (Haiku E6b by default) on the calibrated real params; evals unaffected (DESIGN §6.7)
-- [ ] Final check from the phone with the real bot and API
+- [x] Final check from the phone with the real bot and API (2026-11-22): answers, charts, Show SQL, /today, /week, /metrics, a clean refusal and feedback all worked; bad feedback on /week became a candidate. Fixes from it: replies to the question or SQL message rate it, the command menu, quieter logs, /week weekday names from `dim_date`, and the feedback confirmation quotes the rated question
 
 **Done when:** asking a question from your phone returns an answer and chart, and bad feedback shows up as a candidate eval question.
 

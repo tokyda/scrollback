@@ -24,13 +24,21 @@ pin timezone and metrics to `eval/questions.yaml` `params` (cap 180 s, last view
 synthetic warehouses and the gold never move when `config.yaml` is tuned. Never commit the
 owner's per-day Screen Time figures.
 
-**Phase 6, the Telegram bot: built on branch `phase-6` (PR open, not merged; final phone
-check pending).** DESIGN §8 "As built". Key decisions (owner, 2026-11-22):
+**Phase 6, the Telegram bot: done on branch `phase-6` (PR open, not merged until the owner
+says).** DESIGN §8 "As built". Phone check 2026-11-22 passed on the real bot (7 paid runs,
+$0.011 in total, all E6b, prompt hash `a8da3c450e57`). It found the /week weekday bug: Haiku
+labelled every day one off, and the fix is bot-level (weekday names from `dim_date.dow_name`,
+then 7/7 right). That case is in the git-ignored candidates file, pending owner review.
+Key decisions (owner, 2026-11-22):
 - `ask` and the bot run `interactive.experiment` (default `e06b_cannot_answer_haiku.yaml`):
   only its llm/agent overrides, on config.yaml's calibrated metrics. Evals never read the
   `interactive` section (tested). `ask --experiment f | --no-experiment`.
 - `/today` and `/week` are fixed agent questions about the *most recent day / last 7 days of
-  data* (exports lag), and must state the dates used. Charts only on a chart keyword or `/week`.
+  data* (exports lag); `/week` takes weekday names from `dim_date.dow_name`. The dates show in
+  the assumptions. Charts only on a chart keyword or `/week`.
+- `/feedback` rates the replied-to question, answer, chart or SQL message, or else the last
+  answer, and its confirmation quotes the rated question (a reply sent from Telegram's command
+  menu can lose its reply link).
 - Feedback: `traces/feedback/feedback.jsonl` + `agent_feedback` table; message map
   `traces/bot/messages.jsonl`. `eval import-feedback` writes git-ignored
   `eval/candidates/feedback.yaml`, never `questions.yaml`.
