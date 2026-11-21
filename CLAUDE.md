@@ -29,13 +29,12 @@ Run it with `uv run scrollback serve bot`. Phone check passed on the real bot (a
 prompt hash `a8da3c450e57`; about $0.016 of real API spend in total). It found the /week weekday
 bug: Haiku labelled every day one off. The fix is bot-level (weekday names from
 `dim_date.dow_name`, then 7/7 right), and the case is now eval question q097.
-**👍/👎 buttons: phone check not confirmed (2026-11-22).** The owner reports the buttons worked,
-but no tap reached any bot: no `feedback.jsonl` or `agent_feedback` lines after 22:09:54Z, no
-bot log entries, no 👎 note prompt, nothing pending at Telegram, and no other poller on the
-token. During that check four background bots had been started and stopped one after another;
-the last one (commit `e7762cb`, with buttons) handled `hi` and `/week` but received no taps.
-Re-check with one bot: `serve bot`, send `/today`, tap 👍 then 👎 and reply with a note; expect
-good, bad, and bad + note lines for that trace.
+**👍/👎 buttons: phone check passed (2026-11-22).** With one bot running (`serve bot` started
+by the owner, commit `ccb4055`), `/today` trace `20261121T225556-6487c0a3` got good, bad, and
+bad + note lines in both `feedback.jsonl` and `agent_feedback`, plus the 👎 note prompt in the
+message map. `import-feedback` picked it up; the candidate is marked `rejected` (a test, not a
+real bad answer). An earlier attempt recorded no taps: several background bots had been
+started and stopped one after another, which led to the single-instance lock below.
 **Single instance:** `serve bot` takes `traces/bot/serve_bot.lock` (PID, start time, commit)
 and refuses to start while another bot holds it; a Telegram 409 Conflict logs a clear
 "another process is polling this bot token" error. The start-up line shows the PID and commit.
