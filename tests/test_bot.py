@@ -430,3 +430,37 @@ def test_rating_buttons_from_strangers_or_for_unknown_traces(
     toasts = [c.params["text"] for c in fake.sent("answerCallbackQuery")]
     assert toasts == ["I can't find that answer any more."] * 2
     assert load_feedback(bot_settings.paths.traces_dir) == []
+
+
+def test_409_conflict_logs_a_clear_message_once(
+    bot_settings: Settings, fake: FakeTelegram, caplog: pytest.LogCaptureFixture
+) -> None:
+    fake.failures["getUpdates"] = (
+        409,
+        "Conflict: terminated by other getUpdates request; make sure that only one bot "
+        "instance is running",
+    )
+    bot = _bot(bot_settings, fake, [])
+    bot.settings.bot.drop_pending_on_start = False
+    with caplog.at_level(logging.INFO, logger="scrollback.bot"):
+        bot.run(max_polls=3)
+    errors = [r for r in caplog.records if r.levelno == logging.ERROR]
+    assert len(errors) == 1  # once per conflict streak, not every poll
+    assert "another process is polling this bot token" in errors[0].getMessage()
+    assert "stop the other one" in errors[0].getMessage()
+
+    del fake.failures["getUpdates"]
+    caplog.clear()
+    with caplog.at_level(logging.INFO, logger="scrollback.bot"):
+        bot.run(max_polls=1)
+    assert not [r for r in caplog.records if r.levelno == logging.ERROR]
+
+
+def test_telegram_error_carries_status(fake: FakeTelegram) -> None:
+    from scrollback.bot.telegram_api import TelegramError
+
+    fake.failures["getUpdates"] = (409, "Conflict")
+    api = TelegramAPI(FAKE_TOKEN, transport=fake.transport)
+    with pytest.raises(TelegramError) as info:
+        api.get_updates(None, 1)
+    assert info.value.status == 409

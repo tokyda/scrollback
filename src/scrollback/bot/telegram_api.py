@@ -26,6 +26,10 @@ MESSAGE_LIMIT = 4096  # Telegram's maximum message length (characters)
 class TelegramError(RuntimeError):
     """A Bot API call failed. The message never contains the token."""
 
+    def __init__(self, message: str, status: int | None = None) -> None:
+        super().__init__(message)
+        self.status = status  # HTTP status when Telegram answered (409 = another poller)
+
 
 def redact(text: str, token: str) -> str:
     return text.replace(token, REDACTED) if token else text
@@ -117,7 +121,8 @@ class TelegramAPI:
         if not isinstance(payload, dict) or not payload.get("ok"):
             desc = payload.get("description", "") if isinstance(payload, dict) else ""
             raise TelegramError(
-                redact(f"{method}: HTTP {response.status_code}: {desc}", self._token)
+                redact(f"{method}: HTTP {response.status_code}: {desc}", self._token),
+                status=response.status_code,
             )
         return payload.get("result")
 
