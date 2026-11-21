@@ -36,3 +36,8 @@ With a 30-minute session gap:
 - A session is a viewing streak inferred from gaps, not an app open/close event; the export
   has no app-open data.
 - Session length is an estimate because it is a sum of estimated view times.
+- **Session length is `est_watch_sec`, not the span.** `end_ts_local - start_ts_local` is the
+  time from the first view's start to the last view's start. It leaves out the last view's
+  watch time and counts every gap between views in full (up to {session_gap_min} minutes),
+  while `est_watch_sec` caps each view at {view_cap_sec} seconds. Use the span only when the
+  question asks for the clock time a session covered, and label it as the span.
