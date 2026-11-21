@@ -166,7 +166,7 @@ def test_today_and_week_are_fixed_questions(bot_settings: Settings, fake: FakeTe
     bot.handle_update(fake.message(OWNER, "/week@ScrollbackBot"))
     msg = _first_user_message(bot)
     assert f"Question: {WEEK_QUESTION}" in msg and "Include a chart" in msg
-    assert "last 7 days of data" in WEEK_QUESTION and "dates you used" in WEEK_QUESTION
+    assert "last 7 days of data" in WEEK_QUESTION and "dim_date.dow_name" in WEEK_QUESTION
     assert fake.sent("sendPhoto")
 
 
@@ -233,6 +233,7 @@ def test_feedback_on_last_answer_and_on_reply(bot_settings: Settings, fake: Fake
     assert [f.trace_id for f in fbs] == [second, first, second]
     confirm = fake.sent("sendMessage")[-1].params["text"]
     assert "recorded <b>bad</b>" in confirm and "candidate eval question" in confirm
+    assert "“second, as a chart”" in confirm  # quotes the question it rated
 
 
 def test_feedback_reply_to_question_or_sql_message(

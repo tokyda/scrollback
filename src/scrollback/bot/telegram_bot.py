@@ -37,9 +37,11 @@ log = logging.getLogger("scrollback.bot")
 TODAY_QUESTION = (
     "How much did I watch on the most recent day in my data? State the date you used in the answer."
 )
+# Weekday names come from dim_date: Haiku worked them out itself and got all seven wrong by
+# one on the phone check (2026-11-22). Bot-level only; the system prompt is unchanged.
 WEEK_QUESTION = (
     "Show my watch time for the last 7 days of data, by day, with a chart. "
-    "State the dates you used in the answer."
+    "Take weekday names from dim_date.dow_name; don't work them out."
 )
 HELP_TEXT = (
     "Ask me anything about your TikTok watch history, e.g. "
@@ -370,8 +372,18 @@ class ScrollbackBot:
             log.warning("%s", db_error)
         log.info("feedback %s on trace %s", fb.rating, fb.trace_id)
         extra = " It will be a candidate eval question." if fb.rating == "bad" else ""
+        # Quote the rated question, so a rating that landed on the wrong answer shows at once.
+        record = find_trace(self.traces_dir, fb.trace_id) or {}
+        asked = str(record.get("question") or "")
+        if len(asked) > 200:
+            asked = asked[:200] + "…"
+        on = (
+            f"“{_esc(asked)}” (<code>{fb.trace_id}</code>)"
+            if asked
+            else f"<code>{fb.trace_id}</code>"
+        )
         self.api.send_message(
             chat_id,
-            f"Thanks, recorded <b>{fb.rating}</b> feedback on <code>{fb.trace_id}</code>.{extra}",
+            f"Thanks, recorded <b>{fb.rating}</b> feedback on {on}.{extra}",
             reply_to=message_id,
         )
