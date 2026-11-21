@@ -46,7 +46,9 @@ def test_doc_sections(tmp_path: Path) -> None:
     )
     chunks = doc_chunks(tmp_path)
     assert [c.id for c in chunks] == ["doc:x#first-part", "doc:x#second"]  # short intro dropped
-    assert chunks[0].title == "Title: First part" and "col_a" in chunks[0].keywords
+    assert chunks[0].title == "Title: First part"
+    # Body identifiers are text, not keywords; a doc section's keywords are its heading.
+    assert chunks[0].keywords == "Title: First part" and "`col_a`" in chunks[0].text
     assert slug("The method (gap-based, version 1)") == "the-method-gap-based-version-1"
 
 

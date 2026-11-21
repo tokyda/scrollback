@@ -5,7 +5,7 @@ Sources, each a switch in ``agent.kb_sources``:
 - ``metrics``: one chunk per metric in ``knowledge/metrics.yml`` (definition, SQL, caveat
   text, synonyms);
 - ``docs``: one chunk per ``##`` section of the glossary docs in ``knowledge/docs/``, plus the
-  text before the first section when it says something;
+  text before the first section when it says something; its keywords are its heading;
 - ``tables``: one chunk per mart in ``dbt/models/marts/_marts.yml`` (table and column
   descriptions);
 - ``cannot_answer``: the sections of ``knowledge/docs/cannot_answer.md`` (E6 adds them);
@@ -109,9 +109,11 @@ def doc_chunks(docs_dir: Path) -> list[Chunk]:
             parts.append(("intro", title, intro))
         parts += [(slug(t), f"{title}: {t}", body) for t, body in sections if body]
         for section, heading, body in parts:
-            idents = " ".join(sorted(set(re.findall(r"`([a-z_][a-z0-9_]*)`", body))))
+            # Keywords are the section's own heading only. Identifiers named in the body count
+            # once, as text: as keywords (weighted up) a section that mentions many metrics
+            # matched almost any query (DESIGN §6.2).
             out.append(Chunk(f"doc:{name}#{section}", "doc", source, heading,
-                             f"# {heading}\n{body}", f"{heading} {idents}"))  # fmt: skip
+                             f"# {heading}\n{body}", heading))  # fmt: skip
     return out
 
 
