@@ -18,7 +18,7 @@ with the keys it found (extend `VARIANTS` in `ingest/detect.py` and add a synthe
 unknown extra fields only warn and land in `extras`.
 
 **PRs.** Everything through Phase 4 is merged into `main`: #1 (Phases 0-1), #3 (Phase 2), #4
-(Phase 3) and #5 (Phase 4). #2 was superseded by #3. No PR is open.
+(Phase 3) and #5 (Phase 4). #2 was superseded by #3. #6 (Phase 5, `phase-5`) is open; don't merge until the owner says.
 
 **Headline numbers** (96 questions x 3 repeats, `claude-sonnet-5-5`, effort medium; full write-up
 in `eval/reports/e00_baseline.md`):
