@@ -11,7 +11,7 @@ If you change a design decision, update `docs/DESIGN.md` in the same commit and 
 
 ## Current status (2026-11-22)
 
-**Phases.** Phases 0-5 are done and merged. The first real export was ingested and the
+**Phases.** Phases 0-6 are done and merged. The first real export was ingested and the
 parameters calibrated in PR #8 (merged): DESIGN §4.1 records every format assumption against it
 (it added variant `v3_likes_favorites`), UTC is confirmed, and the date spine now covers the
 watch-history window only (§4.4).
@@ -24,18 +24,21 @@ pin timezone and metrics to `eval/questions.yaml` `params` (cap 180 s, last view
 synthetic warehouses and the gold never move when `config.yaml` is tuned. Never commit the
 owner's per-day Screen Time figures.
 
-**Phase 6, the Telegram bot: done on branch `phase-6` (PR #10 open, not merged until the owner
-says).** DESIGN §8 "As built". Phone check 2026-11-22 passed on the real bot (7 paid runs,
-$0.011 in total, all E6b, prompt hash `a8da3c450e57`). It found the /week weekday bug: Haiku
-labelled every day one off, and the fix is bot-level (weekday names from `dim_date.dow_name`,
-then 7/7 right). That case is in the git-ignored candidates file, pending owner review.
+**Phase 6, the Telegram bot: done, merged in #10 (2026-11-22).** DESIGN §8 "As built".
+Run it with `uv run scrollback serve bot`. Phone check passed on the real bot (all runs E6b,
+prompt hash `a8da3c450e57`; about $0.016 of real API spend in total). It found the /week weekday
+bug: Haiku labelled every day one off. The fix is bot-level (weekday names from
+`dim_date.dow_name`, then 7/7 right), and the case is now eval question q097.
+**Not yet verified on the phone:** the 👍/👎 buttons (tested against the mocked API only).
 Key decisions (owner, 2026-11-22):
 - `ask` and the bot run `interactive.experiment` (default `e06b_cannot_answer_haiku.yaml`):
   only its llm/agent overrides, on config.yaml's calibrated metrics. Evals never read the
   `interactive` section (tested). `ask --experiment f | --no-experiment`.
 - `/today` and `/week` are fixed agent questions about the *most recent day / last 7 days of
-  data* (exports lag); `/week` takes weekday names from `dim_date.dow_name`. The dates show in
-  the assumptions. Charts only on a chart keyword or `/week`.
+  data* (exports lag); `/week` takes weekday names from `dim_date.dow_name` and states which
+  dates it used. Charts only on a chart keyword or `/week`.
+- Every answer has 👍/👎 buttons (`fb:<rating>:<trace_id>`); 👎 asks for an optional note as a
+  force-reply.
 - `/feedback` rates the replied-to question, answer, chart or SQL message, or else the last
   answer, and its confirmation quotes the rated question (a reply sent from Telegram's command
   menu can lose its reply link).
@@ -50,8 +53,15 @@ records, and keep `AGENT_RESULT_MODE=aggregate_only`. Tests, evals and CI stay o
 data.
 
 **PRs.** All merged into `main`: #1 (Phases 0-1), #3 (Phase 2), #4 (Phase 3), #5 (Phase 4),
-#6 (Phase 5), #7 (docs) and #8 (real export and calibration). #2 was superseded by #3. No PR is
-open.
+#6 (Phase 5), #7 (docs), #8 (real export and calibration), #9 (docs) and #10 (Phase 6). #2 was
+superseded by #3.
+
+**Next: Phase 7, polish and demo** (ROADMAP): the README (problem statement, architecture
+diagram, metric definitions with the watch-time estimation story, eval table, demo GIF, privacy
+note, synthetic quickstart), rehearsing the 3-minute demo (DESIGN §8) on real data, the dbt docs
+site linked from the README, a short write-up of the three most instructive bad cases, and a
+clean-clone check. Done when a stranger can clone the repo, run the quickstart and reproduce the
+headline eval numbers.
 
 **Eval set:** 97 questions since 2026-11-22. q097 (dev, weekday labels) came from bot feedback and
 has text `wrong_values` like `"2026-11-14 Friday"` (DESIGN §7.1, §7.2). No eval has run with it;
