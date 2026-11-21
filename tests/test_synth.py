@@ -96,6 +96,19 @@ def test_variants_differ_in_shape() -> None:
     assert set(like_v1) == {"Date", "Link"}
 
 
+def test_v3_matches_the_real_export_layout() -> None:
+    v3 = synthesize(days=7, variant="v3_likes_favorites").export
+    assert set(v3["Your Activity"]) >= {"Watch History", "Searches", "Share History"}
+    assert "Like List" not in v3["Your Activity"]
+    like_section = v3["Likes and Favorites"]["Like List"]
+    assert set(like_section) == {"App", "ItemFavoriteList"}
+    like = like_section["ItemFavoriteList"][0]
+    assert set(like) == {"date", "link"} and "tiktokv.com/share/video/" in like["link"]
+    assert set(v3["Likes and Favorites"]["Favorite Videos"]["FavoriteVideoList"][0]) == {
+        "Date", "Link"
+    }  # fmt: skip
+
+
 def test_timestamps_written_in_utc() -> None:
     result = synthesize(days=3)
     ev = next(e for e in result.events if e.dataset is Dataset.WATCH and e.noise is None)

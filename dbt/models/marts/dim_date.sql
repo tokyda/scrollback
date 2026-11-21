@@ -1,15 +1,11 @@
--- Date spine from the first to the last local date with any event (views, likes, searches).
--- It stops at the last data date: days after the latest export are unknown, not zero.
+-- Date spine over the watch-history window: the first to the last local date with a view.
+-- Days outside it are unknown, not zero: before the window the export has no watch history
+-- (likes and favourites can reach back years), after it the export hasn't happened yet.
+-- Likes and searches outside the window stay in their fact tables.
 -- Weeks run Monday-Sunday (ISO).
 with bounds as (
     select min(local_date) as first_date, max(local_date) as last_date
-    from (
-        select local_date from {{ ref('stg_watch') }}
-        union all
-        select local_date from {{ ref('stg_like') }}
-        union all
-        select local_date from {{ ref('stg_search') }}
-    )
+    from {{ ref('stg_watch') }}
 ),
 
 spine as (

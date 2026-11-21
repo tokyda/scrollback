@@ -11,19 +11,20 @@ If you change a design decision, update `docs/DESIGN.md` in the same commit and 
 
 ## Current status (2026-11-22)
 
-**Phases.** Phases 0-5 are done and merged, except the Phase 1 item "ingest one real export".
-Every TikTok-format assumption is listed in DESIGN §4.1.
+**Phases.** Phases 0-5 are done and merged. The first real export is ingested (branch
+`real-data`): DESIGN §4.1 records every format assumption against it (it added variant
+`v3_likes_favorites`), UTC is confirmed, and the date spine now covers the watch-history window
+only (§4.4).
 
-**Next steps, in order:**
-1. **Ingest the real export** (now in `data/raw/`, git-ignored). Run `scrollback ingest` on it.
-   An unknown structure fails with the keys it found: extend `VARIANTS` in `ingest/detect.py`
-   and add a synthetic variant. Unknown extra fields only warn and land in `extras`. Then update
-   the DESIGN §4.1 assumption list.
-2. **Tune the parameters on real data** and settle the DESIGN §14 open questions: whether
-   export timestamps are UTC, the session gap and the binge threshold. Use
-   `scrollback inspect gaps` for `session_gap_min` and `view_cap_sec`, edit `config.yaml` and
-   rebuild with `scrollback build`. Record each choice and its reason in DESIGN.
-3. **Phase 6: the Telegram bot** (ROADMAP).
+**Real data (2026-11-22).** `config.yaml` points at `data/warehouse/real.duckdb` (git-ignored)
+with parameters tuned on the real export: gap 30 min, **cap 120 s** (calibrated against a week
+of phone Screen Time; 180 s overshot), last view 10 s, binge 60 min (DESIGN §4.3).
+**Tests and evals don't read these:** `repo_settings()` in `tests/conftest.py` and eval runs
+pin timezone and metrics to `eval/questions.yaml` `params` (cap 180 s, last view 20 s), so the
+synthetic warehouses and the gold never move when `config.yaml` is tuned. Never commit the
+owner's per-day Screen Time figures.
+
+**Next:** Phase 6 (Telegram bot).
 
 On real data the privacy rules below apply in full. Print counts and aggregates only, never
 records, and keep `AGENT_RESULT_MODE=aggregate_only`. Tests, evals and CI stay on synthetic

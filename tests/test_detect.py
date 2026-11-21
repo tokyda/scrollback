@@ -37,6 +37,57 @@ def v2_doc() -> dict[str, Any]:
     }
 
 
+def v3_doc() -> dict[str, Any]:
+    """The layout of the first real export (2026-11), with made-up values: likes and
+    favourites under a top-level "Likes and Favorites", searches under "Searches"."""
+    return {
+        "Comment": {"Comments": {}},
+        "Likes and Favorites": {
+            "Collection": {},
+            "Favorite Videos": {
+                "App": 0,
+                "FavoriteVideoList": [{"Date": "2026-01-01 10:00:07", "Link": LINK}],
+            },
+            "Like List": {
+                "App": 0,
+                "ItemFavoriteList": [{"date": "2026-01-01 10:00:05", "link": LINK}],
+            },
+        },
+        "Your Activity": {
+            "Watch History": {"VideoList": [{"Date": "2026-01-01 10:00:00", "Link": LINK}]},
+            "Searches": {"SearchList": [{"Date": "2026-01-01 09:59:00", "SearchTerm": "x"}]},
+            "Share History": {"ShareHistoryList": None},
+            "Login History": {"LoginHistoryList": []},
+        },
+    }
+
+
+def test_detects_v3_likes_favorites_layout() -> None:
+    detected = detect(v3_doc())
+    assert detected.variant == "v3_likes_favorites"
+    assert set(detected.sections) == set(Dataset) and detected.absent == []
+    like = detected.sections[Dataset.LIKE]
+    assert like.path == ("Likes and Favorites", "Like List", "ItemFavoriteList")
+    assert like.key_map == {"date": "date", "link": "link"} and like.unknown_keys == []
+    assert detected.sections[Dataset.SEARCH].path == ("Your Activity", "Searches", "SearchList")
+    assert "Comment" in detected.ignored_top_level
+    assert "Likes and Favorites > Collection" in detected.ignored_top_level
+    assert "Your Activity > Login History" in detected.ignored_top_level
+
+
+def test_moved_section_fails_loudly_instead_of_dropping_it() -> None:
+    # The real export under the v2 rules: likes moved out of the activity root. Before v3 this
+    # loaded without likes, favourites and searches, silently.
+    doc = v3_doc()
+    doc["Likes & Favs"] = doc.pop("Likes and Favorites")  # an unknown container name
+    with pytest.raises(UnknownExportFormatError) as err:
+        detect(doc)
+    message = str(err.value)
+    assert "v2_your_activity" in message and "'ItemFavoriteList'" in message
+    assert "Likes & Favs > Like List > ItemFavoriteList" in message
+    assert LINK not in message and "2026-01-01" not in message  # keys only, never values
+
+
 def test_detects_v1() -> None:
     detected = detect(v1_doc())
     assert detected.variant == "v1_activity"

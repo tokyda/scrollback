@@ -108,8 +108,9 @@ models:
 
   - name: dim_date
     description: >
-      Contiguous date spine from the first to the last date with any event, so zero-activity
-      days exist. Days after the last export are not included (unknown, not zero).
+      Contiguous date spine over the watch-history window (first to last date with a view), so
+      zero-activity days inside it exist. Days outside it are not included (unknown, not zero).
+      Likes and searches outside the window are in fct_likes and fct_searches only.
     columns:
       - name: local_date
         data_tests: [unique, not_null]

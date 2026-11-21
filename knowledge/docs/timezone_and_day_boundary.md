@@ -50,6 +50,7 @@ while a session is never counted twice or split.
 
 ## Coverage
 
-The date spine (`dim_date`) runs from the first to the last date with any event in the loaded
-exports. Days after the latest export are **not** zero-use days; they are unknown and are not
-in the tables.
+The date spine (`dim_date`, and so `agg_daily`) covers the watch-history window: the first to
+the last date with a view in the loaded exports. Days outside it are **not** zero-use days;
+they are unknown and are not in the tables. Likes and favourites can reach back further than
+watch history; those older likes are in `fct_likes` but not in `agg_daily`.

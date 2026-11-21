@@ -2,13 +2,14 @@
 # Environment variables override values here (see src/scrollback/config.py).
 
 timezone:
-  source_tz: UTC              # timezone of timestamps in the TikTok export (DESIGN §4.1; unverified)
+  source_tz: UTC              # timezone of timestamps in the TikTok export (DESIGN §4.1; confirmed)
   local_tz: Asia/Singapore    # timezone used for local_date / local_hour
 
 paths:
   raw_dir: data/raw
   sample_dir: data/sample
-  warehouse: data/warehouse/scrollback.duckdb
+  warehouse: data/warehouse/real.duckdb   # the owner's real export (git-ignored); tests, CI and
+                                          # evals build their own synthetic warehouses
   dbt_project_dir: dbt
   traces_dir: traces
   eval_runs_dir: eval/runs
@@ -19,10 +20,12 @@ paths:
 # Watch-time estimation, session and data-quality parameters (DESIGN §4.3, §4.4, §5).
 # This is the single source of truth: `scrollback build` passes them to dbt as --vars and
 # dbt has no defaults of its own. Tune them with `scrollback inspect gaps`.
+# Tuned on the owner's real export, 2026-11-22 (DESIGN §4.3). Tests and evals don't use these:
+# they pin their own values in eval/questions.yaml (180 s cap, 20 s last view).
 metrics:
   session_gap_min: 30
-  view_cap_sec: 180
-  default_last_view_sec: 20
+  view_cap_sec: 120             # calibrated against a week of phone Screen Time; 180 overshot
+  default_last_view_sec: 10     # ~ the real median within-session gap (9 s)
   binge_threshold_min: 60
   late_night_start_hour: 0
   late_night_end_hour: 5

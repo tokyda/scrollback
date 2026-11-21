@@ -356,7 +356,7 @@ def _link(variant: str, ev: Event) -> str | None:
 def _render(variant: str, ev: Event, tz: ZoneInfo) -> dict[str, Any]:
     utc_text = ev.local_ts.replace(tzinfo=tz).astimezone(UTC).strftime(EXPORT_TS_FORMAT)
     date_text = ev.date_override if ev.date_override is not None else utc_text
-    lower = variant == "v2_your_activity" and ev.dataset is Dataset.LIKE
+    lower = variant in ("v2_your_activity", "v3_likes_favorites") and ev.dataset is Dataset.LIKE
     date_key, link_key = ("date", "link") if lower else ("Date", "Link")
 
     record: dict[str, Any] = {date_key: date_text}
@@ -399,15 +399,18 @@ def render_export(variant: str, events: list[Event], local_tz: str) -> dict[str,
     for _, ev in ordered:
         lists[ev.dataset].append(_render(variant, ev, tz))
 
-    root: dict[str, Any] = {}
+    tops: dict[str, dict[str, Any]] = {spec.root: {}}
     for dataset in (Dataset.WATCH, Dataset.LIKE, Dataset.FAVORITE, Dataset.SEARCH, Dataset.SHARE):
-        section, list_key = spec.paths[dataset]
-        root[section] = {list_key: lists[dataset]}
-    root["Login History"] = {"LoginHistoryList": []}
+        top, section, list_key = spec.paths[dataset]
+        body: dict[str, Any] = {list_key: lists[dataset]}
+        if top != spec.root:
+            body = {"App": 0, **body}  # real v3 exports carry an "App" key beside the list
+        tops.setdefault(top, {})[section] = body
+    tops[spec.root]["Login History"] = {"LoginHistoryList": []}
 
     decoys = _decoy_sections(variant)
     first_decoy = next(iter(decoys))
-    return {first_decoy: decoys.pop(first_decoy), spec.root: root, **decoys}
+    return {first_decoy: decoys.pop(first_decoy), **tops, **decoys}
 
 
 # --------------------------------------------------------------------------- manifest

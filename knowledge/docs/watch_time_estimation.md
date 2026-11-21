@@ -53,3 +53,10 @@ next view starts a new session. Session total: 40 + 30 + 180 + 15 + 35 = **300 s
 All live in `config.yaml` (`metrics:`) and are passed to dbt; they can be tuned with
 `scrollback inspect gaps`. Current values: session gap {session_gap_min} min, cap
 {view_cap_sec} s, single-view default {default_last_view_sec} s.
+
+The cap was calibrated against one week of the owner's phone Screen Time for TikTok (the app
+is only on that phone). Screen Time counts all time in the app, including comments, DMs,
+search, LIVE and browsing, so the watch-time estimate should come out somewhat **below**
+Screen Time, never be tuned to match it. A larger cap put the estimate above Screen Time, so
+it was lowered to a round value that puts the estimate below it. Treat Screen Time as an upper
+bound on watch time, not as the true value.
