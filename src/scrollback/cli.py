@@ -514,6 +514,32 @@ def eval_rescore(
     )
 
 
+@eval_app.command("retrieval")
+def eval_retrieval(
+    k: Annotated[int | None, typer.Option(min=1, help="Top k (default: llm.retrieval_k).")] = None,
+    split: Annotated[str, typer.Option(help="dev | test | all")] = "dev",
+    experiment: Annotated[
+        Path | None, typer.Option(exists=True, help="Use this experiment's kb_sources.")
+    ] = None,
+    show_misses: Annotated[bool, typer.Option("--misses", help="List missed chunks.")] = False,
+    config: ConfigOption = None,
+) -> None:
+    """Offline recall@k: search each question's own text and look for its expected_knowledge.
+    No API calls. Dev by default: the test split is held out."""
+    from scrollback.evals.questions import load_questions
+    from scrollback.evals.retrieval import retrieval_report
+    from scrollback.evals.run import experiment_settings, load_experiment
+
+    if split not in ("dev", "test", "all"):
+        typer.echo("--split must be dev, test or all", err=True)
+        raise typer.Exit(2)
+    qset = load_questions()
+    settings = _settings(config)
+    if experiment is not None:
+        settings = experiment_settings(settings, load_experiment(experiment), qset)
+    typer.echo(retrieval_report(qset, settings, split=split, k=k, show_misses=show_misses))
+
+
 @eval_app.command("import-feedback")
 def eval_import_feedback() -> None:
     """Turn bad bot feedback into candidate eval questions."""
@@ -521,9 +547,42 @@ def eval_import_feedback() -> None:
 
 
 @kb_app.command("index")
-def kb_index() -> None:
-    """Embed metrics, docs, schema and examples into DuckDB."""
-    _not_implemented("kb index", "Phase 5")
+def kb_index(
+    rebuild: Annotated[bool, typer.Option("--rebuild", help="Rebuild even if up to date.")] = False,
+    config: ConfigOption = None,
+) -> None:
+    """Embed metrics, docs, table descriptions and examples into the knowledge index."""
+    from collections import Counter
+
+    from scrollback.kb.index import ensure_index
+
+    settings = _settings(config)
+    index = ensure_index(settings, rebuild=rebuild)
+    by_source = Counter(c.source for c in index.chunks)
+    counts = ", ".join(f"{k} {v}" for k, v in sorted(by_source.items()))
+    typer.echo(
+        f"{len(index.chunks)} chunks ({counts}), model {index.model}, "
+        f"hash {index.content_hash[:12]}, {settings.paths.kb_index.name}"
+    )
+
+
+@kb_app.command("search")
+def kb_search(
+    query: Annotated[str, typer.Argument(help="What to look up.")],
+    k: Annotated[
+        int | None, typer.Option(min=1, help="Chunks to return (default: retrieval_k).")
+    ] = None,
+    show_text: Annotated[bool, typer.Option("--text", help="Print each chunk's text.")] = False,
+    config: ConfigOption = None,
+) -> None:
+    """Search the knowledge base the way search_knowledge does (agent.kb_sources apply)."""
+    from scrollback.kb.retrieve import search
+
+    settings = _settings(config)
+    for hit in search(query, settings, k=k):
+        typer.echo(f"{hit.score:.4f}  {hit.chunk.id}")
+        if show_text:
+            typer.echo("    " + hit.text.replace("\n", "\n    "))
 
 
 @alerts_app.command("check")

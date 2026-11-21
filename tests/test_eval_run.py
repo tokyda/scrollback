@@ -265,3 +265,45 @@ def test_cli_rescore_dev_only_run(tmp_path: Path, monkeypatch: pytest.MonkeyPatc
     assert "test n/a" in result.output
     rec = load_records(run_dir)[0]
     assert "caveat_strong" in rec["scores"]
+
+
+class SearchingOracle(OracleLLM):
+    """Searches the knowledge base with the question first, then answers like the oracle."""
+
+    model = "mock-searching"
+
+    def complete(
+        self, *, system: str, messages: list[dict[str, Any]], tools: list[dict[str, Any]]
+    ) -> LLMResponse:
+        q = _question_for(messages)
+        if len(messages) == 1:
+            return mock_turn(("search_knowledge", {"query": q.question}))
+        trimmed = [messages[0], *messages[3:]]  # hide the search turn from the oracle
+        return super().complete(system=system, messages=trimmed, tools=tools)
+
+
+def test_search_run_records_retrieval(tmp_path: Path) -> None:
+    from scrollback.evals.run import Experiment
+
+    base = repo_settings()
+    base.paths = base.paths.model_copy(update={"kb_index": tmp_path / "kb.duckdb"})
+    base.kb = base.kb.model_copy(update={"embedding_model": "hashing"})
+    exp = Experiment.model_validate({
+        "name": "e02a_test", "description": "search on",
+        "overrides": {"agent": {"prompt_version": "1_search", "search_knowledge": True}},
+    })  # fmt: skip
+    run_dir = run_eval(
+        exp, QSET, base=base, llm_factory=lambda s: SearchingOracle(), split="dev", repeat=1,
+        workers=1, only=["q001", "q023", "q063"], runs_dir=tmp_path / "runs",
+        labels_dir=tmp_path / "labels",
+    )  # fmt: skip
+    records = {r["question"]: r for r in load_records(run_dir)}
+    assert all(r["search_available"] and r["kb_searches"] == 1 for r in records.values())
+    assert records["q001"]["retrieved"] and isinstance(records["q001"]["kb_recall"], float)
+    assert records["q063"]["kb_recall"] is None  # its knowledge is the E6 cannot_answer doc
+    summary = json.loads((run_dir / "summary.json").read_text())
+    assert summary["sub_scores"]["kb_searched"] == 1.0
+    assert summary["sub_scores"]["kb_recall"] is not None
+    assert summary["efficiency"]["kb_searches"] == 1.0
+    config = json.loads((run_dir / "config.json").read_text())
+    assert len(config["system_prompt_sha256"]) == 64

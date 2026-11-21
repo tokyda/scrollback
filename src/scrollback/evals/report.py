@@ -36,6 +36,11 @@ def _sub_rate(records: list[dict[str, Any]], name: str) -> float | None:
     return _rate([bool(v) for v in vals])
 
 
+def _mean_of(records: list[dict[str, Any]], key: str) -> float | None:
+    vals = [float(r[key]) for r in records if isinstance(r.get(key), int | float)]
+    return mean(vals) if vals else None
+
+
 def summarize(records: list[dict[str, Any]], qset: QuestionSet) -> dict[str, Any]:
     repeats = sorted({r["repeat"] for r in records})
     dev = [r for r in records if r["split"] == "dev"]
@@ -86,6 +91,12 @@ def summarize(records: list[dict[str, Any]], qset: QuestionSet) -> dict[str, Any
             "assumptions_on_ambiguous": _sub_rate(
                 [r for r in records if r["category"] == "ambiguous"], "assumptions"
             ),
+            # Phase 5, reported only: recall of the agent's own searches over the question's
+            # expected_knowledge (runs with search_knowledge on and something expected).
+            "kb_recall": _mean_of(records, "kb_recall"),
+            "kb_searched": _rate(
+                [r.get("kb_searches", 0) > 0 for r in records if r.get("search_available")]
+            ),
         },
         "efficiency": {
             "steps": mean(r.get("steps", 0) for r in records) if records else None,
@@ -97,6 +108,7 @@ def summarize(records: list[dict[str, Any]], qset: QuestionSet) -> dict[str, Any
             "latency_s": mean(r.get("latency_ms", 0) for r in records) / 1000 if records else None,
             "cost_per_question_usd": mean(costs) if costs else None,
             "total_cost_usd": sum(costs) if costs else None,
+            "kb_searches": mean(r.get("kb_searches", 0) for r in records) if records else None,
         },
         "statuses": dict(Counter(r["status"] for r in records)),
         "labels_suggested": dict(
@@ -167,6 +179,9 @@ def render_report(
         "| strong caveat, estimate + reason (all estimate questions) | "
         f"{_pct(sub.get('strong_caveat_on_estimate_questions'))} |",
         f"| assumptions stated (ambiguous) | {_pct(sub['assumptions_on_ambiguous'])} |",
+        f"| runs that searched the knowledge base | {_pct(sub.get('kb_searched'))} |",
+        "| knowledge recall of the agent's searches (reported only) | "
+        f"{_pct(sub.get('kb_recall'))} |",
         "",
         "## Efficiency (mean per question run)",
         "",
@@ -221,6 +236,8 @@ SUB_SCORE_ROWS = (
     ("caveat_on_estimate_questions", "caveat (estimate questions)"),
     ("strong_caveat_on_traps", "strong caveat (traps, reported only)"),
     ("strong_caveat_on_estimate_questions", "strong caveat (estimate questions, reported only)"),
+    ("kb_searched", "runs that searched the knowledge base"),
+    ("kb_recall", "knowledge recall of the agent's searches (reported only)"),
 )
 
 
@@ -277,6 +294,8 @@ def compare(a: dict[str, Any], b: dict[str, Any], split: str = "all") -> str:
         f"| tool calls | {num(ea['tool_calls'], '.2f')} | {num(eb['tool_calls'], '.2f')} |",
         f"| tool errors | {num(ea['tool_errors'], '.3f')} | {num(eb['tool_errors'], '.3f')} |",
         f"| tokens | {num(ea['tokens'], ',.0f')} | {num(eb['tokens'], ',.0f')} |",
+        f"| knowledge searches | {num(ea.get('kb_searches'), '.2f')} | "
+        f"{num(eb.get('kb_searches'), '.2f')} |",
         f"| latency (s) | {num(ea['latency_s'], '.1f')} | {num(eb['latency_s'], '.1f')} |",
         f"| cost per run ($) | {num(ea['cost_per_question_usd'], '.4f')} | "
         f"{num(eb['cost_per_question_usd'], '.4f')} |",

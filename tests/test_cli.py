@@ -10,8 +10,8 @@ TOP_LEVEL = [
     "eval", "kb", "alerts", "digest", "serve",
 ]  # fmt: skip
 GROUPS = {
-    "eval": ["run", "report", "import-feedback"],
-    "kb": ["index"],
+    "eval": ["run", "report", "retrieval", "import-feedback"],
+    "kb": ["index", "search"],
     "alerts": ["check"],
     "digest": ["send"],
     "serve": ["api", "bot"],
@@ -37,7 +37,6 @@ def test_group_help_lists_subcommands(group: str) -> None:
 @pytest.mark.parametrize(
     ("args", "label"),
     [
-        (["kb", "index"], "Phase 5"),
         (["serve", "bot"], "Phase 6"),
         (["alerts", "check"], "stretch"),
         (["digest", "send"], "stretch"),

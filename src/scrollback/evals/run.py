@@ -203,6 +203,8 @@ def run_one(
         )
         suspect = suspect_scoring(q, s)
     tokens = trace.tokens()
+    searches = [t for t in trace.tool_calls if t.name == "search_knowledge" and not t.is_error]
+    retrieved = list(dict.fromkeys(i for t in searches for i in t.meta.get("retrieved", [])))
     record = {
         "question": q.id,
         "repeat": repeat,
@@ -236,8 +238,30 @@ def run_one(
         "cost_usd": trace.cost_usd,
         "latency_ms": trace.latency_ms,
         "models_served": trace.models_served,
+        "search_available": settings.agent.search_knowledge,
+        "kb_searches": len(searches),
+        "retrieved": retrieved,
+        "kb_recall": run_recall(q, retrieved, settings)
+        if settings.agent.search_knowledge
+        else None,
     }
     return record, trace.to_dict()
+
+
+def expected_in_scope(q: Question, settings: Settings) -> list[str]:
+    """The question's expected chunks that this run's kb_sources can return."""
+    from scrollback.kb.chunks import all_chunks
+
+    sources = {c.id: c.source for c in all_chunks()}
+    allowed = set(settings.agent.kb_sources)
+    return [e for e in q.expected_knowledge if sources.get(e) in allowed]
+
+
+def run_recall(q: Question, retrieved: list[str], settings: Settings) -> float | None:
+    """Recall of the agent's own searches (all of them, deduplicated) for this question."""
+    from scrollback.kb.retrieve import recall_at_k
+
+    return recall_at_k(retrieved, expected_in_scope(q, settings))
 
 
 def run_eval(

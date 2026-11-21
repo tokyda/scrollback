@@ -113,3 +113,31 @@ def test_recall_at_k() -> None:
     assert recall_at_k(["a", "b"], ["a", "c"]) == 0.5
     assert recall_at_k(["a"], []) is None
 
+
+def test_retrieval_report_offline(kb_settings: Settings) -> None:
+    from scrollback.evals.questions import load_questions
+    from scrollback.evals.retrieval import question_recalls, retrieval_report
+
+    qset = load_questions()
+    rows = question_recalls(qset, kb_settings, split="dev", k=6)
+    assert len(rows) == len(qset.by_split("dev"))
+    unanswerable = [r for r in rows if r.category == "unanswerable"]
+    assert unanswerable and all(r.recall is None for r in unanswerable)  # cannot_answer is E6
+    text = retrieval_report(qset, kb_settings, split="dev", k=6, show_misses=True)
+    assert "recall@6" in text and "| **all** |" in text and "unanswerable" not in text
+
+
+def test_cli_kb_search(tmp_path: Path) -> None:
+    from typer.testing import CliRunner
+
+    from scrollback.cli import app
+
+    cfg = tmp_path / "config.yaml"
+    cfg.write_text(
+        "paths:\n  kb_index: kb.duckdb\nkb:\n  embedding_model: hashing\n", encoding="utf-8"
+    )
+    runner = CliRunner()
+    out = runner.invoke(app, ["kb", "index", "--config", str(cfg)])
+    assert out.exit_code == 0 and "chunks" in out.output and "hashing" in out.output
+    out = runner.invoke(app, ["kb", "search", "binge sessions", "--k", "2", "--config", str(cfg)])
+    assert out.exit_code == 0 and "metric:binge_sessions" in out.output
