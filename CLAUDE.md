@@ -138,7 +138,7 @@ The scoring false negatives found in review are listed in the label files.
      "unknown isn't zero" rules), same sources (`20261121T185323Z_e06a_refusal_rules_haiku`,
      report `eval/reports/e06a_refusal_rules_haiku.md`): 99.0% (98.4-100) vs E2b 99.5%, within
      variance; q072 fixed 3/3; q019 r1/r3 fail (`wrong_time_window`, 17-18 Oct, as E1-haiku;
-     labels pending); strong caveats on estimate questions 33% -> 77%; no over-refusal; $0.0012
+     owner-confirmed; a `resolve_dates` tool is in the stretch backlog); strong caveats on estimate questions 33% -> 77%; no over-refusal; $0.0012
      per question, tokens +8%. **Next: E6b** = E6a + `cannot_answer` in `kb_sources`
      (`e06b_cannot_answer_haiku.yaml`); report vs E6a and stop. Cost estimate and OK before each.
      Offline recall@6 with E6b's sources: unanswerable 16.7%, ranking 100 -> 70%, trap 86.1 ->

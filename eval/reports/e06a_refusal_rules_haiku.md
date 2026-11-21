@@ -51,7 +51,7 @@ that is E6b (owner decision 2026-11-22, DESIGN §7.5).
   doesn't cover today (2026-11-20)", say the history ends on 2026-11-19, and give yesterday's
   figure, labelled. That is the "unknown isn't zero" behaviour the rule asks for. It is the one
   failure that has persisted since E1-haiku.
-- **q019 r1 and r3 fail** (proposed `wrong_time_window`). With today Monday 26 Oct, both read
+- **q019 r1 and r3 fail** (`wrong_time_window`, owner-confirmed). With today Monday 26 Oct, both read
   "last weekend" as 17–18 Oct instead of 24–25 Oct ("the Mon–Sun week before today"). The SQL
   and arithmetic are correct for the dates they chose. **This is the same misreading, in nearly
   the same words, as E1-haiku q019 r2/r3**, before search existed. The new rules say nothing
@@ -90,9 +90,9 @@ that is E6b (owner decision 2026-11-22, DESIGN §7.5).
   - 1 is q074 r3, a partial-coverage trap: "The data doesn't cover all of May 2026. It starts on
     2026-05-24", followed by the partial total. That is the behaviour the trap tests.
 
-## Failures (proposed labels; owner to confirm)
+## Failures (labels confirmed by the owner, 2026-11-22)
 
-| Q | Rep | Proposed | What happened |
+| Q | Rep | Label | What happened |
 |---|---|---|---|
 | q019 | 1 | `wrong_time_window` | "Last weekend = Saturday 2026-10-17 and Sunday 2026-10-18" (gold 24–25 Oct). The SQL is correct for those dates. |
 | q019 | 3 | `wrong_time_window` | The same reading, "the Mon–Sun week before today, 2026-10-26". |

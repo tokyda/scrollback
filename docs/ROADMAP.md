@@ -111,3 +111,4 @@ Build scope by phase. Each phase ends with a "Done when" check. See `docs/DESIGN
 - Clarifying questions for ambiguous queries in interactive mode, with their own eval category
 - Cost guardrails: per-day token budget, cheap-model routing for simple questions
 - `query_metric` semantic-layer tool (`metrics.yml → SQL`), formerly ladder step E5 (DESIGN §7.5)
+- Deterministic relative-date resolver tool, e.g. `resolve_dates("last weekend", today)` → start/end dates, so the agent doesn't do calendar arithmetic itself. Motivated by q019: Haiku reads "last weekend" on a Monday as the weekend before last in some runs (E1-haiku r2/r3, E6a r1/r3)
