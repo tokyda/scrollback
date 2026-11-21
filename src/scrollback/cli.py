@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Annotated
 
@@ -678,11 +679,10 @@ def serve_bot(
     Answers only chats in TELEGRAM_ALLOWED_CHAT_IDS, with the same config as `ask`
     (interactive.experiment), and only in aggregate_only mode. Each question costs money."""
     import logging
+    import signal
 
-    from scrollback.agent import llm as llm_module
-    from scrollback.agent.llm import LLMError
-    from scrollback.bot.telegram_api import RedactingFilter, TelegramAPI, TelegramError
-    from scrollback.bot.telegram_bot import ScrollbackBot
+    from scrollback.bot.lock import BotAlreadyRunningError, BotLock, git_commit
+    from scrollback.bot.telegram_api import RedactingFilter
     from scrollback.warehouse.db import has_view_data
 
     settings, config_label = _interactive_settings(config, experiment, no_experiment)
@@ -708,6 +708,40 @@ def serve_bot(
         handler.addFilter(RedactingFilter(token))
     logging.getLogger("matplotlib").setLevel(logging.WARNING)  # "categorical units" chatter
 
+    # One bot per machine: Telegram lets only one client poll a token (DESIGN §8).
+    commit = git_commit(settings.root)
+    lock = BotLock(settings.paths.traces_dir, commit=commit)
+    try:
+        lock.acquire()
+    except BotAlreadyRunningError as exc:
+        typer.echo(f"Cannot start the bot: {exc}", err=True)
+        raise typer.Exit(1) from None
+    if lock.replaced is not None:
+        typer.echo(f"Removed a stale bot lock (PID {lock.replaced.pid} is no longer running).")
+    previous_term = signal.signal(signal.SIGTERM, _interrupt)  # so `kill` releases the lock
+    try:
+        _run_bot(settings, token, config_label, db_path, commit)
+    finally:
+        signal.signal(signal.SIGTERM, previous_term)
+        lock.release()
+
+
+def _interrupt(signum: int, frame: object) -> None:
+    raise KeyboardInterrupt
+
+
+def _run_bot(
+    settings: Settings,
+    token: str,
+    config_label: str,
+    db_path: Path,
+    commit: str | None,
+) -> None:
+    from scrollback.agent import llm as llm_module
+    from scrollback.agent.llm import LLMError
+    from scrollback.bot.telegram_api import TelegramAPI, TelegramError
+    from scrollback.bot.telegram_bot import ScrollbackBot
+
     if settings.agent.search_knowledge:
         from scrollback.kb.index import ensure_index
 
@@ -721,7 +755,8 @@ def serve_bot(
     bot = ScrollbackBot(api, settings, client, db_path=db_path)
     n = len(settings.secrets.telegram_allowed_chat_ids)
     typer.echo(
-        f"Bot running: {config_label} ({settings.llm.model}, "
+        f"Bot running (PID {os.getpid()}, commit {commit or 'unknown'}): {config_label} "
+        f"({settings.llm.model}, "
         f"prompt v{settings.agent.prompt_version}, effort {settings.llm.effort}), "
         f"{n} allowed chat{'s' if n != 1 else ''}, "
         f"warehouse {db_path.name}, {settings.agent.result_mode}. Ctrl+C to stop."

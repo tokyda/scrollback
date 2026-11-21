@@ -84,7 +84,9 @@ def test_starts_with_interactive_config(
         app, ["serve", "bot", "--config", str(_config(agent_settings, tmp_path))]
     )
     assert result.exit_code == 0, result.output
-    assert "Bot running: e06b_cannot_answer_haiku (claude-haiku-5-5, prompt v3" in result.output
+    assert "Bot running (PID " in result.output
+    assert "): e06b_cannot_answer_haiku (claude-haiku-5-5, prompt v3" in result.output
+    assert not (agent_settings.paths.traces_dir / "bot" / "serve_bot.lock").exists()  # released
     assert "2 allowed chats" in result.output and "aggregate_only" in result.output
     assert result.output.rstrip().endswith("Bot stopped.")
     assert FAKE_TOKEN not in result.output
@@ -92,3 +94,29 @@ def test_starts_with_interactive_config(
     assert s.agent.search_knowledge and s.agent.prompt_version == "3"
     assert seen["allowed"] == frozenset({11, 22})
     assert agent_settings.paths.kb_index.exists()  # index built at start, not on question 1
+
+
+def test_refuses_when_another_bot_holds_the_lock(
+    agent_settings: Settings, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Phone check 2026-11-22: two bots on one token split the updates between them."""
+    import json
+
+    from scrollback.bot import lock as lock_module
+
+    _env(tmp_path, TELEGRAM_BOT_TOKEN=FAKE_TOKEN, TELEGRAM_ALLOWED_CHAT_IDS="11")
+    held = agent_settings.paths.traces_dir / "bot" / "serve_bot.lock"
+    held.parent.mkdir(parents=True)
+    held.write_text(json.dumps({"pid": 424242, "started_at": "2026-11-22T06:27:00+00:00",
+                                "host": "mac", "commit": "e7762cb"}))  # fmt: skip
+    monkeypatch.setattr(lock_module, "is_bot_process", lambda pid: pid == 424242)
+    created: list[str] = []
+    monkeypatch.setattr(llm_module, "create_llm_client", lambda s: created.append("llm"))
+    result = runner.invoke(
+        app, ["serve", "bot", "--config", str(_config(agent_settings, tmp_path))]
+    )
+    assert result.exit_code == 1
+    assert "another bot is already running (PID 424242" in result.output
+    assert "commit e7762cb" in result.output and "kill 424242" in result.output
+    assert created == [] and held.exists()  # nothing started; the other bot's lock is kept
+    assert FAKE_TOKEN not in result.output

@@ -73,6 +73,12 @@ BOT_COMMANDS = [
     ("feedback", "good|bad [note]: rate an answer (reply to it) or the last one"),
     ("help", "What I can do"),
 ]
+CONFLICT_MESSAGE = (
+    "Telegram 409 Conflict: another process is polling this bot token (a second "
+    "`scrollback serve bot`, on this or another machine). Only one can receive messages and "
+    "button taps, so updates go to whichever polls; stop the other one. Retrying."
+)
+CONFLICT_REMIND_EVERY = 20  # repeat the message every N consecutive conflicts
 SQL_CALLBACK = "sql:"
 RATE_CALLBACK = "fb:"  # fb:good:<trace_id> / fb:bad:<trace_id>
 NOTE_PLACEHOLDER = "What was wrong? (optional)"
@@ -216,17 +222,24 @@ class ScrollbackBot:
     def run(self, *, max_polls: int | None = None) -> None:
         self.register_commands()
         offset = self.skip_pending() if self.settings.bot.drop_pending_on_start else None
-        polls, backoff = 0, 1.0
+        polls, backoff, conflicts = 0, 1.0, 0
         while max_polls is None or polls < max_polls:
             polls += 1
             try:
                 updates = self.api.get_updates(offset, self.settings.bot.poll_timeout_sec)
             except TelegramError as exc:
-                log.warning("getUpdates failed: %s", exc)
+                if exc.status == 409:
+                    if conflicts % CONFLICT_REMIND_EVERY == 0:
+                        log.error("%s", CONFLICT_MESSAGE)
+                    conflicts += 1
+                else:
+                    log.warning("getUpdates failed: %s", exc)
                 self._sleep(backoff)
                 backoff = min(backoff * 2, 60.0)
                 continue
-            backoff = 1.0
+            if conflicts:
+                log.info("polling again after %d conflict(s)", conflicts)
+            backoff, conflicts = 1.0, 0
             for update in updates:
                 offset = int(update["update_id"]) + 1
                 self.safe_handle(update)
