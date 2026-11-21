@@ -262,7 +262,8 @@ Every raw `*` table has an `extras JSON` column (NULL unless the record had unkn
   - `video_id` and search terms **may** appear in results (owner's decision, 2026-11-20), e.g. "most rewatched video" or "top searches";
   - `describe_table` shows sample rows only for `agg_*`/`dim_*` and column statistics (min, max, distinct count) for `fct_*`.
   This guards against accidental row dumps. It isn't a security boundary against a determined model; the execution layer in §6.3 is the second line.
-- The Telegram bot only answers chat IDs listed in `TELEGRAM_ALLOWED_CHAT_IDS`.
+- The Telegram bot only answers chat IDs listed in `TELEGRAM_ALLOWED_CHAT_IDS` and ignores all others silently. It refuses to start unless `aggregate_only` is on. Its logs hold no question text, answers, results, chat IDs or token (§8).
+- Bot feedback and the message map live under `traces/` (git-ignored). Candidate eval questions from bad feedback go to `eval/candidates/` (git-ignored), because they hold real questions and answers (§8).
 
 ---
 
@@ -744,16 +745,19 @@ scrollback/
 │   ├── agent/{loop.py, tools.py, sql_guard.py, llm.py, prompts/}
 │   ├── charts.py
 │   ├── tracing.py
-│   ├── evals/{questions.py, warehouses.py, gold.py, score.py, run.py, labels.py, report.py, retrieval.py}
+│   ├── evals/{questions.py, warehouses.py, gold.py, score.py, run.py, labels.py, report.py, retrieval.py, feedback_import.py}
 │   ├── monitor/{anomaly.py, digest.py}
 │   ├── api/app.py
-│   └── bot/telegram_bot.py
+│   ├── experiments.py      # experiment files; interactive config for ask and the bot (§6.7)
+│   ├── feedback.py         # /feedback store, trace lookup, bot message map (§8)
+│   └── bot/{telegram_api.py, telegram_bot.py}
 ├── eval/                    # eval data; the code lives in src/scrollback/evals/ (importable, typed)
 │   ├── questions.yaml
 │   ├── gold_snapshot.json
 │   ├── experiments/*.yaml
 │   ├── runs/                # git-ignored except selected summaries
 │   ├── labels/
+│   ├── candidates/          # git-ignored: candidate questions from bot feedback (§8)
 │   └── reports/             # committed baseline/experiment reports
 └── tests/
     └── fixtures/            # static test inputs (synthetic only)
