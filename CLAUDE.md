@@ -25,19 +25,20 @@ in `eval/reports/e00_baseline.md`):
 
 | Run | Overall | Dev | Test (held out) | Cost |
 |---|---|---|---|---|
-| E0 baseline (marts) `20261119T222732Z_e00_baseline` | **93.4%** | 91.7% | 96.9% | $2.79 |
+| E0 baseline (marts) `20261119T222732Z_e00_baseline` | **93.8%** | 92.2% | 96.9% | $2.79 |
 | E-1 warehouse ablation (staging only) `20261119T224207Z_em1_warehouse_ablation` | **53.8%** | 51.0% | 59.4% | $2.78 |
 
 Same agent, prompt and model; only the queryable tables differ, so the data modelling is worth
-about 40 points. Every failure in both runs has an owner-confirmed label; nothing is pending.
+about 40 points. (E0 was 93.4% / 91.7% dev as first reported; re-scored on 2026-11-21, q060 r3
+now passes on q060's watch-time reading.) Every failure in both runs has an owner-confirmed label; nothing is pending.
 The scoring false negatives found in review are listed in the label files.
 
 **Confirmed bad-case clusters** (owner-confirmed labels in `eval/labels/`):
-- E0, 19 runs:
+- E0, 18 runs:
   - 15 `wrong_metric_definition`, all one cause: session length measured as first-to-last-view
     span instead of estimated watch time (q023, q042, q062, q084, q087, 3/3 each);
-  - 3 `missing_caveat` (q075 x2, q071 x1);
-  - 1 `answer_misreport` (q060 r3: 16.45% reported as 17%).
+  - 3 `missing_caveat` (q075 x2, q071 x1).
+  - (q060 r3, once `answer_misreport`, passes since 2026-11-21 on the watch-time reading.)
 - E-1, 133 runs:
   - 53 `over_refusal` ("no durations, here are counts");
   - 65 `wrong_metric_definition` (its own gap estimates, spans, "binge = 30+ videos", views as
@@ -75,8 +76,13 @@ The scoring false negatives found in review are listed in the label files.
   shown arithmetic, a row count, or a describe_table value (row count, column stats, sample
   cells). A hedged guess ("can't know, but probably 40 min") fails.
 - *Text matching:* rounding at the printed precision; a ratio also matches as a percentage;
-  seconds, minutes and hours scale only with a unit word in text; dates, years, times and
-  "N tables" are never answer numbers.
+  seconds, minutes and hours scale only with a unit word in text; dates, date ranges ("Mon 9 -
+  Sun 15 Nov"), years, times and "N tables" are never answer numbers; "Sept" is a month;
+  "est." is an estimate word.
+- *Result cells (2026-11-21):* a whole-number cell gets no rounding slack against a ratio; a
+  row-label column (distinct consecutive integers, 3+ rows: hour, weekday, rank) is never
+  rescaled (hour 17 is not 17%); a share of a group (sum where flag / column total) counts
+  when the text states it.
 - *Ambiguity policy:* alternatives exist only in `ambiguous`. A question found to have two
   reasonable readings moves there with all readings accepted (q056, q082). Later readings are
   added (q060 10pm-6am).
@@ -90,14 +96,16 @@ The scoring false negatives found in review are listed in the label files.
   only for baselines and final runs.
 
 **Phase 5 (branch `phase-5`, in progress; ladder rules in DESIGN §7.5):**
-1. **Done:** E1 on Sonnet (`describe_include_descriptions: true`), dev 99.5% vs E0 91.7%; one
+1. **Done:** E1 on Sonnet (`describe_include_descriptions: true`), dev 99.5% vs E0 92.2%; one
    failing run (q087 r3). Report: `eval/reports/e01_descriptions.md`. **E1 is Sonnet's final
    config**; re-run Sonnet with a later step only if Haiku results suggest it would help.
-2. **Next: the model swap at the base of the ladder.** Run E0-haiku and E1-haiku
-   (`eval/experiments/e00_haiku.yaml`, `e01_haiku.yaml`) on dev; report both against Sonnet
-   E0/E1 with `eval report <a> <b> --split dev`.
-3. If E1-haiku is below ~93% on dev, run **E2a → E6 on Haiku**, one config change each,
-   cumulative; accuracy first, plus tokens, steps and recall@k. Stop for review after each.
+2. **Done:** E0-haiku 90.1% and E1-haiku 97.9% (95.3-100) on dev, $0.0008 per question vs
+   Sonnet E1's $0.0105. Labels owner-confirmed; report `eval/reports/e00_e01_haiku.md`.
+   E1-haiku fails 4 runs: q019 r2/r3 (`wrong_time_window`), q052 r3 (`aggregation_error`),
+   q072 r3 (`failed_refusal`). Haiku done-when part 1 is open (E1-haiku has a 100% repeat).
+3. **Next: E2a → E6 on Haiku** (owner decision 2026-11-21, although E1-haiku is above ~93%),
+   one config change each, cumulative; accuracy first, plus tokens, steps and recall@k. Cost
+   estimate and the owner's OK before each run; stop for review after each.
    - Knowledge indexer: fastembed, `bge-small-en-v1.5`, in a separate git-ignored DuckDB
      file; `{param}` placeholders are filled at retrieval time from the run's settings.
    - **E2a** = `search_knowledge` only, prompt `system_v1_search.md` (v1 + one tool line, no

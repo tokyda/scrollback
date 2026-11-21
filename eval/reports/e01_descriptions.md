@@ -24,6 +24,9 @@ the current scorer (`eval rescore`, which flipped no runs).
 |---|---|---|---|
 | **Dev** | **91.7%** (90.6–92.2) | **99.5%** (98.4–100) | **+7.8** |
 
+> **Re-scored 2026-11-21** (`eval/reports/e00_e01_haiku.md`): E0 q060 r3 now passes on q060's new
+> watch-time reading, so E0 dev is 92.2% (92.2–92.2) and the gain is +7.3. E1 is unchanged.
+
 E1's worst repeat (98.4%) is above E0's best (92.2%), so the gain is beyond repeat
 variance, and E1 stays in the ladder.
 

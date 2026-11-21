@@ -4,13 +4,13 @@
  "n_runs": 288,
  "accuracy": {
   "overall": {
-   "mean": 0.9340277777777778,
-   "min": 0.9270833333333334,
+   "mean": 0.9375,
+   "min": 0.9375,
    "max": 0.9375
   },
   "dev": {
-   "mean": 0.9166666666666666,
-   "min": 0.90625,
+   "mean": 0.921875,
+   "min": 0.921875,
    "max": 0.921875
   },
   "test": {
@@ -60,8 +60,8 @@
     "max": 1.0
    },
    "ambiguous": {
-    "mean": 0.9444444444444444,
-    "min": 0.8333333333333334,
+    "mean": 1.0,
+    "min": 1.0,
     "max": 1.0
    },
    "unanswerable": {
@@ -78,7 +78,7 @@
  },
  "sub_scores": {
   "execution": 0.9922480620155039,
-  "answer": 0.937984496124031,
+  "answer": 0.9418604651162791,
   "metric_selection": 0.07364341085271318,
   "refusal_correct": 1.0,
   "caveat_on_traps": 0.8888888888888888,
@@ -101,10 +101,9 @@
  },
  "labels_suggested": {
   "wrong_metric_definition": 15,
-  "missing_caveat": 3,
-  "answer_misreport": 1
+  "missing_caveat": 3
  },
- "suspect_scoring": 16,
+ "suspect_scoring": 15,
  "per_question": {
   "q001": "3/3",
   "q002": "3/3",
@@ -165,7 +164,7 @@
   "q057": "3/3",
   "q058": "3/3",
   "q059": "3/3",
-  "q060": "2/3",
+  "q060": "3/3",
   "q061": "3/3",
   "q062": "0/3",
   "q063": "3/3",
@@ -204,10 +203,9 @@
   "q096": "3/3"
  },
  "flaky": [
-  "q060",
   "q071",
   "q075"
  ],
  "run_id": "20261119T222732Z_e00_baseline",
- "rescored_at": "2026-11-20T17:00:49+00:00"
+ "rescored_at": "2026-11-21T04:10:00+00:00"
 }

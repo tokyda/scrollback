@@ -137,14 +137,6 @@ failures:
   suspect_scoring: 'leads with wrong-definition value 62.03 but also states the gold value: check that
     the wrong value is the headline, not labelled context'
   label: wrong_metric_definition
-- question: q060
-  repeat: 3
-  category: ambiguous
-  split: dev
-  suggested: answer_misreport
-  reason: the cited result matches gold but the text does not state it
-  suspect_scoring: result matches gold but the text check failed
-  label: answer_misreport
 - question: q062
   repeat: 3
   category: ambiguous
@@ -185,6 +177,15 @@ confirmed:
   decision: 15 wrong_metric_definition, 3 missing_caveat, 1 answer_misreport (q060 r3). q067 r1 passes
     with describe_table grounding. q034 r2/r3 confirmed scoring false negatives, resolved by the range-sum
     rule.
+scoring_false_negatives:
+- question: q034
+  repeat: 2
+  note: correct sum over the cited per-day rows inside the date range the answer states; scored as a pass
+    by the range-sum rule (owner decision 2026-11-20)
+- question: q034
+  repeat: 3
+  note: correct sum over the cited per-day rows inside the date range the answer states; scored as a pass
+    by the range-sum rule (owner decision 2026-11-20)
 rescored_to_pass:
 - question: q067
   repeat: 1
@@ -201,6 +202,11 @@ rescored_to_pass:
   before: false
   after: true
   old_label: failed_refusal
+- question: q060
+  repeat: 3
+  before: false
+  after: true
+  old_label: answer_misreport
 - question: q095
   repeat: 3
   before: false
@@ -212,12 +218,3 @@ rescored_to_pass:
   after: true
   old_label: failed_refusal
 rescored_to_fail: []
-scoring_false_negatives:
-- question: q034
-  repeat: 2
-  note: correct sum over the cited per-day rows inside the date range the answer states; scored as a pass
-    by the range-sum rule (owner decision 2026-11-20)
-- question: q034
-  repeat: 3
-  note: correct sum over the cited per-day rows inside the date range the answer states; scored as a pass
-    by the range-sum rule (owner decision 2026-11-20)

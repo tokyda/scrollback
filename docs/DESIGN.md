@@ -565,8 +565,10 @@ Each step is one config. Results go into the README table.
 
 Opus is no longer on the ladder.
 
+**Result (2026-11-21, `eval/reports/e00_e01_haiku.md`):** E0-haiku 90.1% and E1-haiku 97.9% (95.3–100) on dev, against Sonnet E0 92.2% and E1 99.5%; $0.0008 per question on Haiku against $0.0105 on Sonnet. E1-haiku is above the ~93% headroom threshold, but **the owner chose to run E2a → E6 on Haiku anyway**, so the RAG steps are measured. They are expected to show mostly in tokens, steps, recall@k and the strong-caveat sub-score: 4 failing runs are left (q019 ×2, q052, q072).
+
 **Done when, for Haiku** (owner decision 2026-11-21):
-1. the best Haiku config beats E1-haiku beyond repeat variance on dev (its worst repeat above E1-haiku's best); and
+1. the best Haiku config beats E1-haiku beyond repeat variance on dev (its worst repeat above E1-haiku's best); *open: E1-haiku's best repeat is 100%, so this can't be met as written; the owner is to decide a replacement*; and
 2. target: its mean dev pass rate is within about 2 points of Sonnet E1 (99.5%), with cost per question reported next to Sonnet's.
 
 **Ladder rules (Phase 5, owner decisions 2026-11-20, 2026-11-21):**

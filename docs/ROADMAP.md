@@ -68,10 +68,11 @@ Build scope by phase. Each phase ends with a "Done when" check. See `docs/DESIGN
 - [x] SQL error self-correction (max 2 retries) *(already part of the E0 baseline, DESIGN §6.3)*
 - [ ] Semantic compiler `metrics.yml → SQL` + `query_metric` tool
 - [ ] Refusal and caveat rules in the prompt
-- [x] **E1** on Sonnet (dev 99.5% vs E0 91.7%; `eval/reports/e01_descriptions.md`); E1 is Sonnet's final config
-- [ ] **E0-haiku** and **E1-haiku** on dev (model swap moved to the base of the ladder, §7.5)
-- [ ] If E1-haiku is below ~93% on dev: **E2a, E2b, E3, E5, E6** on Haiku (§7.5; E4 cut); compare reports after each
+- [x] **E1** on Sonnet (dev 99.5% vs E0 92.2% after the 2026-11-21 re-score; `eval/reports/e01_descriptions.md`); E1 is Sonnet's final config
+- [x] **E0-haiku** and **E1-haiku** on dev (model swap moved to the base of the ladder, §7.5): 90.1% and 97.9% (Sonnet E1 99.5%) at $0.0008 vs $0.0105 per question; `eval/reports/e00_e01_haiku.md`
+- [ ] **E2a, E2b, E3, E5, E6** on Haiku (§7.5; E4 cut; run although E1-haiku is above ~93%, owner decision 2026-11-21); compare reports after each
 - [ ] Final: best Haiku config and Sonnet E1 on the test split
+- [x] *(added)* Scorer fixes from the Haiku review ("Sept", weekday date ranges, "est.", a no-data phrase, ratio and row-label cells, group shares) and q060's watch-time reading (§7.2)
 - [x] *(added)* Strong-caveat sub-score (estimate + reason; reported only, §7.2) and `eval report a b --split`
 - [ ] Retrieval eval: for each question, is the right metric or doc in the top k (recall@k)
 - [ ] README results table: accuracy, bad-case mix, tokens and latency per experiment
