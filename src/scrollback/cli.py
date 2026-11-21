@@ -300,15 +300,6 @@ def _trace_line(result: object) -> str:
     )
 
 
-STATUS_MESSAGES = {
-    "step_limit": "No answer: the agent reached its step limit without a final answer.",
-    "refused": "No answer: the model declined this request.",
-    "no_final_answer": "No answer: the agent stopped without giving a final answer.",
-    "max_tokens": "No answer: the model ran out of output tokens.",
-    "error": "No answer: the model call failed",
-}
-
-
 @app.command()
 def ask(
     question: Annotated[str, typer.Argument(help="Question in plain English.")],
@@ -331,7 +322,7 @@ def ask(
 
     from scrollback.agent import llm as llm_module
     from scrollback.agent.llm import LLMError
-    from scrollback.agent.loop import run_agent
+    from scrollback.agent.loop import STATUS_MESSAGES, run_agent
     from scrollback.warehouse.db import has_view_data
 
     settings, config_label = _interactive_settings(config, experiment, no_experiment)

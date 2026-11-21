@@ -69,6 +69,7 @@ class TelegramAPI:
     ) -> None:
         if not token:
             raise TelegramError("no bot token")
+        quiet_http_loggers()  # always: at INFO httpx logs each URL, token included
         self._token = token
         self._client = httpx.Client(
             base_url=f"{base_url}/bot{token}/", timeout=timeout_sec, transport=transport

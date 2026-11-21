@@ -24,6 +24,7 @@ class FakeTelegram:
         self.token = token
         self.calls: list[Call] = []
         self.update_batches: list[list[dict[str, Any]]] = []
+        self.after_drop: list[list[dict[str, Any]]] = []  # arrive after a drop-pending call
         self.failures: dict[str, tuple[int, str]] = {}  # method -> (status, description)
         self.raise_on: dict[str, Exception] = {}
         self.next_message_id = 1000
@@ -114,7 +115,7 @@ class FakeTelegram:
             offset = params.get("offset")
             if offset is not None and int(offset) < 0:  # "drop pending": last update only
                 pending = [u for b in self.update_batches for u in b]
-                self.update_batches = []
+                self.update_batches, self.after_drop = self.after_drop, []
                 return pending[-1:] if pending else []
             return self.update_batches.pop(0) if self.update_batches else []
         if method in ("sendMessage", "sendPhoto"):

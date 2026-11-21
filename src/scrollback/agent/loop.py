@@ -44,6 +44,15 @@ AGGREGATE_RULE = (
     "  agg_* / dim_* tables. Row-level results are rejected."
 )
 
+# What to tell the user for each status other than answered (CLI and bot).
+STATUS_MESSAGES = {
+    "step_limit": "No answer: the agent reached its step limit without a final answer.",
+    "refused": "No answer: the model declined this request.",
+    "no_final_answer": "No answer: the agent stopped without giving a final answer.",
+    "max_tokens": "No answer: the model ran out of output tokens.",
+    "error": "No answer: the model call failed",
+}
+
 
 @dataclass
 class AgentResult:
