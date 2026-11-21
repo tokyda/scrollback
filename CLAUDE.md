@@ -133,11 +133,13 @@ The scoring false negatives found in review are listed in the label files.
      the run's cited results when the text states every gold value (E2b q087 r1, the only
      flip); "no TikTok views for" is a no-data/coverage phrase.
    - **Plan change (2026-11-22, owner):** E3 skipped (no headroom; DESIGN §7.5), E5
-     (`query_metric`) moved to the stretch backlog. **Next: E6** on Haiku, built on E2b:
-     `system_v3.md` (v2 + estimate-caveat, refusal-first and "unknown isn't zero" rules) and
-     `kb_sources` + `cannot_answer` (`eval/experiments/e06_refusal_rules_haiku.yaml`). Built;
-     dev estimate $0.24, awaiting the owner's OK. Offline recall@6 with E6's sources: unanswerable
-     16.7%, ranking 100 -> 70%, trap 86.1 -> 76.4% (cannot_answer chunks crowd others).
+     (`query_metric`) moved to the stretch backlog. E6 is split (owner, 2026-11-22), one change
+     each: **Next: E6a** = E2b + `system_v3.md` (v2 + estimate-caveat, refusal-first and
+     "unknown isn't zero" rules), same sources (`e06a_refusal_rules_haiku.yaml`); report vs E2b
+     and stop. **Then E6b** = E6a + `cannot_answer` in `kb_sources`
+     (`e06b_cannot_answer_haiku.yaml`); report vs E6a and stop. Cost estimate and OK before each.
+     Offline recall@6 with E6b's sources: unanswerable 16.7%, ranking 100 -> 70%, trap 86.1 ->
+     76.4% (cannot_answer chunks crowd others).
    - If a printed estimate exceeds the approved amount, ask before running, even by cents.
    - Glossary edit committed before E2 (`2fa833a`, sessions.md: span vs session length);
      disclose it in the E2a report. `metrics.yml` and the docs predate the eval questions.

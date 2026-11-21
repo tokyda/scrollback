@@ -1,0 +1,17 @@
+# E6b on Haiku (DESIGN §7.5): E6a + the cannot_answer doc in the knowledge index.
+# One change from e06a_refusal_rules_haiku: kb_sources adds cannot_answer. Prompt
+# (system_v3.md), tool, k and retrieval are unchanged.
+name: e06b_cannot_answer_haiku
+description: "E6b on Haiku: E6a + the cannot_answer doc indexed for search_knowledge"
+overrides:
+  llm:
+    model: claude-haiku-5-5
+    effort: medium
+  agent:
+    prompt_version: "3"
+    result_mode: aggregate_only
+    describe_include_descriptions: true
+    search_knowledge: true
+    kb_sources: [metrics, docs, tables, cannot_answer]
+    sql_max_retries: 2
+    max_steps: 8

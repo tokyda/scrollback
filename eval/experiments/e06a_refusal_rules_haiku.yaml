@@ -1,0 +1,19 @@
+# E6a on Haiku (DESIGN §7.5): E2b + the system_v3.md rules only.
+# One change from e02b_lookup_rule_haiku: prompt system_v3.md, which is system_v2.md plus three
+# rules (estimate caveat with a reason; refuse in the first sentence and name what's missing;
+# a period outside the data's dates is unknown, not zero). A test checks that this is the only
+# difference. Sources are E2b's: the cannot_answer doc is NOT indexed (that is E6b).
+name: e06a_refusal_rules_haiku
+description: "E6a on Haiku: E2b + caveat, refusal and unknown-isn't-zero rules (system_v3.md)"
+overrides:
+  llm:
+    model: claude-haiku-5-5
+    effort: medium
+  agent:
+    prompt_version: "3"
+    result_mode: aggregate_only
+    describe_include_descriptions: true
+    search_knowledge: true
+    kb_sources: [metrics, docs, tables]
+    sql_max_retries: 2
+    max_steps: 8

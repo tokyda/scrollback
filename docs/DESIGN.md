@@ -386,7 +386,7 @@ Implemented in `src/scrollback/agent/sql_guard.py`. Every rejection has a stable
 
 **`system_v1.md` (E0) is deliberately minimal:** role, the four tools, the mart table names (no descriptions), "base every number on a run_sql result and cite its result_ids", the `aggregate_only` rule when it's on, relative dates resolved against the supplied today with Monday–Sunday weeks and the range stated in `assumptions`, ambiguity handling, "fix failing queries", and "lead with the number". It contains **no** metric definitions, glossary content, estimate caveats or refusal rules; those are what E1–E6 add and measure. The full target rule set is below.
 
-**`system_v2.md` (E2b)** = `system_v1_search.md` + the lookup rule. **`system_v3.md` (E6)** = v2 + three rules, appended to its Rules list: say when a number is an estimate and why in a few words; if the data can't answer, say so in the first sentence and name what's missing (no guessing; a related number the data has may follow, labelled); a day or period with no rows outside the data's first and last dates is unknown, not zero. Tests check each version is exactly its parent plus its rules.
+**`system_v2.md` (E2b)** = `system_v1_search.md` + the lookup rule. **`system_v3.md` (E6a, E6b)** = v2 + three rules, appended to its Rules list: say when a number is an estimate and why in a few words; if the data can't answer, say so in the first sentence and name what's missing (no guessing; a related number the data has may follow, labelled); a day or period with no rows outside the data's first and last dates is unknown, not zero. Tests check each version is exactly its parent plus its rules.
 
 - Always resolve metric definitions through `search_knowledge` before computing anything.
 - Prefer `query_metric`, and fall back to `run_sql` for anything it can't express.
@@ -577,7 +577,8 @@ Each step is one config. Results go into the README table.
 | ~~E3~~ | ~~+ few-shot examples via RAG~~ *(skipped, see below)* | — |
 | ~~E4~~ | ~~+ richer structured SQL errors~~ *(cut, see below)* | — |
 | ~~E5~~ | ~~+ `query_metric` semantic-layer tool~~ *(moved to the stretch backlog, see below)* | — |
-| E6 | + "cannot answer" doc in the knowledge index + caveat, refusal and "unknown isn't zero" rules, as `system_v3.md`; built on E2b | fewer failed refusals and missing caveats, check over-refusal |
+| E6a | + caveat, refusal and "unknown isn't zero" rules, as `system_v3.md`; built on E2b, same knowledge sources | fewer failed refusals and missing caveats, check over-refusal |
+| E6b | + the "cannot answer" doc in the knowledge index (`kb_sources` adds `cannot_answer`) | the rules work better with the doc to retrieve; check that its chunks don't crowd out others |
 | ~~E7~~ | ~~model swap at the end~~ *(moved to the base of the ladder, see below)* | — |
 
 *(E-1 added, 2026-11-20, after E0 scored ~95%: much of E0's strength appears to come from the marts encoding the definitions as columns (`est_watch_sec`, `is_binge`, `is_late_night`, `is_active`). E-1 measures that directly. The SQL guard, `describe_table` and the prompt's table list all follow `agent.tables`. In the staging scope no table counts as pre-aggregated, so every query must aggregate.)*
@@ -587,6 +588,8 @@ Each step is one config. Results go into the README table.
 *(E4 cut, 2026-11-20, owner decision at the start of Phase 5: E0 has no `sql_error_unrecovered` and no `hallucinated_table_or_column` failures in 288 runs, so richer error messages have nothing to fix and could only move tokens and steps. The ladder spends its runs on the failures that exist. E4 can come back if a later config produces SQL-error failures.)*
 
 *(E3 skipped, 2026-11-22, owner decision: no headroom. E2b passes 191 of 192 dev runs (99.5%). The only failure left is q072's "0 minutes" for a day with no data, which is a refusal failure, not a SQL one. The relative-date failures examples were meant to fix (q019, q080) and q052's rounding pass 3/3 in E2b, so examples could only move tokens and steps, and writing them carries a leak risk that the overlap check would only partly control. E3 can come back if the test split or a real export shows SQL-pattern failures.)*
+
+*(E6 split into E6a and E6b, 2026-11-22, owner decision: one change per step, so the rules' effect is measured apart from the doc's. Offline recall@6 on dev with the `cannot_answer` source added shows the reason. Unanswerable questions come into scope at 16.7%, but ranking falls from 100% to 70% and trap from 86.1% to 76.4%, as its chunks crowd others out.)*
 
 *(E5 moved to the stretch backlog, 2026-11-22, owner decision: for the same reason, a `query_metric` tool has no dev failures left to fix. It stays in the design (§6.2) as a stretch item.)*
 
@@ -613,7 +616,7 @@ Opus is no longer on the ladder.
 - **One experiment, one change.** Each config differs from the previous one by a single change. E2 is split into E2a (tool available) and E2b (plus the lookup rule), so the rule's effect is measured apart from the tool's.
 - **Cumulative.** Each step builds on the previous config. A step is dropped from later configs only if its dev pass rate is worse than the previous config's beyond repeat variance (its best repeat below the previous config's worst).
 - **Dev only while iterating.** The test split runs once, on the final config.
-- **Prompt versions:** `system_v1.md` is never edited; E2b adds `system_v2.md`, E6 adds `system_v3.md`.
+- **Prompt versions:** `system_v1.md` is never edited; E2b adds `system_v2.md`, E6a adds `system_v3.md`.
 - **Done when** (for Sonnet; replaces "beats E0 on execution accuracy", since E0's execution score is already 99.2% and its failures are in the answer text):
   - the best config's mean dev pass rate is above E0's best dev repeat, and its worst dev repeat is at least E0's dev mean;
   - the session-length cluster (dev: q023, q042, q084, q087) passes at least 10 of its 12 dev runs;
