@@ -100,7 +100,7 @@ The scoring false negatives found in review are listed in the label files.
 - *Reporting:* test accuracy is reported overall only, never per category. The test split is
   only for baselines and final runs.
 
-**Phase 5 (branch `phase-5`, in progress; ladder rules in DESIGN §7.5):**
+**Phase 5 (branch `phase-5`, all runs done, PR pending; ladder rules in DESIGN §7.5):**
 1. **Done:** E1 on Sonnet (`describe_include_descriptions: true`), dev 99.5% vs E0 91.7%; one
    failing run (q087 r3). Report: `eval/reports/e01_descriptions.md`. **E1 is Sonnet's final
    config**; re-run Sonnet with a later step only if Haiku results suggest it would help.
@@ -139,12 +139,13 @@ The scoring false negatives found in review are listed in the label files.
      report `eval/reports/e06a_refusal_rules_haiku.md`): 99.0% (98.4-100) vs E2b 99.5%, within
      variance; q072 fixed 3/3; q019 r1/r3 fail (`wrong_time_window`, 17-18 Oct, as E1-haiku;
      owner-confirmed; a `resolve_dates` tool is in the stretch backlog); strong caveats on
-     estimate questions 33% -> 77%; no over-refusal; $0.0012 per question, tokens +8%. **E6b done** = E6a + `cannot_answer` in `kb_sources`
-     (`20261121T190518Z_e06b_cannot_answer_haiku`, report `eval/reports/e06b_cannot_answer_haiku.md`):
+     estimate questions 33% -> 77%; no over-refusal; $0.0012 per question, tokens +8%.
+     **E6b done** = E6a + `cannot_answer` in `kb_sources`
+     (`20261121T190518Z_e06b_cannot_answer_haiku`, report
+     `eval/reports/e06b_cannot_answer_haiku.md`):
      99.5% (98.4-100), no regressions; q072 3/3; fails q019 r1 (label pending); in-run recall on
      shared questions 90.4 -> 90.7% (offline crowding didn't show in runs); $0.0011 per question.
-     Proposed best Haiku config: E6b. **Next: final test runs** (E6b Haiku est. $0.13, Sonnet E1
-     est. $1.23), each after the owner's OK.
+     **E6b is the best Haiku config** (owner, 2026-11-22; q019 r1 confirmed `wrong_time_window`).
    - If a printed estimate exceeds the approved amount, ask before running, even by cents.
    - Glossary edit committed before E2 (`2fa833a`, sessions.md: span vs session length);
      disclose it in the E2a report. `metrics.yml` and the docs predate the eval questions.
@@ -160,8 +161,11 @@ The scoring false negatives found in review are listed in the label files.
    - **E3 skipped, E4 cut, E5 stretch** (DESIGN §7.5). Never edit `system_v1.md`. Opus is
      off the ladder.
    - Recall@k needs `expected_knowledge` on each question; show the owner 15 for review first.
-4. **Final (after E6):** the best Haiku config and Sonnet E1, once each, on the test split;
-   then the README results table.
+4. **Final runs done** (`eval/reports/final_test.md`, at `b257ad8`): test split, once each.
+   Haiku E6b `20261121T195214Z` 100% (no failures), $0.0011 per question; Sonnet E1
+   `20261121T195447Z` 99.0% (96.9-100), $0.0099 per question, one failure q094 r1 (proposed
+   `missing_caveat`, awaiting the owner). q062 passes 3/3 on both. **No tuning after test
+   results** (owner). README results table written. Remaining: PR (don't merge until told).
 5. The strong-caveat sub-score (estimate + reason) is reported only; it never affects pass.
 6. Every real-API run needs a printed cost estimate and the owner's OK first. A Sonnet dev
    run (64 x 3) costs about $2; Haiku is priced at about 1/20 of Sonnet.
