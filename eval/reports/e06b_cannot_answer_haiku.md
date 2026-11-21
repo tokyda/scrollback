@@ -61,9 +61,9 @@ tool, k and retrieval are as in E6a.
 phrase (8 in E6a), and none fails. As in E6a, these are estimate caveats ("the export has no
 video durations") in answers that lead with the number.
 
-## Failure (proposed label; owner to confirm)
+## Failure (label confirmed by the owner, 2026-11-22)
 
-| Q | Rep | Proposed | What happened |
+| Q | Rep | Label | What happened |
 |---|---|---|---|
 | q019 | 1 | `wrong_time_window` | "'Last weekend' = Saturday 2026-10-17 and Sunday 2026-10-18 …, the weekend before the current Monday-Sunday week" (gold 24–25 Oct). The same misreading as E1-haiku r2/r3 and E6a r1/r3. The `resolve_dates` stretch item is aimed at it. |
 
@@ -75,7 +75,7 @@ video durations") in answers that lead with the number.
 - **Compared with E2b:** the same accuracy at +4% tokens ($0.0011 vs $0.0010 per question).
   It adds the q072 fix, far more strong caveats (estimate questions 33% → 78%), and cheaper
   unanswerable runs. Under the ladder rule (cumulative, a step stays unless it regresses
-  beyond variance), **E6b is the best Haiku config**.
+  beyond variance), **E6b is the best Haiku config** (owner decision 2026-11-22).
 - **Final runs on the test split** (32 questions × 3, once each):
   - E6b on Haiku: estimate $0.13 (up to ~$0.18);
   - Sonnet E1: estimate $1.23 (up to ~$1.98).

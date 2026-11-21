@@ -22,6 +22,10 @@ failures:
   suggested: wrong_time_window
   reason: date literals ['2026-10-17', '2026-10-18'] vs gold ['2026-10-24', '2026-10-25']
   suspect_scoring: null
-  label: null
-  note: 'proposed wrong_time_window (genuine): "Last weekend = Saturday 2026-10-17 and Sunday 2026-10-18,
+  label: wrong_time_window
+  note: '"Last weekend = Saturday 2026-10-17 and Sunday 2026-10-18,
     the weekend before the current Monday-Sunday week" (gold 24-25 Oct); as E1-haiku r2/r3, E6a r1/r3'
+confirmed:
+  by: owner
+  date: '2026-11-22'
+  decision: 1 wrong_time_window (q019 r1, last weekend read as 17-18 Oct). E6b is the best Haiku config.
