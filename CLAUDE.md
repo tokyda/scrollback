@@ -110,8 +110,11 @@ The scoring false negatives found in review are listed in the label files.
 3. **Next: E2a → E6 on Haiku** (owner decision 2026-11-21, although E1-haiku is above ~93%),
    one config change each, cumulative; accuracy first, plus tokens, steps and recall@k. Cost
    estimate and the owner's OK before each run; stop for review after each.
-   - **E2a** (`eval/experiments/e02a_search_haiku.yaml`; estimate $0.21 for dev x3): approved
-     by the owner on 2026-11-21, with the 15 `expected_knowledge` samples.
+   - **E2a done** (`20261121T070131Z_e02a_search_haiku`, report `eval/reports/e02a_search_haiku.md`):
+     dev 97.9% (96.9-98.4), same as E1-haiku; tokens +32%, $0.0011 per question; offline
+     recall@6 79.3%, in-run recall 87.6%. Fails q072 r1/r3 ("0 minutes"), q080 r1; q072 r2 is a
+     suspected scoring false negative ("No TikTok views are recorded"), fix awaiting the owner.
+     Labels pending. Next: E2b, after the owner's review.
    - Glossary edit committed before E2 (`2fa833a`, sessions.md: span vs session length);
      disclose it in the E2a report. `metrics.yml` and the docs predate the eval questions.
    - Owner decisions 2026-11-21: the cell and group-share scorer rules (`94914c9`) accepted;
