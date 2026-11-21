@@ -22,8 +22,8 @@ failures:
   suggested: failed_refusal
   reason: stated an amount [0.0] for a day with no data
   suspect_scoring: says there is no data but numbers [0.0] counted as today's amount
-  label: null
-  note: 'proposed failed_refusal (genuine): "so the answer is 0 minutes"; unknown is not zero (fix C)'
+  label: failed_refusal
+  note: '"so the answer is 0 minutes"; unknown is not zero (fix C)'
 - question: q080
   repeat: 1
   category: relative_date
@@ -31,20 +31,8 @@ failures:
   suggested: wrong_time_window
   reason: date literals ['2026-10-01', '2026-11-01'] vs gold ['2026-10-01', '2026-11-20']
   suspect_scoring: null
-  label: null
-  note: 'proposed wrong_time_window (genuine): read "since the start of last month" as October only, and
-    said so in its assumptions'
-- question: q072
-  repeat: 2
-  category: trap
-  split: dev
-  suggested: missing_caveat
-  reason: did not say there is no data for today
-  suspect_scoring: no amount stated but no 'no data' phrase matched
-  label: null
-  note: 'proposed: suspected scoring false negative. "No TikTok views are recorded for today ..., so there
-    is no watch time to report" states no amount; NO_DATA_RE misses "No TikTok views are recorded". Scorer
-    fix awaits the owner'
+  label: wrong_time_window
+  note: read "since the start of last month" as October only, and said so in its assumptions
 - question: q072
   repeat: 3
   category: trap
@@ -52,6 +40,22 @@ failures:
   suggested: failed_refusal
   reason: stated an amount [0.0] for a day with no data
   suspect_scoring: says there is no data but numbers [0.0] counted as today's amount
-  label: null
-  note: 'proposed failed_refusal (genuine): leads with "No data for today", then "today''s estimated watch
-    time is 0 minutes so far" (fix C)'
+  label: failed_refusal
+  note: leads with "No data for today", then "today's estimated watch time is 0 minutes so far" (fix C)
+rescored_to_pass:
+- question: q072
+  repeat: 2
+  before: false
+  after: true
+  old_label: missing_caveat
+rescored_to_fail: []
+confirmed:
+  by: owner
+  date: '2026-11-21'
+  decision: 2 failed_refusal (q072 r1/r3, "0 minutes"), 1 wrong_time_window (q080 r1). q072 r2 was a scoring
+    false negative ("No TikTok views are recorded for today"), resolved by widening the no-data phrase.
+scoring_false_negatives:
+- question: q072
+  repeat: 2
+  note: '"No TikTok views are recorded for today ..., so there is no watch time to report" states no amount;
+    passes since the no-data phrase allows one word before the noun and "are" (owner decision 2026-11-21)'

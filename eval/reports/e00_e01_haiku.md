@@ -60,12 +60,15 @@ q087 2/3→3/3.
 | execution | 98.8% | 97.1% | 100% | 98.2% |
 | answer | 93.0% | 92.4% | 99.4% | 98.2% |
 | metric selection (reported only) | 6.4% | 0.6% | 6.4% | 0.0% |
-| caveat (traps / estimate questions) | 83.3% / 61.5% | 83.3% / 65.6% | 100% / 80.2% | 94.4% / 89.6% |
+| caveat (traps / estimate questions) | 83.3% / 61.5% | 83.3% / 65.6% | 100% / 80.2% | 100%\* / 89.6% |
 | strong caveat (traps / estimate questions; reported only) | 22.2% / 9.4% | 0% / 0% | 44.4% / 42.7% | 55.6% / 18.8% |
 | steps / tool calls | 3.02 / 3.96 | 3.14 / 4.46 | 3.02 / 3.96 | 3.11 / 4.28 |
 | tool errors | 0.047 | 0.115 | 0.036 | 0.062 |
 | tokens | 8,629 | 10,160 | 9,487 | 10,917 |
 | latency | 6.0 s | 5.3 s | 6.3 s | 5.2 s |
+
+\* 94.4% as first reported. After the no-data phrase was widened following E2a (2026-11-21), q072
+r3 counts as saying there's no data. It still fails, since it also states "0 minutes".
 
 - Haiku makes slightly more tool calls than Sonnet. It uses about 15% more tokens and makes
   more tool errors, but it is faster.

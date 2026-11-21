@@ -482,6 +482,20 @@ def test_no_watch_time_recorded_is_a_no_data_statement() -> None:
     assert not run("q072", zero).passed
 
 
+def test_no_tiktok_views_are_recorded_is_a_no_data_statement() -> None:
+    # E2a q072 r2: one word before the noun ("TikTok views") and "are" as the verb.
+    text = (
+        "No TikTok views are recorded for today (Fri 2026-11-20), so there is no watch time to "
+        "report. The export's last view is 2026-11-19 at 19:46 local. That day's estimated watch "
+        "time was about 102.7 minutes across 167 views. Today may simply be missing from the "
+        "export rather than a true zero, so this may be worth rechecking after the next data load."
+    )
+    rows = [["2026-11-18", 36, 22.5], ["2026-11-19", 167, 102.7]]
+    assert run("q072", text, rows, ["local_date", "views", "est_watch_minutes"]).passed
+    zero = "No TikTok views are recorded for today, so today's watch time is 0 minutes."
+    assert not run("q072", zero).passed
+
+
 def test_sept_is_a_date() -> None:
     # E1-haiku q087 r1: "26 Sept" for 2026-09-26.
     text = (

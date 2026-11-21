@@ -88,8 +88,8 @@ COVERAGE_RE = re.compile(
     re.IGNORECASE,
 )
 NO_DATA_RE = re.compile(
-    r"\b(?:no data|no (?:watch(?:ing)? )?(?:time|minutes|activity|views?|data) (?:is |was |has "
-    r"been |have been )?(?:recorded|logged)|"
+    r"\b(?:no data|no (?:[a-z]+ )?(?:watch(?:ing)? )?(?:time|minutes|activity|views?|data) "
+    r"(?:is |are |was |were |has been |have been )?(?:recorded|logged)|"
     r"no (?:views?|records?|activity|watch(?:ing)? history) (?:recorded |yet |"
     r"for|logged|on)|no (?:watch )?(?:events?|views?|data|records?|activity) (?:for|on|today|"
     r"recorded|yet|logged)|(?:data|history|export) (?:ends?|stops?|finishes) (?:on|at)|"

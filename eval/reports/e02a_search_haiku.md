@@ -20,8 +20,8 @@ The step is judged on the per-step criteria the owner set on 2026-11-21 (DESIGN 
 
 | | E1-haiku | E2a | Change |
 |---|---|---|---|
-| **Dev pass rate** | 97.9% (95.3–100) | **97.9%** (96.9–98.4) | 0.0 |
-| Failing runs | 4 | 4 | |
+| **Dev pass rate** | 97.9% (95.3–100) | **98.4%** (96.9–100) | +0.5 |
+| Failing runs | 4 | 3 | |
 | Session-length cluster (q023, q042, q084, q087) | 12/12 | 12/12 | |
 | Tokens per run | 10,917 | 14,401 | +32% |
 | Cost per run | $0.0008 | $0.0011 | +38% |
@@ -29,9 +29,10 @@ The step is judged on the per-step criteria the owner set on 2026-11-21 (DESIGN 
 | Steps / tool calls | 3.11 / 4.28 | 3.14 / 4.80 | +0.52 calls (the search) |
 | Latency | 5.2 s | 5.1 s | |
 
-- **No regression beyond repeat variance:** E2a's best repeat (98.4%) is above E1-haiku's worst
+- **No regression beyond repeat variance:** E2a's best repeat (100%) is above E1-haiku's worst
   (95.3%), so E2a stays in the ladder.
-- **No accuracy gain either:** the same mean, with a narrower range (62, 63 and 63 of 64).
+- **No gain beyond repeat variance either:** +0.5 points, with repeats of 62, 64 and 63 of 64.
+  (First reported as 97.9%; q072 r2 then passed after an owner-approved scorer fix; see below.)
 - **The cost is about a third more tokens.** Each search returns 6 full chunks, and the agent
   searches in 98% of runs (1.13 searches per run).
 
@@ -39,7 +40,7 @@ The step is judged on the per-step criteria the owner set on 2026-11-21 (DESIGN 
 |---|---|---|
 | relative_date | 92.6 | 96.3 |
 | multi_step | 93.3 | 100 |
-| trap | 94.4 | 83.3 |
+| trap | 94.4 | 88.9 |
 | the other 8 categories | 100 | 100 |
 
 ## E1-haiku's 4 failures, and what changed
@@ -48,24 +49,23 @@ The step is judged on the per-step criteria the owner set on 2026-11-21 (DESIGN 
 |---|---|---|
 | q019 r2, r3 (`wrong_time_window`, "last weekend") | 3/3 pass | **Unlikely.** The knowledge base says nothing about "last weekend", and the agent searched for "watch minutes metric". E0-haiku also passed q019 3/3, so this looks like repeat variance. |
 | q052 r3 (`aggregation_error`, rounded in SQL before subtracting) | 3/3 pass | **Unlikely.** Rounding isn't in the knowledge base; q052 was 1/3 on E0-haiku and 2/3 on E1-haiku. |
-| q072 r3 (`failed_refusal`, "0 minutes" for today) | 0/3 pass | **No.** The agent never retrieved the coverage section (searches: "watch time duration today"). |
+| q072 r3 (`failed_refusal`, "0 minutes" for today) | 1/3 pass | **No.** The agent never retrieved the coverage section (searches: "watch time duration today"). |
 
-**Regressed:** q072 2/3 → 0/3 and q080 3/3 → 2/3. **Improved:** q019 1/3 → 3/3 and q052 2/3 → 3/3.
+**Regressed:** q072 2/3 → 1/3 and q080 3/3 → 2/3. **Improved:** q019 1/3 → 3/3 and q052 2/3 → 3/3.
 
-## Failures (proposed labels; owner to confirm)
+## Failures (labels confirmed by the owner, 2026-11-21)
 
-| Q | Rep | Proposed | What happened |
+| Q | Rep | Label | What happened |
 |---|---|---|---|
 | q072 | 1 | `failed_refusal` | "I can't find any TikTok views for today … so the answer is 0 minutes." Unknown isn't zero (fix C). |
 | q072 | 3 | `failed_refusal` | Leads with "No data for today", then "today's estimated watch time is 0 minutes so far" (fix C). |
-| q072 | 2 | **suspected scoring false negative** | "No TikTok views are recorded for today …, so there is no watch time to report." It states no amount, but the no-data phrase list misses "No TikTok views are recorded". |
 | q080 | 1 | `wrong_time_window` | Read "since the start of last month" as October only, and said so in its assumptions (gold: 1 Oct – today). |
 
-**Suspected scoring false negative (not fixed; needs your OK).** The fix would widen the no-data
-phrase from "no (watch time | minutes | activity | views | data) (is | was | …) recorded" to
-allow one word before the noun ("no TikTok views") and "are" as the verb. It would come with a
-test from this answer text, a rescore of all runs, and a flip report. If accepted, E2a would be
-98.4% (189/192) and q072 1/3.
+**Scoring false negative, fixed (owner decision 2026-11-21).** q072 r2 answered "No TikTok views
+are recorded for today …, so there is no watch time to report", which states no amount, but the
+no-data phrase list missed it. The phrase now allows one word before the noun ("no TikTok
+views") and "are"/"were" as the verb, with a test from this answer text. Re-scoring all seven
+saved runs flipped only this run (E2a 188 → 189 of 192); every other run is unchanged.
 
 The two q072 "0 minutes" runs are the failure E6 (refusal rules, with the `cannot_answer` doc)
 is meant to address. E2a's knowledge base doesn't include that doc.

@@ -81,11 +81,13 @@
   "answer": 0.9824561403508771,
   "metric_selection": 0.0,
   "refusal_correct": 1.0,
-  "caveat_on_traps": 0.9444444444444444,
+  "caveat_on_traps": 1.0,
   "caveat_on_estimate_questions": 0.8958333333333334,
   "strong_caveat_on_traps": 0.5555555555555556,
   "strong_caveat_on_estimate_questions": 0.1875,
-  "assumptions_on_ambiguous": 1.0
+  "assumptions_on_ambiguous": 1.0,
+  "kb_recall": null,
+  "kb_searched": null
  },
  "efficiency": {
   "steps": 3.1145833333333335,
@@ -94,7 +96,8 @@
   "tokens": 10916.885416666666,
   "latency_s": 5.159302604166666,
   "cost_per_question_usd": 0.0008130081770833333,
-  "total_cost_usd": 0.15609757000000002
+  "total_cost_usd": 0.15609757000000002,
+  "kb_searches": 0
  },
  "statuses": {
   "answered": 192
@@ -103,7 +106,7 @@
   "wrong_time_window": 3,
   "failed_refusal": 1
  },
- "suspect_scoring": 0,
+ "suspect_scoring": 1,
  "per_question": {
   "q001": "3/3",
   "q002": "3/3",
@@ -176,5 +179,5 @@
   "q072"
  ],
  "run_id": "20261120T171107Z_e01_haiku",
- "rescored_at": "2026-11-21T04:11:03+00:00"
+ "rescored_at": "2026-11-21T12:18:44+00:00"
 }
