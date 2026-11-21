@@ -64,13 +64,14 @@ Build scope by phase. Each phase ends with a "Done when" check. See `docs/DESIGN
 ## Phase 5: RAG and optimisation ladder
 - [ ] Knowledge indexer: chunks `metrics.yml`, docs, `schema.yml` and examples → embeddings in DuckDB
 - [x] `search_knowledge` with hybrid retrieval (embeddings + synonym/keyword match): fastembed bge-small + BM25, RRF; `kb index`, `kb search`
-- [ ] `knowledge/examples.yml` few-shot pairs + overlap check against the eval set
+- [ ] ~~`knowledge/examples.yml` few-shot pairs + overlap check against the eval set~~ *(E3 skipped, owner decision 2026-11-22: no headroom; DESIGN §7.5)*
 - [x] SQL error self-correction (max 2 retries) *(already part of the E0 baseline, DESIGN §6.3)*
-- [ ] Semantic compiler `metrics.yml → SQL` + `query_metric` tool
+- [ ] ~~Semantic compiler `metrics.yml → SQL` + `query_metric` tool~~ *(moved to the stretch backlog, 2026-11-22)*
 - [ ] Refusal and caveat rules in the prompt
 - [x] **E1** on Sonnet (dev 99.5% vs E0 91.7%; `eval/reports/e01_descriptions.md`); E1 is Sonnet's final config
 - [x] **E0-haiku** and **E1-haiku** on dev (model swap moved to the base of the ladder, §7.5): 90.1% and 97.9% (Sonnet E1 99.5%) at $0.0008 vs $0.0105 per question; `eval/reports/e00_e01_haiku.md`
-- [ ] **E2a** (98.4% dev after the no-data fix; re-run on the new retrieval as E2a′, 98.4%), **E2b** (done: 99.0%; `eval/reports/e02b_lookup_rule_haiku.md`), **E3, E5, E6** on Haiku (§7.5; E4 cut; run although E1-haiku is above ~93%, owner decision 2026-11-21); compare reports after each
+- [x] **E2a** (98.4% dev after the no-data fix; re-run on the new retrieval as E2a′, 98.4%) and **E2b** (99.5% after the cross-result scorer fix; `eval/reports/e02b_lookup_rule_haiku.md`) on Haiku
+- [ ] **E6** on Haiku, built on E2b (`system_v3.md` + the `cannot_answer` doc in the index; §7.5). E3 skipped and E5 moved to stretch (owner decision 2026-11-22); E4 cut
 - [ ] Final: best Haiku config and Sonnet E1 on the test split
 - [x] *(added)* Scorer fixes from the Haiku review ("Sept", weekday date ranges, "est.", a no-data phrase, ratio and row-label cells, group shares) and q060's watch-time reading (§7.2)
 - [x] *(added)* Strong-caveat sub-score (estimate + reason; reported only, §7.2) and `eval report a b --split`
@@ -109,3 +110,4 @@ Build scope by phase. Each phase ends with a "Done when" check. See `docs/DESIGN
 - Multi-turn conversation memory with follow-ups ("and the week before?")
 - Clarifying questions for ambiguous queries in interactive mode, with their own eval category
 - Cost guardrails: per-day token budget, cheap-model routing for simple questions
+- `query_metric` semantic-layer tool (`metrics.yml → SQL`), formerly ladder step E5 (DESIGN §7.5)

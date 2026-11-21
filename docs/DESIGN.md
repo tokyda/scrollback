@@ -340,7 +340,7 @@ Implemented in `src/scrollback/agent/loop.py` on the Messages API (manual loop; 
 | `make_chart` | `result_id`, `kind` (line/bar), `x`, `y`, `title` | `chart_id` (PNG under `charts/`) | charts a real `run_sql` result *(changed from model-typed `rows`: cheaper, and the model can't chart invented numbers)* |
 | `final_answer` | `text`, `result_ids[]`, `metrics_used[]`, `assumptions[]`, `chart_id` | — | ends the loop; unknown ids are returned as an error to fix |
 
-**v0 (E0 baseline)** has only `describe_table`, `run_sql`, `make_chart` and `final_answer`. All four use strict JSON schemas and are validated again in code. `search_knowledge` and `query_metric` arrive in Phase 5.
+**v0 (E0 baseline)** has only `describe_table`, `run_sql`, `make_chart` and `final_answer`. All four use strict JSON schemas and are validated again in code. `search_knowledge` arrives in Phase 5; `query_metric` is a stretch item (§7.5).
 - `describe_table` returns columns, types and a row count. Column and table descriptions are behind `agent.describe_include_descriptions` (off in E0, on from E1). In `aggregate_only` mode it shows sample rows only for `agg_*`/`dim_*`, and column statistics for `fct_*` (§4.6).
 - `run_sql` results carry a `result_id` (`r1`, `r2`, …). Errors come back as `[rule_code] message` with `is_error`.
 - **`search_knowledge` (as built, Phase 5).** Off unless `agent.search_knowledge` is on, and then it is listed first. Chunks (`kb/chunks.py`):
@@ -572,10 +572,10 @@ Each step is one config. Results go into the README table.
 | E1 | + table and column descriptions (`describe_include_descriptions: true`) | fewer hallucinated columns |
 | E2a | + `search_knowledge` tool over the metrics, glossary and table descriptions (hybrid retrieval); prompt v1 with only its tool list extended by the new tool, no new rule | does the agent look definitions up unprompted, and do fewer definitions go wrong |
 | E2b | + the rule "look up the definition of any metric before computing it" (`system_v2.md`) | fewer wrong metric definitions than E2a |
-| E3 | + few-shot examples via RAG | better time-window and session SQL |
+| ~~E3~~ | ~~+ few-shot examples via RAG~~ *(skipped, see below)* | — |
 | ~~E4~~ | ~~+ richer structured SQL errors~~ *(cut, see below)* | — |
-| E5 | + `query_metric` semantic-layer tool | biggest jump on metric questions, fewer tokens |
-| E6 | + "cannot answer" doc + refusal rules (and the estimate-caveat rule), as `system_v3.md` | fewer failed refusals and missing caveats, check over-refusal |
+| ~~E5~~ | ~~+ `query_metric` semantic-layer tool~~ *(moved to the stretch backlog, see below)* | — |
+| E6 | + "cannot answer" doc in the knowledge index + caveat, refusal and "unknown isn't zero" rules, as `system_v3.md`; built on E2b | fewer failed refusals and missing caveats, check over-refusal |
 | ~~E7~~ | ~~model swap at the end~~ *(moved to the base of the ladder, see below)* | — |
 
 *(E-1 added, 2026-11-20, after E0 scored ~95%: much of E0's strength appears to come from the marts encoding the definitions as columns (`est_watch_sec`, `is_binge`, `is_late_night`, `is_active`). E-1 measures that directly. The SQL guard, `describe_table` and the prompt's table list all follow `agent.tables`. In the staging scope no table counts as pre-aggregated, so every query must aggregate.)*
@@ -583,6 +583,10 @@ Each step is one config. Results go into the README table.
 *(E4 changed, 2026-11-20: basic self-correction, where the error goes back to the model with up to `sql_max_retries` = 2 retries, is already part of the E0 baseline, so E4 now measures richer error content instead. E0's errors are the guard's rule code plus DuckDB's or the guard's message.)*
 
 *(E4 cut, 2026-11-20, owner decision at the start of Phase 5: E0 has no `sql_error_unrecovered` and no `hallucinated_table_or_column` failures in 288 runs, so richer error messages have nothing to fix and could only move tokens and steps. The ladder spends its runs on the failures that exist. E4 can come back if a later config produces SQL-error failures.)*
+
+*(E3 skipped, 2026-11-22, owner decision: no headroom. E2b passes 191 of 192 dev runs (99.5%). The only failure left is q072's "0 minutes" for a day with no data, which is a refusal failure, not a SQL one. The relative-date failures examples were meant to fix (q019, q080) and q052's rounding pass 3/3 in E2b, so examples could only move tokens and steps, and writing them carries a leak risk that the overlap check would only partly control. E3 can come back if the test split or a real export shows SQL-pattern failures.)*
+
+*(E5 moved to the stretch backlog, 2026-11-22, owner decision: for the same reason, a `query_metric` tool has no dev failures left to fix. It stays in the design (§6.2) as a stretch item.)*
 
 **Model swap at the base (owner decision 2026-11-21).** E1 on Sonnet scored 99.5% on dev (one failing run in 192; `eval/reports/e01_descriptions.md`), so later steps can't show accuracy gains on Sonnet. The model swap therefore moves from the end of the ladder to its base:
 1. **E0-haiku** and **E1-haiku**: the E0 and E1 configs with `model: claude-haiku-5-5`, dev split, reported against Sonnet E0 and E1.
