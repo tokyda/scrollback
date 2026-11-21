@@ -120,9 +120,14 @@ The scoring false negatives found in review are listed in the label files.
      recall@6 unchanged at 79.3%. The crowding section ("sessions that cross midnight") is
      lifted mainly by the year in its example dates, so pure numbers are not keyword tokens
      (owner decision): recall@6 81.6%, 3 trap gains, no losses.
-   - E2a is re-run on the new retrieval (E2a′, same config), then **E2b**
-     (`eval/experiments/e02b_lookup_rule_haiku.yaml`, `system_v2.md` = v1_search + one rule)
-     is compared with E2a′ (owner decision 2026-11-21).
+   - **E2a′** (E2a re-run on the new retrieval, `20261121T143825Z_e02a_search_haiku`, report
+     `eval/reports/e02a_rerun_haiku.md`): 98.4%, same as E2a; offline recall@6 81.6%, in-run
+     86.6%. **E2b done** (`20261121T144258Z_e02b_lookup_rule_haiku`, `system_v2.md` =
+     v1_search + one rule, report `eval/reports/e02b_lookup_rule_haiku.md`): 99.0% (98.4-100),
+     $0.0010 per question, in-run recall 91.2%, strong caveats on traps 44% -> 67%. Fails q072
+     r3 and q087 r1; q087 r1 is a suspected scoring false negative (gold values split across
+     two cited results), fix awaiting the owner. Labels for E2a′ and E2b pending. Best Haiku
+     config so far: E2b. Next: E3 (examples.yml + overlap check), after the owner's review.
    - Glossary edit committed before E2 (`2fa833a`, sessions.md: span vs session length);
      disclose it in the E2a report. `metrics.yml` and the docs predate the eval questions.
    - Owner decisions 2026-11-21: the cell and group-share scorer rules (`94914c9`) accepted;
