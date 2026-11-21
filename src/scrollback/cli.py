@@ -631,9 +631,73 @@ def serve_api() -> None:
 
 
 @serve_app.command("bot")
-def serve_bot() -> None:
-    """Run the Telegram bot."""
-    _not_implemented("serve bot", "Phase 6")
+def serve_bot(
+    db: DbOption = None,
+    config: ConfigOption = None,
+    experiment: ExperimentOption = None,
+    no_experiment: NoExperimentOption = False,
+) -> None:
+    """Run the Telegram bot (long polling; Ctrl+C to stop).
+
+    Answers only chats in TELEGRAM_ALLOWED_CHAT_IDS, with the same config as `ask`
+    (interactive.experiment), and only in aggregate_only mode. Each question costs money."""
+    import logging
+
+    from scrollback.agent import llm as llm_module
+    from scrollback.agent.llm import LLMError
+    from scrollback.bot.telegram_api import RedactingFilter, TelegramAPI, TelegramError
+    from scrollback.bot.telegram_bot import ScrollbackBot
+    from scrollback.warehouse.db import has_view_data
+
+    settings, config_label = _interactive_settings(config, experiment, no_experiment)
+    token_secret = settings.secrets.telegram_bot_token
+    token = token_secret.get_secret_value() if token_secret else ""
+    problems = []
+    if not token:
+        problems.append("TELEGRAM_BOT_TOKEN is not set (.env)")
+    if not settings.secrets.telegram_allowed_chat_ids:
+        problems.append("TELEGRAM_ALLOWED_CHAT_IDS is empty (.env); the bot would answer no one")
+    if settings.agent.result_mode != "aggregate_only":
+        problems.append("agent.result_mode must be aggregate_only for the bot (DESIGN §4.6)")
+    db_path = db or settings.paths.warehouse
+    if not has_view_data(db_path):
+        problems.append(f"no data in {db_path.name}: run `scrollback ingest <export>` first")
+    if problems:
+        for problem in problems:
+            typer.echo(f"Cannot start the bot: {problem}", err=True)
+        raise typer.Exit(1)
+
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+    for handler in logging.getLogger().handlers:
+        handler.addFilter(RedactingFilter(token))
+
+    if settings.agent.search_knowledge:
+        from scrollback.kb.index import ensure_index
+
+        ensure_index(settings)  # build or load now, not on the first question
+    try:
+        client = llm_module.create_llm_client(settings)
+    except LLMError as exc:
+        typer.echo(f"LLM setup failed: {exc}", err=True)
+        raise typer.Exit(1) from None
+    api = TelegramAPI(token, timeout_sec=settings.bot.poll_timeout_sec + 30)
+    bot = ScrollbackBot(api, settings, client, db_path=db_path)
+    n = len(settings.secrets.telegram_allowed_chat_ids)
+    typer.echo(
+        f"Bot running: {config_label} ({settings.llm.model}, "
+        f"prompt v{settings.agent.prompt_version}, effort {settings.llm.effort}), "
+        f"{n} allowed chat{'s' if n != 1 else ''}, "
+        f"warehouse {db_path.name}, {settings.agent.result_mode}. Ctrl+C to stop."
+    )
+    try:
+        bot.run()
+    except KeyboardInterrupt:
+        typer.echo("Bot stopped.")
+    except TelegramError as exc:  # already token-free
+        typer.echo(f"Bot stopped: {exc}", err=True)
+        raise typer.Exit(1) from None
+    finally:
+        api.close()
 
 
 if __name__ == "__main__":  # pragma: no cover
