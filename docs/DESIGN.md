@@ -169,10 +169,29 @@ The export records **when a view started**, not how long it lasted, so watch tim
 
 - **Session:** an ordered run of views where the gap between consecutive views is ≤ `session_gap_min` (default **30 min**). A gap exactly equal to the threshold stays in the session. Views are ordered by UTC timestamp (so daylight-saving changes can't distort gaps), with ties in the same second broken by `view_id`.
 - **Per-view estimated watch seconds:**
-  - not the last view in its session: `min(gap_to_next_view_sec, view_cap_sec)`, with `view_cap_sec` default **180**
-  - last view in its session: the median of the other estimates in that session, falling back to `default_last_view_sec` (default **20**) for a single-view session. For an even number of other estimates the median is the mean of the middle two, so `est_watch_sec` is a DOUBLE and can end in .5.
+  - not the last view in its session: `min(gap_to_next_view_sec, view_cap_sec)`, with `view_cap_sec` default **180** (synthetic data and evals; **120** for the real export, see below)
+  - last view in its session: the median of the other estimates in that session, falling back to `default_last_view_sec` (default **20**; 10 for the real export) for a single-view session. For an even number of other estimates the median is the mean of the middle two, so `est_watch_sec` is a DOUBLE and can end in .5.
   - config validation requires `default_last_view_sec ≤ view_cap_sec`, so every estimate lies in [0, `view_cap_sec`].
 - **Caveats, which the agent must surface when relevant:** pauses within the cap are counted as watching, long videos are undercounted at the cap, and background play is invisible.
+
+**Parameters for the real export** *(owner decisions 2026-11-22, first real export, §4.1)*. `config.yaml` holds the values for the owner's data. The synthetic data, tests and evals don't read them: they pin their own in `eval/questions.yaml` (`params`: gap 30 min, cap **180 s**, last view 20 s, binge 60 min), so the eval gold and the test warehouses never move when the real config is tuned.
+
+| Parameter | Synthetic / eval (pinned) | Real (`config.yaml`) | Why |
+|---|---|---|---|
+| `session_gap_min` | 30 | 30 | `inspect gaps` shows no natural break: gaps thin out smoothly past 20 min, so the conventional 30 stays. |
+| `view_cap_sec` | 180 | **120** | Calibrated against phone Screen Time (below): 180 s overshoots it. |
+| `default_last_view_sec` | 20 | 10 | Close to the real median within-session gap (9 s). It only affects single-view sessions (70 of 1,560). |
+| `binge_threshold_min` | 60 | 60 | The median real session is 17 min and p90 72 min; 60 flags the top ~15% of sessions. |
+
+**Calibrating the cap against Screen Time** *(2026-11-22)*.
+- **Method:**
+  - The owner's iPhone Screen Time for TikTok, one week (Sun 15 – Sat 21 Nov 2026). TikTok is only on that phone, so Screen Time covers all their TikTok use.
+  - Compared on the four Singapore calendar days that are complete in both sources (Sun 15 – Wed 18). The export ends early on Fri 20, so Thu 19 is complete too and was checked separately.
+  - Estimated watch minutes per day were computed with session gap 30 min and last view 10 s, for caps of 120, 180, 240 and 300 s. The offline calculation matched the warehouse's own per-day totals exactly at the old settings.
+- **Result**, estimate vs Screen Time over the four days: cap 120 s **−8.2%**, 180 s **+4.7%**, 240 s +14.3%, 300 s +22.2%. At 180 s the estimate was above Screen Time on 3 of the 4 days; at 120 s it was below on 3 of 4, and the fourth was within the reading error of the bar chart. Thu 19 behaved the same way (−9% at 120 s, +7% at 180 s), so it isn't cut off by the export.
+- **Why 120 s.** Screen Time counts all foreground time in the app (comments, DMs, search, LIVE, browsing), so a watch-time estimate should come out **somewhat below** it, not equal to it. 180 s overshoots, which means gaps that include time away from the screen or idle time were being credited as watching. 120 s is the round value below it; it wasn't fitted to minimise the error, since one week is a small sample. Screen Time is an upper bound, not a target.
+- **Cost:** a gap over 2 minutes now counts as 2 minutes, so videos longer than that are undercounted. 7.6% of the real within-session gaps are capped, and total estimated watch time over the whole history is 12.8% lower than at 180 s.
+- The owner's per-day Screen Time figures are not stored in the repo.
 
 This estimate is the project's main data-definition story. It belongs in the README, and the agent cites it whenever "watch time" appears.
 
