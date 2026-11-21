@@ -80,11 +80,11 @@ mode, so row-level records never reach the model.
 
 | You send | You get |
 |---|---|
-| any question | the answer, its assumptions (including the dates used), the metrics used, and a **Show SQL** button; a chart as a photo if you ask for a chart, plot, graph or trend |
+| any question | the answer, its assumptions (including the dates used), the metrics used, a **Show SQL** button and 👍 / 👎 buttons (👎 asks for an optional note); a chart as a photo if you ask for a chart, plot, graph or trend |
 | `/today` | watch time on the most recent day in your data (an export always ends before today) |
 | `/week` | the last 7 days of data, by day, with a chart |
 | `/metrics` | every metric's definition |
-| `/feedback good\|bad [note]` | rates the answer you reply to, or the last one |
+| `/feedback good\|bad [note]` | rates the answer you reply to, or the last one, with a note in one message |
 
 `uv run scrollback eval import-feedback` turns answers rated bad into candidate eval questions
 in `eval/candidates/feedback.yaml`. That file is git-ignored because it holds real questions and

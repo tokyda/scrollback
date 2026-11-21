@@ -165,8 +165,13 @@ class MessageMap:
         self.path = messages_path(traces_dir)
         self._by_message: dict[tuple[int, int], str] = {}
         self._last: dict[int, str] = {}
+        self._note_prompts: dict[tuple[int, int], str] = {}
         for r in _read(self.path):
-            self._remember(int(r["chat_id"]), int(r["message_id"]), str(r["trace_id"]))
+            chat, mid, trace = int(r["chat_id"]), int(r["message_id"]), str(r["trace_id"])
+            if r.get("kind") == "note_prompt":
+                self._note_prompts[(chat, mid)] = trace
+            else:
+                self._remember(chat, mid, trace)
 
     def _remember(self, chat_id: int, message_id: int, trace_id: str) -> None:
         self._by_message[(chat_id, message_id)] = trace_id
@@ -178,6 +183,23 @@ class MessageMap:
             self.path,
             {"chat_id": chat_id, "message_id": message_id, "trace_id": trace_id, "at": _now()},
         )
+
+    def add_note_prompt(self, chat_id: int, message_id: int, trace_id: str) -> None:
+        """A "what was wrong?" message after 👎: a reply to it is that answer's note."""
+        self._note_prompts[(chat_id, message_id)] = trace_id
+        _append(
+            self.path,
+            {
+                "chat_id": chat_id,
+                "message_id": message_id,
+                "trace_id": trace_id,
+                "kind": "note_prompt",
+                "at": _now(),
+            },
+        )
+
+    def note_prompt_trace(self, chat_id: int, message_id: int) -> str | None:
+        return self._note_prompts.get((chat_id, message_id))
 
     def trace_for(self, chat_id: int, message_id: int) -> str | None:
         return self._by_message.get((chat_id, message_id))

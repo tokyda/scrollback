@@ -8,7 +8,9 @@
   for ``/week``; a chart the agent makes on its own is sent too.
 - ``/today`` and ``/week`` are fixed agent questions about the *most recent* data, because an
   export always ends before the day it is used. ``/metrics`` lists ``metrics.yml`` (no LLM).
-- ``/feedback good|bad [note]`` rates the answer it replies to, or the chat's last answer.
+- Every answer carries 👍 / 👎 buttons (``fb:<rating>:<trace_id>``). 👎 then asks for an
+  optional note as a reply. ``/feedback good|bad [note]`` rates the answer it replies to, or
+  the chat's last answer.
 - ``aggregate_only`` is required: the bot refuses to start in any other result mode.
 
 Logs carry trace IDs, statuses, costs and error *types* only: no question text, answers, query
@@ -30,7 +32,14 @@ from scrollback.agent.llm import LLMClient
 from scrollback.agent.loop import STATUS_MESSAGES, AgentResult, run_agent
 from scrollback.bot.telegram_api import MESSAGE_LIMIT, TelegramAPI, TelegramError
 from scrollback.config import Settings
-from scrollback.feedback import RATINGS, MessageMap, find_trace, record_feedback
+from scrollback.feedback import (
+    RATINGS,
+    Feedback,
+    MessageMap,
+    Rating,
+    find_trace,
+    record_feedback,
+)
 
 log = logging.getLogger("scrollback.bot")
 
@@ -41,7 +50,8 @@ TODAY_QUESTION = (
 # one on the phone check (2026-11-22). Bot-level only; the system prompt is unchanged.
 WEEK_QUESTION = (
     "Show my watch time for the last 7 days of data, by day, with a chart. "
-    "Take weekday names from dim_date.dow_name; don't work them out."
+    "Take weekday names from dim_date.dow_name; don't work them out. "
+    "State which dates you used."
 )
 HELP_TEXT = (
     "Ask me anything about your TikTok watch history, e.g. "
@@ -64,6 +74,8 @@ BOT_COMMANDS = [
     ("help", "What I can do"),
 ]
 SQL_CALLBACK = "sql:"
+RATE_CALLBACK = "fb:"  # fb:good:<trace_id> / fb:bad:<trace_id>
+NOTE_PLACEHOLDER = "What was wrong? (optional)"
 SQL_CHARS = 3500  # leaves room for the HTML wrapper inside Telegram's 4096 limit
 TEXT_BUDGET = MESSAGE_LIMIT - 96
 
@@ -105,6 +117,25 @@ def format_reply(result: AgentResult) -> str:
     if len(body) > room:
         body = body[: max(room - 12, 0)] + " …(cut)"
     return f"{body}\n\n{tail_text}"
+
+
+def answer_markup(trace_id: str, *, has_sql: bool) -> dict[str, Any]:
+    """Inline buttons under every answer: 👍 / 👎 (and Show SQL when a query ran)."""
+    rows = [
+        [
+            {"text": "👍", "callback_data": f"{RATE_CALLBACK}good:{trace_id}"},
+            {"text": "👎", "callback_data": f"{RATE_CALLBACK}bad:{trace_id}"},
+        ]
+    ]
+    if has_sql:
+        rows.insert(0, [{"text": "Show SQL", "callback_data": f"{SQL_CALLBACK}{trace_id}"}])
+    return {"inline_keyboard": rows}
+
+
+def _toast(prefix: str, question: str) -> str:
+    """Callback answer text (Telegram shows up to 200 characters)."""
+    text = f"{prefix} on “{question}”" if question else prefix
+    return text if len(text) <= 200 else text[:199] + "…"
 
 
 def pack(blocks: list[str], limit: int = TEXT_BUDGET) -> list[str]:
@@ -229,6 +260,12 @@ class ScrollbackBot:
         if text.startswith("/"):
             self._on_command(chat_id, message_id, text, msg)
             return
+        replied = msg.get("reply_to_message")
+        if isinstance(replied, dict):
+            noted = self.messages.note_prompt_trace(chat_id, int(replied["message_id"]))
+            if noted is not None:
+                self._on_note(chat_id, message_id, noted, text)
+                return
         want = wants_chart(text, self.settings.bot.chart_keywords)
         self.answer(chat_id, text, want_chart=want, reply_to=message_id)
 
@@ -291,10 +328,7 @@ class ScrollbackBot:
         if result.trace_db_error:
             log.warning("%s", result.trace_db_error)
         a = result.answer
-        markup = None
-        if a is not None and a.sql_used:
-            button = {"text": "Show SQL", "callback_data": f"{SQL_CALLBACK}{trace.trace_id}"}
-            markup = {"inline_keyboard": [[button]]}
+        markup = answer_markup(trace.trace_id, has_sql=a is not None and bool(a.sql_used))
         mid = self.api.send_message(
             chat_id, format_reply(result), reply_markup=markup, reply_to=reply_to
         )
@@ -312,8 +346,11 @@ class ScrollbackBot:
         if chat_id not in self.allowed:
             self._ignore()
             return
-        self.api.answer_callback_query(str(cq["id"]))
         data = str(cq.get("data") or "")
+        if data.startswith(RATE_CALLBACK):
+            self._on_rate_button(chat_id, str(cq["id"]), data, message.get("message_id"))
+            return
+        self.api.answer_callback_query(str(cq["id"]))
         if not data.startswith(SQL_CALLBACK):
             return
         trace_id = data[len(SQL_CALLBACK) :]
@@ -333,6 +370,55 @@ class ScrollbackBot:
                 reply_to=reply_to,
             )
             self.messages.add(chat_id, sql_id, trace_id)
+
+    # ------------------------------------------------------------------ 👍 / 👎
+
+    def _on_rate_button(
+        self, chat_id: int, callback_id: str, data: str, answer_id: int | None
+    ) -> None:
+        rating, _, trace_id = data[len(RATE_CALLBACK) :].partition(":")
+        if rating not in RATINGS or find_trace(self.traces_dir, trace_id) is None:
+            self.api.answer_callback_query(callback_id, "I can't find that answer any more.")
+            return
+        fb = self._record(trace_id, rating)  # rating narrowed by the RATINGS check
+        question = self._question_of(trace_id)
+        if fb.rating == "good":
+            self.api.answer_callback_query(callback_id, _toast("Recorded 👍", question))
+            return
+        self.api.answer_callback_query(callback_id, _toast("Recorded 👎", question))
+        prompt_id = self.api.send_message(
+            chat_id,
+            f"Recorded 👎 on {self._quote(trace_id)}. What was wrong? Reply to this message "
+            "with a note, or ignore it. It will be a candidate eval question.",
+            reply_markup={"force_reply": True, "input_field_placeholder": NOTE_PLACEHOLDER},
+            reply_to=answer_id,
+        )
+        self.messages.add_note_prompt(chat_id, prompt_id, trace_id)
+
+    def _on_note(self, chat_id: int, message_id: int, trace_id: str, note: str) -> None:
+        self._record(trace_id, "bad", note)
+        self.api.send_message(
+            chat_id, f"Thanks, note added to 👎 on {self._quote(trace_id)}.", reply_to=message_id
+        )
+
+    def _record(self, trace_id: str, rating: Rating, note: str = "") -> Feedback:
+        fb, db_error = record_feedback(
+            self.traces_dir, self.db_path, trace_id=trace_id, rating=rating, note=note
+        )
+        if db_error:
+            log.warning("%s", db_error)
+        log.info("feedback %s on trace %s%s", fb.rating, fb.trace_id, " (note)" if note else "")
+        return fb
+
+    def _question_of(self, trace_id: str) -> str:
+        record = find_trace(self.traces_dir, trace_id) or {}
+        asked = str(record.get("question") or "")
+        return asked if len(asked) <= 200 else asked[:200] + "…"
+
+    def _quote(self, trace_id: str) -> str:
+        asked = self._question_of(trace_id)
+        code = f"<code>{trace_id}</code>"
+        return f"“{_esc(asked)}” ({code})" if asked else code
 
     # ------------------------------------------------------------------ feedback
 
@@ -361,29 +447,11 @@ class ScrollbackBot:
                     chat_id, "Nothing to rate yet: ask a question first.", reply_to=message_id
                 )
                 return
-        fb, db_error = record_feedback(
-            self.traces_dir,
-            self.db_path,
-            trace_id=trace_id,
-            rating=rating,  # narrowed by the RATINGS check above
-            note=note,
-        )
-        if db_error:
-            log.warning("%s", db_error)
-        log.info("feedback %s on trace %s", fb.rating, fb.trace_id)
+        fb = self._record(trace_id, rating, note)  # rating narrowed by the RATINGS check
         extra = " It will be a candidate eval question." if fb.rating == "bad" else ""
         # Quote the rated question, so a rating that landed on the wrong answer shows at once.
-        record = find_trace(self.traces_dir, fb.trace_id) or {}
-        asked = str(record.get("question") or "")
-        if len(asked) > 200:
-            asked = asked[:200] + "…"
-        on = (
-            f"“{_esc(asked)}” (<code>{fb.trace_id}</code>)"
-            if asked
-            else f"<code>{fb.trace_id}</code>"
-        )
         self.api.send_message(
             chat_id,
-            f"Thanks, recorded <b>{fb.rating}</b> feedback on {on}.{extra}",
+            f"Thanks, recorded <b>{fb.rating}</b> feedback on {self._quote(trace_id)}.{extra}",
             reply_to=message_id,
         )

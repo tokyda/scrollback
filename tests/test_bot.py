@@ -167,6 +167,7 @@ def test_today_and_week_are_fixed_questions(bot_settings: Settings, fake: FakeTe
     msg = _first_user_message(bot)
     assert f"Question: {WEEK_QUESTION}" in msg and "Include a chart" in msg
     assert "last 7 days of data" in WEEK_QUESTION and "dim_date.dow_name" in WEEK_QUESTION
+    assert WEEK_QUESTION.endswith("State which dates you used.")
     assert fake.sent("sendPhoto")
 
 
@@ -202,7 +203,9 @@ def test_agent_failure_statuses_and_exceptions(bot_settings: Settings, fake: Fak
     bot.handle_update(fake.message(OWNER, "q"))
     reply = fake.sent("sendMessage")[-1].params
     assert reply["text"].startswith("No answer: the model call failed")
-    assert "reply_markup" not in reply and "<code>" in reply["text"]  # trace footer
+    assert "<code>" in reply["text"]  # trace footer
+    rows = reply["reply_markup"]["inline_keyboard"]  # no Show SQL, but still 👍 / 👎
+    assert [b["text"] for row in rows for b in row] == ["👍", "👎"]
 
     bot = _bot(bot_settings, fake, [])
     bot.db_path = bot_settings.paths.warehouse.parent / "missing.duckdb"
@@ -350,3 +353,80 @@ def test_long_answer_is_cut_to_fit(bot_settings: Settings, fake: FakeTelegram) -
     bot.handle_update(fake.message(OWNER, "q"))
     text = fake.sent("sendMessage")[0].params["text"]
     assert len(text) <= 4096 and "…(cut)" in text and "<code>" in text
+
+
+# --------------------------------------------------------------------------- 👍 / 👎
+
+
+def _buttons(call: Any) -> dict[str, str]:
+    rows = call.params["reply_markup"]["inline_keyboard"]
+    return {b["text"]: b["callback_data"] for row in rows for b in row}
+
+
+def test_every_answer_has_rating_buttons(bot_settings: Settings, fake: FakeTelegram) -> None:
+    bot = _bot(bot_settings, fake, SIMPLE)
+    bot.handle_update(fake.message(OWNER, "q"))
+    buttons = _buttons(fake.sent("sendMessage")[0])
+    assert list(buttons) == ["Show SQL", "👍", "👎"]
+    trace_id = buttons["Show SQL"].removeprefix("sql:")
+    assert buttons["👍"] == f"fb:good:{trace_id}" and buttons["👎"] == f"fb:bad:{trace_id}"
+    assert all(len(v.encode()) <= 64 for v in buttons.values())
+
+
+def test_thumbs_up_records_good_with_a_toast(bot_settings: Settings, fake: FakeTelegram) -> None:
+    bot = _bot(bot_settings, fake, SIMPLE)
+    bot.handle_update(fake.message(OWNER, "how much on 19 Nov?"))
+    answer = fake.sent("sendMessage")[0]
+    bot.handle_update(fake.callback(OWNER, _buttons(answer)["👍"]))
+    (fb,) = load_feedback(bot_settings.paths.traces_dir)
+    assert fb.rating == "good" and fb.note == ""
+    (toast,) = fake.sent("answerCallbackQuery")
+    assert toast.params["text"] == "Recorded 👍 on “how much on 19 Nov?”"
+    assert len(fake.sent("sendMessage")) == 1  # no extra message for 👍
+
+
+def test_thumbs_down_asks_for_a_note(bot_settings: Settings, fake: FakeTelegram) -> None:
+    bot = _bot(bot_settings, fake, SIMPLE)
+    bot.handle_update(fake.message(OWNER, "how much on 19 Nov?"))
+    answer = fake.sent("sendMessage")[0]
+    bot.handle_update(fake.callback(OWNER, _buttons(answer)["👎"]))
+    prompt = fake.sent("sendMessage")[-1]
+    assert prompt.params["reply_markup"]["force_reply"] is True
+    assert "“how much on 19 Nov?”" in prompt.params["text"]
+    prompt_id = fake.next_message_id
+
+    # the note arrives as a reply to the prompt; a restarted bot still knows the prompt
+    bot2 = _bot(bot_settings, fake, [])
+    bot2.handle_update(fake.message(OWNER, "wrong weekday labels", reply_to=prompt_id))
+    fbs = load_feedback(bot_settings.paths.traces_dir)
+    assert [(f.rating, f.note) for f in fbs] == [("bad", ""), ("bad", "wrong weekday labels")]
+    assert len({f.trace_id for f in fbs}) == 1
+    assert fake.sent("sendMessage")[-1].params["text"].startswith("Thanks, note added to 👎")
+    assert _llm(bot2).requests == []  # a note is not a question
+
+
+def test_command_in_reply_to_note_prompt_runs_the_command(
+    bot_settings: Settings, fake: FakeTelegram
+) -> None:
+    bot = _bot(bot_settings, fake, SIMPLE)
+    bot.handle_update(fake.message(OWNER, "q"))
+    bot.handle_update(fake.callback(OWNER, _buttons(fake.sent("sendMessage")[0])["👎"]))
+    prompt_id = fake.next_message_id
+    bot.handle_update(fake.message(OWNER, "/help", reply_to=prompt_id))
+    assert "/feedback good|bad" in fake.sent("sendMessage")[-1].params["text"]
+    assert len(load_feedback(bot_settings.paths.traces_dir)) == 1  # only the 👎 itself
+
+
+def test_rating_buttons_from_strangers_or_for_unknown_traces(
+    bot_settings: Settings, fake: FakeTelegram
+) -> None:
+    bot = _bot(bot_settings, fake, SIMPLE)
+    bot.handle_update(fake.message(OWNER, "q"))
+    up = _buttons(fake.sent("sendMessage")[0])["👍"]
+    bot.handle_update(fake.callback(STRANGER, up))
+    assert fake.sent("answerCallbackQuery") == [] and bot.ignored == 1
+    bot.handle_update(fake.callback(OWNER, "fb:good:20261122T000000-deadbeef"))
+    bot.handle_update(fake.callback(OWNER, "fb:meh:" + up.removeprefix("fb:good:")))
+    toasts = [c.params["text"] for c in fake.sent("answerCallbackQuery")]
+    assert toasts == ["I can't find that answer any more."] * 2
+    assert load_feedback(bot_settings.paths.traces_dir) == []
