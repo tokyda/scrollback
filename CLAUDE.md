@@ -11,17 +11,42 @@ If you change a design decision, update `docs/DESIGN.md` in the same commit and 
 
 ## Current status (2026-11-22)
 
-**Phases.** Phases 0-4 are done, except the Phase 1 item "ingest one real export": no real
-export yet, so every TikTok-format assumption is listed in DESIGN §4.1. When one arrives, put
-it in `data/raw/`, run `scrollback ingest` and update that list. An unknown structure fails
-with the keys it found (extend `VARIANTS` in `ingest/detect.py` and add a synthetic variant);
-unknown extra fields only warn and land in `extras`.
+**Phases.** Phases 0-5 are done and merged, except the Phase 1 item "ingest one real export".
+Every TikTok-format assumption is listed in DESIGN §4.1.
 
-**PRs.** Everything through Phase 4 is merged into `main`: #1 (Phases 0-1), #3 (Phase 2), #4
-(Phase 3) and #5 (Phase 4). #2 was superseded by #3. #6 (Phase 5, `phase-5`) is open; don't merge until the owner says.
+**Next steps, in order:**
+1. **Ingest the real export** (now in `data/raw/`, git-ignored). Run `scrollback ingest` on it.
+   An unknown structure fails with the keys it found: extend `VARIANTS` in `ingest/detect.py`
+   and add a synthetic variant. Unknown extra fields only warn and land in `extras`. Then update
+   the DESIGN §4.1 assumption list.
+2. **Tune the parameters on real data** and settle the DESIGN §14 open questions: whether
+   export timestamps are UTC, the session gap and the binge threshold. Use
+   `scrollback inspect gaps` for `session_gap_min` and `view_cap_sec`, edit `config.yaml` and
+   rebuild with `scrollback build`. Record each choice and its reason in DESIGN.
+3. **Phase 6: the Telegram bot** (ROADMAP).
 
-**Headline numbers** (96 questions x 3 repeats, `claude-sonnet-5-5`, effort medium; full write-up
-in `eval/reports/e00_baseline.md`):
+On real data the privacy rules below apply in full. Print counts and aggregates only, never
+records, and keep `AGENT_RESULT_MODE=aggregate_only`. Tests, evals and CI stay on synthetic
+data.
+
+**PRs.** Everything through Phase 5 is merged into `main`: #1 (Phases 0-1), #3 (Phase 2), #4
+(Phase 3), #5 (Phase 4) and #6 (Phase 5). #2 was superseded by #3.
+
+**Headline results** (96 questions, 64 dev / 32 held-out test, x 3 repeats, effort medium; the
+full table is in `README.md`, the final runs in `eval/reports/final_test.md`):
+
+| Config | Model | Dev | Test (held out) | Cost / question |
+|---|---|---|---|---|
+| E-1 warehouse ablation (staging only) | Sonnet 5.5 | 51.0% | 59.4% | $0.0097 |
+| E0 baseline (marts) | Sonnet 5.5 | 91.7% | 96.9% | $0.0097 |
+| **E1** (+ descriptions), Sonnet's final config | Sonnet 5.5 | 99.5% | **99.0%** | $0.0105 |
+| **E6b** (E1 + search, lookup rule, refusal rules, cannot_answer doc), best Haiku config | Haiku 5.5 | 99.5% | **100%** | $0.0011 |
+
+- The data modelling is worth about 40 points (E-1 vs E0).
+- Descriptions fix the session-length definition error on both models.
+- Haiku E6b matches Sonnet E1 at about a ninth of the cost.
+
+**Phase 4 baseline** (`claude-sonnet-5-5`; full write-up in `eval/reports/e00_baseline.md`):
 
 | Run | Overall | Dev | Test (held out) | Cost |
 |---|---|---|---|---|
@@ -100,7 +125,7 @@ The scoring false negatives found in review are listed in the label files.
 - *Reporting:* test accuracy is reported overall only, never per category. The test split is
   only for baselines and final runs.
 
-**Phase 5 (branch `phase-5`, all runs done, PR pending; ladder rules in DESIGN §7.5):**
+**Phase 5 (done, merged in #6; ladder rules in DESIGN §7.5):**
 1. **Done:** E1 on Sonnet (`describe_include_descriptions: true`), dev 99.5% vs E0 91.7%; one
    failing run (q087 r3). Report: `eval/reports/e01_descriptions.md`. **E1 is Sonnet's final
    config**; re-run Sonnet with a later step only if Haiku results suggest it would help.
@@ -165,7 +190,7 @@ The scoring false negatives found in review are listed in the label files.
    Haiku E6b `20261121T195214Z` 100% (no failures), $0.0011 per question; Sonnet E1
    `20261121T195447Z` 99.0% (96.9-100), $0.0099 per question, one failure q094 r1
    (`missing_caveat`, owner-confirmed). q062 passes 3/3 on both. **No tuning after test
-   results** (owner). README results table written. PR open; don't merge until the owner says.
+   results** (owner). README results table written. Merged in #6.
 5. The strong-caveat sub-score (estimate + reason) is reported only; it never affects pass.
 6. Every real-API run needs a printed cost estimate and the owner's OK first. A Sonnet dev
    run (64 x 3) costs about $2; Haiku is priced at about 1/20 of Sonnet.
