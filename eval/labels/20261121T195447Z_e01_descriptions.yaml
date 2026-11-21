@@ -22,6 +22,10 @@ failures:
   suggested: missing_caveat
   reason: right number but no estimate/coverage caveat
   suspect_scoring: only the caveat check failed
-  label: null
-  note: 'proposed missing_caveat (genuine): "291.3 minutes (about 4.9 hours) across 3 binge sessions"
+  label: missing_caveat
+  note: '"291.3 minutes (about 4.9 hours) across 3 binge sessions"
     answers an "exactly" trap; the estimate is stated only in assumptions, not in the answer text'
+confirmed:
+  by: owner
+  date: '2026-11-22'
+  decision: 1 missing_caveat (q094 r1, the estimate stated only in assumptions).

@@ -34,8 +34,8 @@ question change follows from them.
 - **Sonnet done-when** (DESIGN §7.5): the final test pass rate (99.0%) is at least E0's 96.9%.
   Met, along with the dev criteria met at E1.
 
-## Failure (proposed label; owner to confirm)
+## Failure (label confirmed by the owner, 2026-11-22)
 
-| Run | Q | Rep | Proposed | What happened |
+| Run | Q | Rep | Label | What happened |
 |---|---|---|---|---|
 | Sonnet E1 | q094 | 1 | `missing_caveat` | "Exactly how many minutes … in binge sessions in October 2026?" is a trap. The answer, "291.3 minutes (about 4.9 hours) across 3 binge sessions", is right, but says it is an estimate only in its assumptions ("Watch time is estimated"), not in the answer text. The caveat check reads the answer. Sonnet E1 has no caveat rule; that rule is E6's, which only the Haiku ladder ran. |

@@ -47,12 +47,11 @@ questions. Other rows are from the dev run.
 |---|---|---|
 | E-1 Sonnet | 94: 45 over-refusal, 40 wrong metric definition, 6 day-boundary, 2 failed refusal, 1 misreport | 39: 25 wrong metric definition, 8 over-refusal, 6 day-boundary |
 | E0 Sonnet | 16: 12 wrong metric definition, 3 missing caveat, 1 misreport | 3: wrong metric definition |
-| E1 Sonnet | 1: wrong metric definition | 1: missing caveat² |
+| E1 Sonnet | 1: wrong metric definition | 1: missing caveat |
 | E0 Haiku | 19: 11 wrong metric definition, 3 aggregation, 3 missing caveat, 2 failed refusal | — |
 | E1 Haiku | 4: 2 wrong time window, 1 aggregation, 1 failed refusal | — |
 | E6b Haiku | 1: wrong time window ("last weekend" read as the weekend before) | 0 |
 
-² Proposed label, awaiting owner confirmation.
 
 Reports for every run are in [eval/reports/](eval/reports/); the final test runs are in
 [eval/reports/final_test.md](eval/reports/final_test.md).

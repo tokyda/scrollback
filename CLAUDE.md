@@ -163,9 +163,9 @@ The scoring false negatives found in review are listed in the label files.
    - Recall@k needs `expected_knowledge` on each question; show the owner 15 for review first.
 4. **Final runs done** (`eval/reports/final_test.md`, at `b257ad8`): test split, once each.
    Haiku E6b `20261121T195214Z` 100% (no failures), $0.0011 per question; Sonnet E1
-   `20261121T195447Z` 99.0% (96.9-100), $0.0099 per question, one failure q094 r1 (proposed
-   `missing_caveat`, awaiting the owner). q062 passes 3/3 on both. **No tuning after test
-   results** (owner). README results table written. Remaining: PR (don't merge until told).
+   `20261121T195447Z` 99.0% (96.9-100), $0.0099 per question, one failure q094 r1
+   (`missing_caveat`, owner-confirmed). q062 passes 3/3 on both. **No tuning after test
+   results** (owner). README results table written. PR open; don't merge until the owner says.
 5. The strong-caveat sub-score (estimate + reason) is reported only; it never affects pass.
 6. Every real-API run needs a printed cost estimate and the owner's OK first. A Sonnet dev
    run (64 x 3) costs about $2; Haiku is priced at about 1/20 of Sonnet.
