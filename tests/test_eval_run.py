@@ -252,6 +252,38 @@ def test_rescore_is_stable_and_keeps_labels(tmp_path: Path) -> None:
     assert len(load_records(run_dir)) == 2
 
 
+def test_rescore_applies_owner_override(tmp_path: Path) -> None:
+    from scrollback.evals.run import rescore_run
+
+    labels_dir = tmp_path / "labels"
+    run_dir = run_eval(
+        E0, QSET, base=repo_settings(), llm_factory=lambda s: OracleLLM(), split="all",
+        repeat=1, workers=1, only=["q001"], runs_dir=tmp_path / "runs", labels_dir=labels_dir,
+    )  # fmt: skip
+    assert load_records(run_dir)[0]["passed"]
+    label_path = labels_dir / f"{run_dir.name}.yaml"
+    doc = yaml.safe_load(label_path.read_text()) or {}
+    reason = "the text computes a different metric; the match is a coincidence"
+    doc["overrides"] = [{"question": "q001", "repeat": 1, "passed": False,
+                         "label": "answer_misreport", "reason": reason}]  # fmt: skip
+    label_path.write_text(yaml.safe_dump(doc))
+
+    for _ in range(2):
+        result = rescore_run(run_dir, QSET, base=repo_settings(), labels_dir=labels_dir)
+    rec = load_records(run_dir)[0]
+    assert not rec["passed"] and rec["passed_scored"] and rec["override"] == reason
+    assert result["summary"]["accuracy"]["overall"]["mean"] == 0
+    doc = yaml.safe_load(label_path.read_text())
+    assert doc["overrides"][0]["reason"] == reason  # kept across re-scores
+    (failure,) = doc["failures"]
+    assert failure["label"] == "answer_misreport" and "owner override" in failure["note"]
+
+    doc["overrides"][0]["label"] = None
+    label_path.write_text(yaml.safe_dump(doc))
+    with pytest.raises(ValueError, match="needs a taxonomy"):
+        rescore_run(run_dir, QSET, base=repo_settings(), labels_dir=labels_dir)
+
+
 def test_cli_rescore_dev_only_run(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     from scrollback.evals import run as run_module
 

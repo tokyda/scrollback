@@ -40,7 +40,9 @@ failures:
   suggested: aggregation_error
   reason: result does not match gold
   suspect_scoring: text states the gold value but no cited result matched
-  label: null
+  label: answer_misreport
+  note: states 17% but cites an hourly table with 20 of 24 hours, which cannot give it; it passed before
+    2026-11-21 only through the hour-label coincidence (owner, 2026-11-21)
 - question: q062
   repeat: 1
   category: ambiguous
@@ -110,7 +112,9 @@ failures:
   suggested: aggregation_error
   reason: result does not match gold
   suspect_scoring: text states the gold value but no cited result matched
-  label: null
+  label: answer_misreport
+  note: states 17% but cites an hourly table with 20 of 24 hours, which cannot give it; it passed before
+    2026-11-21 only through the hour-label coincidence (owner, 2026-11-21)
 - question: q062
   repeat: 3
   category: ambiguous

@@ -380,8 +380,9 @@ def rescore_run(
     Uses the current question set and scorer. The first re-score keeps the original
     results as ``results.original.jsonl``. Confirmed labels carry over to failures that
     remain; failures that now pass are listed under ``rescored_to_pass`` in the label file.
+    Owner overrides in the label file (``overrides``) replace the scorer's verdict.
     """
-    from scrollback.evals.labels import load_confirmed
+    from scrollback.evals.labels import load_confirmed, load_overrides
     from scrollback.evals.report import render_report, summarize
 
     records = load_records(run_dir)
@@ -402,6 +403,7 @@ def rescore_run(
 
     label_path = labels_dir / f"{run_dir.name}.yaml"
     confirmed = load_confirmed(label_path)
+    overrides = load_overrides(label_path)
     previous_doc = yaml.safe_load(label_path.read_text()) if label_path.exists() else {}
     # Changes are always reported against the run as originally scored.
     original = run_dir / "results.original.jsonl"
@@ -433,21 +435,27 @@ def rescore_run(
         )
         s = score(q, golds[q.id], out)
         tool_calls = traces.get(r.get("trace_id"), {}).get("tool_calls", [])
+        override = overrides.get((q.id, r["repeat"]))
+        passed = override["passed"] if override else s.passed
         label, reason, suspect = None, None, None
-        if not s.passed:
+        if override and not passed:
+            label, reason = override["label"], f"owner override: {override['reason']}"
+        elif not passed:
             label, reason = suggest_label(
                 q, s, status=r["status"], tool_calls=tool_calls, sql_used=r.get("sql_used", [])
             )
             suspect = suspect_scoring(q, s)
         first = originally.get((q.id, r["repeat"]), r)
-        if s.passed != first["passed"]:
+        if passed != first["passed"]:
             changed.append({"question": q.id, "repeat": r["repeat"],
-                            "before": first["passed"], "after": s.passed,
+                            "before": first["passed"], "after": passed,
                             "old_label": first.get("label_suggested")})  # fmt: skip
+        r = {k: v for k, v in r.items() if k not in ("passed_scored", "override")}
         new_records.append({
-            **r, "category": q.category, "split": q.split, "passed": s.passed,
+            **r, "category": q.category, "split": q.split, "passed": passed,
             "scores": _scores_dict(s), "label_suggested": label, "label_reason": reason,
             "suspect_scoring": suspect,
+            **({"passed_scored": s.passed, "override": override["reason"]} if override else {}),
         })  # fmt: skip
 
     if not original.exists():
@@ -465,6 +473,8 @@ def rescore_run(
         if r["passed"]:
             continue
         prev = confirmed.get((r["question"], r["repeat"]), {})
+        if "override" in r and not prev.get("label"):
+            prev = {"label": r["label_suggested"], "note": f"owner override: {r['override']}"}
         failures.append({
             "question": r["question"], "repeat": r["repeat"], "category": r["category"],
             "split": r["split"], "suggested": r.get("label_suggested"),

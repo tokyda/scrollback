@@ -25,20 +25,22 @@ in `eval/reports/e00_baseline.md`):
 
 | Run | Overall | Dev | Test (held out) | Cost |
 |---|---|---|---|---|
-| E0 baseline (marts) `20261119T222732Z_e00_baseline` | **93.8%** | 92.2% | 96.9% | $2.79 |
+| E0 baseline (marts) `20261119T222732Z_e00_baseline` | **93.4%** | 91.7% | 96.9% | $2.79 |
 | E-1 warehouse ablation (staging only) `20261119T224207Z_em1_warehouse_ablation` | **53.8%** | 51.0% | 59.4% | $2.78 |
 
 Same agent, prompt and model; only the queryable tables differ, so the data modelling is worth
-about 40 points. (E0 was 93.4% / 91.7% dev as first reported; re-scored on 2026-11-21, q060 r3
-now passes on q060's watch-time reading.) Every failure in both runs has an owner-confirmed label; nothing is pending.
+about 40 points. (Re-scored on 2026-11-21: the scorer now passes E0 q060 r3 on q060's watch-time
+reading, but an owner override keeps it a fail, so the numbers are unchanged.) Every failure in
+both runs has an owner-confirmed label; nothing is pending.
 The scoring false negatives found in review are listed in the label files.
 
 **Confirmed bad-case clusters** (owner-confirmed labels in `eval/labels/`):
-- E0, 18 runs:
+- E0, 19 runs:
   - 15 `wrong_metric_definition`, all one cause: session length measured as first-to-last-view
     span instead of estimated watch time (q023, q042, q062, q084, q087, 3/3 each);
   - 3 `missing_caveat` (q075 x2, q071 x1).
-  - (q060 r3, once `answer_misreport`, passes since 2026-11-21 on the watch-time reading.)
+  - 1 `answer_misreport` (q060 r3: 16.4% of views reported as "about 17%"; the scorer passes
+    it on the watch-time reading, overridden by the owner as a coincidence).
 - E-1, 133 runs:
   - 53 `over_refusal` ("no durations, here are counts");
   - 65 `wrong_metric_definition` (its own gap estimates, spans, "binge = 30+ videos", views as
@@ -96,23 +98,25 @@ The scoring false negatives found in review are listed in the label files.
   only for baselines and final runs.
 
 **Phase 5 (branch `phase-5`, in progress; ladder rules in DESIGN §7.5):**
-1. **Done:** E1 on Sonnet (`describe_include_descriptions: true`), dev 99.5% vs E0 92.2%; one
+1. **Done:** E1 on Sonnet (`describe_include_descriptions: true`), dev 99.5% vs E0 91.7%; one
    failing run (q087 r3). Report: `eval/reports/e01_descriptions.md`. **E1 is Sonnet's final
    config**; re-run Sonnet with a later step only if Haiku results suggest it would help.
 2. **Done:** E0-haiku 90.1% and E1-haiku 97.9% (95.3-100) on dev, $0.0008 per question vs
    Sonnet E1's $0.0105. Labels owner-confirmed; report `eval/reports/e00_e01_haiku.md`.
    E1-haiku fails 4 runs: q019 r2/r3 (`wrong_time_window`), q052 r3 (`aggregation_error`),
-   q072 r3 (`failed_refusal`). Haiku done-when part 1 is open (E1-haiku has a 100% repeat).
+   q072 r3 (`failed_refusal`). Haiku done-when (replaced 2026-11-21, DESIGN §7.5): within ~2
+   points of Sonnet E1 is met; from E2a on, judge each step on no regression beyond repeat
+   variance, recall@k, tokens/cost per question, and which of the 4 failures it fixes.
 3. **Next: E2a → E6 on Haiku** (owner decision 2026-11-21, although E1-haiku is above ~93%),
    one config change each, cumulative; accuracy first, plus tokens, steps and recall@k. Cost
    estimate and the owner's OK before each run; stop for review after each.
-   - **E2a is built** (`eval/experiments/e02a_search_haiku.yaml`; estimate $0.21 for dev x3),
-     waiting for the owner's OK. It also waits for the owner's review of 15 `expected_knowledge`
-     samples before `eval retrieval` is run.
+   - **E2a** (`eval/experiments/e02a_search_haiku.yaml`; estimate $0.21 for dev x3): approved
+     by the owner on 2026-11-21, with the 15 `expected_knowledge` samples.
    - Glossary edit committed before E2 (`2fa833a`, sessions.md: span vs session length);
      disclose it in the E2a report. `metrics.yml` and the docs predate the eval questions.
-   - Open for the owner: Haiku done-when part 1 (E1-haiku has a 100% repeat); the cell and
-     group-share scorer rules (`94914c9`); labels for the superseded first E0 run's q060 r1/r3.
+   - Owner decisions 2026-11-21: the cell and group-share scorer rules (`94914c9`) accepted;
+     E0 q060 r3 overridden to `answer_misreport` (label-file `overrides`, DESIGN §7.3); the
+     superseded first E0 run's q060 r1/r3 labelled `answer_misreport`.
    - Knowledge indexer: fastembed, `bge-small-en-v1.5`, in a separate git-ignored DuckDB
      file; `{param}` placeholders are filled at retrieval time from the run's settings.
    - **E2a** = `search_knowledge` only, prompt `system_v1_search.md` (v1 + one tool line, no

@@ -68,7 +68,7 @@ Build scope by phase. Each phase ends with a "Done when" check. See `docs/DESIGN
 - [x] SQL error self-correction (max 2 retries) *(already part of the E0 baseline, DESIGN §6.3)*
 - [ ] Semantic compiler `metrics.yml → SQL` + `query_metric` tool
 - [ ] Refusal and caveat rules in the prompt
-- [x] **E1** on Sonnet (dev 99.5% vs E0 92.2% after the 2026-11-21 re-score; `eval/reports/e01_descriptions.md`); E1 is Sonnet's final config
+- [x] **E1** on Sonnet (dev 99.5% vs E0 91.7%; `eval/reports/e01_descriptions.md`); E1 is Sonnet's final config
 - [x] **E0-haiku** and **E1-haiku** on dev (model swap moved to the base of the ladder, §7.5): 90.1% and 97.9% (Sonnet E1 99.5%) at $0.0008 vs $0.0105 per question; `eval/reports/e00_e01_haiku.md`
 - [ ] **E2a, E2b, E3, E5, E6** on Haiku (§7.5; E4 cut; run although E1-haiku is above ~93%, owner decision 2026-11-21); compare reports after each
 - [ ] Final: best Haiku config and Sonnet E1 on the test split
@@ -77,7 +77,7 @@ Build scope by phase. Each phase ends with a "Done when" check. See `docs/DESIGN
 - [ ] Retrieval eval: for each question, is the right metric or doc in the top k (recall@k) *(built: `expected_knowledge`, `eval retrieval`, per-run `kb_recall`; waiting for the owner's review of 15 samples before it is run)*
 - [ ] README results table: accuracy, bad-case mix, tokens and latency per experiment
 
-**Done when:** for Haiku, the best Haiku config beats E1-haiku beyond repeat variance on dev and is within ~2 points of Sonnet E1, with cost per question side by side; for Sonnet, the best config's mean dev pass rate is above E0's best dev repeat and its worst dev repeat is at least E0's dev mean; the dev session-length cluster (q023, q042, q084, q087) passes at least 10 of 12 runs; the final test pass rate is at least E0's 96.9%; tokens per question are reported; and every gain is linked to a run report (DESIGN §7.5).
+**Done when:** for Haiku, within ~2 points of Sonnet E1 with cost per question side by side (met at E1-haiku), and from E2a on each step shows no dev regression beyond repeat variance, with recall@k, tokens/cost per question and the remaining failures it fixes reported; for Sonnet, the best config's mean dev pass rate is above E0's best dev repeat and its worst dev repeat is at least E0's dev mean; the dev session-length cluster (q023, q042, q084, q087) passes at least 10 of 12 runs; the final test pass rate is at least E0's 96.9%; tokens per question are reported; and every gain is linked to a run report (DESIGN §7.5).
 
 ## Phase 6: Telegram bot
 - [ ] Telegram bot: free-text questions, chart as photo, "Show SQL" button, allowed chat IDs only

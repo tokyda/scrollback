@@ -137,6 +137,17 @@ failures:
   suspect_scoring: 'leads with wrong-definition value 62.03 but also states the gold value: check that
     the wrong value is the headline, not labelled context'
   label: wrong_metric_definition
+- question: q060
+  repeat: 3
+  category: ambiguous
+  split: dev
+  suggested: answer_misreport
+  reason: 'owner override: the answer computes over views (1,955 / 11,885 = 16.4%) and reports it as "about
+    17%"; that 17% also matches the watch-time reading is a coincidence'
+  suspect_scoring: null
+  label: answer_misreport
+  note: 'owner override: the answer computes over views (1,955 / 11,885 = 16.4%) and reports it as "about
+    17%"; that 17% also matches the watch-time reading is a coincidence'
 - question: q062
   repeat: 3
   category: ambiguous
@@ -186,6 +197,15 @@ scoring_false_negatives:
   repeat: 3
   note: correct sum over the cited per-day rows inside the date range the answer states; scored as a pass
     by the range-sum rule (owner decision 2026-11-20)
+overrides:
+- question: q060
+  repeat: 3
+  passed: false
+  label: answer_misreport
+  reason: the answer computes over views (1,955 / 11,885 = 16.4%) and reports it as "about 17%"; that
+    17% also matches the watch-time reading is a coincidence
+  by: owner
+  date: '2026-11-21'
 rescored_to_pass:
 - question: q067
   repeat: 1
@@ -202,11 +222,6 @@ rescored_to_pass:
   before: false
   after: true
   old_label: failed_refusal
-- question: q060
-  repeat: 3
-  before: false
-  after: true
-  old_label: answer_misreport
 - question: q095
   repeat: 3
   before: false

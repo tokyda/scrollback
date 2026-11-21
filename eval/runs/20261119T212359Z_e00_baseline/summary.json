@@ -85,7 +85,9 @@
   "caveat_on_estimate_questions": 0.696078431372549,
   "strong_caveat_on_traps": 0.2857142857142857,
   "strong_caveat_on_estimate_questions": 0.06862745098039216,
-  "assumptions_on_ambiguous": 1.0
+  "assumptions_on_ambiguous": 1.0,
+  "kb_recall": null,
+  "kb_searched": null
  },
  "efficiency": {
   "steps": 2.991228070175439,
@@ -94,7 +96,8 @@
   "tokens": 8560.13596491228,
   "latency_s": 5.936969298245614,
   "cost_per_question_usd": 0.009439315350877192,
-  "total_cost_usd": 2.1521639
+  "total_cost_usd": 2.1521639,
+  "kb_searches": 0
  },
  "statuses": {
   "answered": 228
@@ -189,5 +192,5 @@
   "q075"
  ],
  "run_id": "20261119T212359Z_e00_baseline",
- "rescored_at": "2026-11-21T04:09:59+00:00"
+ "rescored_at": "2026-11-21T06:59:06+00:00"
 }
