@@ -139,10 +139,12 @@ The scoring false negatives found in review are listed in the label files.
      report `eval/reports/e06a_refusal_rules_haiku.md`): 99.0% (98.4-100) vs E2b 99.5%, within
      variance; q072 fixed 3/3; q019 r1/r3 fail (`wrong_time_window`, 17-18 Oct, as E1-haiku;
      owner-confirmed; a `resolve_dates` tool is in the stretch backlog); strong caveats on estimate questions 33% -> 77%; no over-refusal; $0.0012
-     per question, tokens +8%. **Next: E6b** = E6a + `cannot_answer` in `kb_sources`
-     (`e06b_cannot_answer_haiku.yaml`); report vs E6a and stop. Cost estimate and OK before each.
-     Offline recall@6 with E6b's sources: unanswerable 16.7%, ranking 100 -> 70%, trap 86.1 ->
-     76.4% (cannot_answer chunks crowd others).
+     per question, tokens +8%. **E6b done** = E6a + `cannot_answer` in `kb_sources`
+     (`20261121T190518Z_e06b_cannot_answer_haiku`, report `eval/reports/e06b_cannot_answer_haiku.md`):
+     99.5% (98.4-100), no regressions; q072 3/3; fails q019 r1 (label pending); in-run recall on
+     shared questions 90.4 -> 90.7% (offline crowding didn't show in runs); $0.0011 per question.
+     Proposed best Haiku config: E6b. **Next: final test runs** (E6b Haiku est. $0.13, Sonnet E1
+     est. $1.23), each after the owner's OK.
    - If a printed estimate exceeds the approved amount, ask before running, even by cents.
    - Glossary edit committed before E2 (`2fa833a`, sessions.md: span vs session length);
      disclose it in the E2a report. `metrics.yml` and the docs predate the eval questions.
