@@ -24,7 +24,7 @@ pin timezone and metrics to `eval/questions.yaml` `params` (cap 180 s, last view
 synthetic warehouses and the gold never move when `config.yaml` is tuned. Never commit the
 owner's per-day Screen Time figures.
 
-**Phase 6, the Telegram bot: done on branch `phase-6` (PR open, not merged until the owner
+**Phase 6, the Telegram bot: done on branch `phase-6` (PR #10 open, not merged until the owner
 says).** DESIGN §8 "As built". Phone check 2026-11-22 passed on the real bot (7 paid runs,
 $0.011 in total, all E6b, prompt hash `a8da3c450e57`). It found the /week weekday bug: Haiku
 labelled every day one off, and the fix is bot-level (weekday names from `dim_date.dow_name`,
