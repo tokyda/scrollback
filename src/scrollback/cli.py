@@ -58,6 +58,34 @@ def _settings(config: Path | None) -> Settings:
         raise typer.Exit(1) from None
 
 
+ExperimentOption = Annotated[
+    Path | None,
+    typer.Option(
+        "--experiment",
+        help="Experiment file whose llm/agent overrides to use (default: interactive.experiment).",
+    ),
+]
+NoExperimentOption = Annotated[
+    bool,
+    typer.Option("--no-experiment", help="Use config.yaml's llm/agent as they are."),
+]
+
+
+def _interactive_settings(
+    config: Path | None, experiment: Path | None, no_experiment: bool
+) -> tuple[Settings, str]:
+    """Settings for ask and the bot, and a label naming the config in use."""
+    from scrollback.experiments import interactive_settings
+
+    base = _settings(config)
+    try:
+        settings, exp = interactive_settings(base, experiment, use_experiment=not no_experiment)
+    except (OSError, ValueError) as exc:
+        typer.echo(f"Config error: experiment could not be loaded: {exc}", err=True)
+        raise typer.Exit(1) from None
+    return settings, (exp.name if exp else "config.yaml")
+
+
 def _run_build(settings: Settings, db_path: Path, quiet: bool = False) -> None:
     """Run `dbt build`; exit 1 when there is no data or any model/test fails."""
     from scrollback.warehouse.db import has_view_data
@@ -292,8 +320,13 @@ def ask(
     ] = None,
     db: DbOption = None,
     config: ConfigOption = None,
+    experiment: ExperimentOption = None,
+    no_experiment: NoExperimentOption = False,
 ) -> None:
-    """Ask the agent a question about your viewing history."""
+    """Ask the agent a question about your viewing history.
+
+    Runs the same config as the Telegram bot: config.yaml plus the llm/agent overrides of
+    interactive.experiment (the best eval config), on config.yaml's calibrated metric params."""
     from datetime import date
 
     from scrollback.agent import llm as llm_module
@@ -301,7 +334,7 @@ def ask(
     from scrollback.agent.loop import run_agent
     from scrollback.warehouse.db import has_view_data
 
-    settings = _settings(config)
+    settings, config_label = _interactive_settings(config, experiment, no_experiment)
     db_path = db or settings.paths.warehouse
     if not has_view_data(db_path):
         typer.echo("No data: run `scrollback ingest <export>` first.", err=True)
@@ -329,7 +362,7 @@ def ask(
             message += f": {result.trace.error}"
         typer.echo(message, err=True)
     typer.echo("")
-    typer.echo(_trace_line(result))
+    typer.echo(f"{_trace_line(result)} · {config_label}")
     if result.trace_db_error:
         typer.echo(f"Warning: {result.trace_db_error}", err=True)
     if result.status != "answered":
