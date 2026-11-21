@@ -1,8 +1,8 @@
-"""Agent tools v0: describe_table, run_sql, make_chart, final_answer (DESIGN §6.2).
+"""Agent tools: describe_table, run_sql, make_chart, final_answer, search_knowledge (§6.2).
 
-Deliberately minimal for the E0 baseline: no search_knowledge and no query_metric, and
-describe_table returns no column descriptions unless ``agent.describe_include_descriptions``
-is on (E1).
+Deliberately minimal for the E0 baseline: search_knowledge only when ``agent.search_knowledge``
+is on (E2a), no query_metric yet, and describe_table returns no column descriptions unless
+``agent.describe_include_descriptions`` is on (E1).
 
 Every tool returns a :class:`ToolOutcome`; errors are returned to the model as text with a
 stable code (``[code] message``) so it can correct itself, and are recorded in the trace.
@@ -110,13 +110,23 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
         },
     ),
 ]
-TOOL_NAMES = frozenset(t["name"] for t in TOOL_SCHEMAS)
+SEARCH_KNOWLEDGE_SCHEMA = _strict(
+    "search_knowledge",
+    "Search the knowledge base: metric definitions, glossary sections and table "
+    "descriptions. Returns the best-matching entries.",
+    {"query": {"type": "string", "description": "What to look up, e.g. a metric or a term."}},
+)
+TOOL_NAMES = frozenset(t["name"] for t in [*TOOL_SCHEMAS, SEARCH_KNOWLEDGE_SCHEMA])
 
 
 def tool_schemas(settings: Settings) -> list[dict[str, Any]]:
-    """TOOL_SCHEMAS with describe_table's table enum set to the agent's table scope."""
-    schemas: list[dict[str, Any]] = json.loads(json.dumps(TOOL_SCHEMAS))
-    schemas[0]["input_schema"]["properties"]["table"]["enum"] = list(agent_tables(settings))
+    """The tools this run offers: search_knowledge first when it is on, then TOOL_SCHEMAS with
+    describe_table's table enum set to the agent's table scope."""
+    base = [SEARCH_KNOWLEDGE_SCHEMA] if settings.agent.search_knowledge else []
+    schemas: list[dict[str, Any]] = json.loads(json.dumps([*base, *TOOL_SCHEMAS]))
+    for schema in schemas:
+        if schema["name"] == "describe_table":
+            schema["input_schema"]["properties"]["table"]["enum"] = list(agent_tables(settings))
     return schemas
 
 
@@ -130,6 +140,10 @@ class DescribeTableInput(_Input):
 
 class RunSqlInput(_Input):
     sql: str
+
+
+class SearchKnowledgeInput(_Input):
+    query: str
 
 
 class MakeChartInput(_Input):
@@ -442,7 +456,23 @@ def final_answer(ctx: ToolContext, args: FinalAnswerInput) -> ToolOutcome:
     return ToolOutcome(content="Answer recorded.", final=final)
 
 
+def search_knowledge(ctx: ToolContext, args: SearchKnowledgeInput) -> ToolOutcome:
+    from scrollback.kb.retrieve import search
+
+    if not ctx.settings.agent.search_knowledge:
+        return _error("unknown_tool", "search_knowledge is not available in this run")
+    if not args.query.strip():
+        return _error("empty_query", "query is empty; say what to look up")
+    hits = search(args.query, ctx.settings)
+    payload = {
+        "query": args.query,
+        "results": [{"id": h.chunk.id, "title": h.chunk.title, "text": h.text} for h in hits],
+    }
+    return ToolOutcome(content=_dumps(payload), meta={"retrieved": [h.chunk.id for h in hits]})
+
+
 _HANDLERS: dict[str, tuple[type[_Input], Any]] = {
+    "search_knowledge": (SearchKnowledgeInput, search_knowledge),
     "describe_table": (DescribeTableInput, describe_table),
     "run_sql": (RunSqlInput, run_sql),
     "make_chart": (MakeChartInput, make_chart),

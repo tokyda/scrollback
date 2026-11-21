@@ -9,6 +9,7 @@ dependencies = [
     "dbt-core>=1.12",
     "dbt-duckdb>=1.11",
     "duckdb>=2.0.0",
+    "fastembed>=0.9.1",
     "matplotlib>=3.11.2",
     "pydantic>=2.7",
     "python-dotenv>=1.0",

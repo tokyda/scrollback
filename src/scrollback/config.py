@@ -20,6 +20,12 @@ DEFAULT_CONFIG_FILE = "config.yaml"
 CONFIG_PATH_ENV = "SCROLLBACK_CONFIG"
 
 
+# Knowledge sources search_knowledge may return (DESIGN §7.5): E2a uses the first three; E3 adds
+# examples, E6 adds the "cannot answer" doc.
+KBSource = Literal["metrics", "docs", "tables", "cannot_answer", "examples"]
+DEFAULT_KB_SOURCES: tuple[KBSource, ...] = ("metrics", "docs", "tables")
+
+
 class ConfigError(Exception):
     """Raised when configuration is missing or invalid."""
 
@@ -50,6 +56,8 @@ class PathsConfig(_Strict):
     traces_dir: Path = Path("traces")
     eval_runs_dir: Path = Path("eval/runs")
     charts_dir: Path = Path("charts")
+    kb_index: Path = Path("data/kb/knowledge.duckdb")  # git-ignored; rebuilt when stale
+    kb_models: Path = Path("data/kb/models")  # embedding model download cache
 
     def resolved(self, root: Path) -> PathsConfig:
         values = {
@@ -104,11 +112,21 @@ class AgentConfig(_Strict):
     # E0 baseline switches (DESIGN §7.5): descriptions arrive in E1.
     describe_include_descriptions: bool = False
     describe_sample_rows: int = Field(3, ge=0)
+    # Phase 5 (DESIGN §7.5): search_knowledge from E2a; the prompt must mention the tool
+    # exactly when it is on. llm.retrieval_k chunks per search.
+    search_knowledge: bool = False
+    kb_sources: list[KBSource] = Field(default_factory=lambda: list(DEFAULT_KB_SOURCES))
 
     @field_validator("prompt_version", mode="before")
     @classmethod
     def _version_as_text(cls, value: object) -> object:
         return str(value) if isinstance(value, int) and not isinstance(value, bool) else value
+
+
+class KBConfig(_Strict):
+    # "hashing" is a deterministic offline embedder for tests and CI (no download).
+    embedding_model: str = "BAAI/bge-small-en-v1.5"
+    rrf_k: int = Field(60, gt=0)  # reciprocal-rank fusion constant
 
 
 class Secrets(_Strict):
@@ -124,6 +142,7 @@ class Settings(_Strict):
     metrics: MetricsConfig = Field(default_factory=MetricsConfig)
     llm: LLMConfig = Field(default_factory=LLMConfig)
     agent: AgentConfig = Field(default_factory=AgentConfig)
+    kb: KBConfig = Field(default_factory=KBConfig)
     secrets: Secrets = Field(default_factory=Secrets)
     root: Path = Field(default_factory=Path.cwd)
 

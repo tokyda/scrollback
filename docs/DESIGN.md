@@ -93,8 +93,8 @@ The hard part isn't the chatbot. It's making the answers **trustworthy**: consis
 | Transformations | dbt-core + dbt-duckdb | layered models, built-in tests, lineage docs |
 | SQL validation | sqlglot | parse, enforce read-only, rewrite LIMIT |
 | LLM | Anthropic SDK behind a thin `LLMClient` interface, model set from env | swappable provider |
-| Embeddings | sentence-transformers (`BAAI/bge-small-en-v1.5`), local | free, offline, private |
-| Vector store | DuckDB table + `array_cosine_similarity` | one store, no extra infra |
+| Embeddings | fastembed (`BAAI/bge-small-en-v1.5`, ONNX), local *(changed from sentence-transformers, owner decision 2026-11-20: no torch dependency)* | free, offline, private |
+| Vector store | a separate DuckDB file (`paths.kb_index`, git-ignored); ~40 chunks are scored in memory with numpy *(changed from `array_cosine_similarity` in the warehouse: one warehouse per eval anchor, and the agent's warehouse connection is read-only)* | one store, no extra infra |
 | Charts | matplotlib → PNG | works in CLI, API and Telegram |
 | CLI | typer | |
 | API | FastAPI + uvicorn | |
@@ -333,7 +333,7 @@ Implemented in `src/scrollback/agent/loop.py` on the Messages API (manual loop; 
 
 | Tool | Input | Output | Notes |
 |---|---|---|---|
-| `search_knowledge` | `query`, `k` | top-k chunks (metrics, docs, examples) | hybrid: embedding similarity + keyword match on synonyms |
+| `search_knowledge` | `query` | top-k chunks (metrics, docs, table descriptions; examples from E3) | hybrid: embedding similarity + keyword match on synonyms. *As built: k is `llm.retrieval_k` (6), a config value, not a model choice, so experiments control it* |
 | `describe_table` | `table` | columns, types, descriptions, 3 sample rows | marts only |
 | `query_metric` | `metric`, `grain`, `start`, `end`, `filters`, `group_by` | rows + compiled SQL | compiles from `metrics.yml`; the preferred path |
 | `run_sql` | `sql` | rows (≤ 200), column names, row count, or error | read-only guard below |
@@ -343,6 +343,18 @@ Implemented in `src/scrollback/agent/loop.py` on the Messages API (manual loop; 
 **v0 (E0 baseline)** has only `describe_table`, `run_sql`, `make_chart` and `final_answer`. All four use strict JSON schemas and are validated again in code. `search_knowledge` and `query_metric` arrive in Phase 5.
 - `describe_table` returns columns, types and a row count. Column and table descriptions are behind `agent.describe_include_descriptions` (off in E0, on from E1). In `aggregate_only` mode it shows sample rows only for `agg_*`/`dim_*`, and column statistics for `fct_*` (§4.6).
 - `run_sql` results carry a `result_id` (`r1`, `r2`, …). Errors come back as `[rule_code] message` with `is_error`.
+- **`search_knowledge` (as built, Phase 5).** Off unless `agent.search_knowledge` is on, and then it is listed first. Chunks (`kb/chunks.py`):
+  - one per metric in `metrics.yml` (definition, SQL, caveat text, synonyms);
+  - one per `##` section of each glossary doc, plus its intro when it has one;
+  - one per mart from `_marts.yml`;
+  - examples from `knowledge/examples.yml` (E3).
+
+  `agent.kb_sources` picks which sources a run may see. E2a uses `[metrics, docs, tables]`; E3 adds `examples`; E6 adds `cannot_answer`, the sections of `cannot_answer.md`. Retrieval (`kb/retrieve.py`) fuses two rankings with reciprocal-rank fusion (`kb.rrf_k` = 60):
+  - cosine similarity of bge-small embeddings, with BGE's query instruction on the query;
+  - BM25 over title, text and keywords. Keywords (names, labels, synonyms, column names) count three times, and identifiers are split on `_`.
+
+  A chunk that matches no query token and isn't in the embedding top 3 is dropped. Chunk text keeps `{param}` placeholders, which are filled from the run's settings when returned. The index stores a hash of the chunk texts and the model, and it is rebuilt when either changes (`scrollback kb index`, `kb search`). Tests and CI use a deterministic offline hashing embedder (`kb.embedding_model: hashing`).
+- **Prompt and tool must agree.** Loading a prompt that mentions `search_knowledge` while the tool is off, or the reverse, fails (`PromptToolMismatchError`).
 
 ### 6.3 SQL guard (`run_sql`)
 - Parse with sqlglot (DuckDB dialect). Reject anything that isn't a single `SELECT`/`WITH`.
@@ -535,6 +547,19 @@ Every failed question gets one primary label: auto-suggested from the trace, the
 - **Report:** accuracy is mean (min–max) over repeats. Per-category accuracy is shown for **dev only**; the held-out **test** split is reported overall only, since it has too few questions per category. The report also covers sub-scores, efficiency, cost, the bad-case distribution, every failure with its label and reason, per-question pass counts and flaky questions.
 - `scrollback eval report <run_a> <run_b> [--split dev|test|all]` produces markdown with overall and per-category accuracy, the questions that regressed or improved, the sub-scores (including the strong caveat) and efficiency (steps, tool calls, tool errors, tokens, latency, cost per run and total). The comparison is summarised from both runs' records, so `--split dev` compares a dev-only run with the dev half of a full run on equal terms. *(Changed 2026-11-21: it used to compare the saved summaries, so a dev-only run's cost was set against a full run's.)*
 - Each config is run with `--repeat 3`, and the mean ± spread is reported, because LLM output varies even at temperature 0.
+- **Retrieval recall (Phase 5, reported only).** Each question carries `expected_knowledge`: the chunk ids a good search should find. They are written from the definitions by rule, not from retrieval output:
+  - each expected metric's chunk;
+  - the sessions section that separates session length from the span, for session-length questions;
+  - the midnight-crossing section where sessions are dated by their start;
+  - the estimate caveat or method sections for estimate traps;
+  - coverage for partial or missing days;
+  - `agg_daily` for per-calendar-day averages;
+  - the table where one column is the crux;
+  - the cannot-answer sections for unanswerable questions.
+
+  Only expected chunks within the run's `kb_sources` count, so unanswerable questions have no recall before E6. Two measures:
+  - **offline** `scrollback eval retrieval [--k] [--split dev] [--experiment]` searches with each question's own text: recall@k per category on dev, overall only on test. No API calls.
+  - **per run**, the union of the chunks the agent's own `search_knowledge` calls returned, scored against `expected_knowledge` (`kb_recall`). Reported with the share of runs that searched at all (`kb_searched`) and searches per run.
 
 ### 7.5 Planned experiment ladder
 Each step is one config. Results go into the README table.
@@ -664,12 +689,12 @@ scrollback/
 │   ├── ingest/{detect.py, parse.py, load.py}
 │   ├── synth/generator.py
 │   ├── warehouse/{db.py, dbt_runner.py, inspect.py}
-│   ├── kb/{index.py, retrieve.py}
+│   ├── kb/{chunks.py, index.py, retrieve.py}
 │   ├── semantic/{metrics.py, compile.py}  # metrics.yml schema + loader; → SQL compiler (Phase 5)
 │   ├── agent/{loop.py, tools.py, sql_guard.py, llm.py, prompts/}
 │   ├── charts.py
 │   ├── tracing.py
-│   ├── evals/{questions.py, warehouses.py, gold.py, score.py, run.py, labels.py, report.py}
+│   ├── evals/{questions.py, warehouses.py, gold.py, score.py, run.py, labels.py, report.py, retrieval.py}
 │   ├── monitor/{anomaly.py, digest.py}
 │   ├── api/app.py
 │   └── bot/telegram_bot.py

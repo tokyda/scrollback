@@ -55,15 +55,27 @@ class AgentResult:
     results: dict[str, QueryResult] = field(default_factory=dict)  # every successful run_sql
 
 
+class PromptToolMismatchError(ValueError):
+    """The prompt and the tool list disagree about search_knowledge."""
+
+
 def load_system_prompt(settings: Settings) -> str:
     version = settings.agent.prompt_version
     path = PROMPTS_DIR / f"system_v{version}.md"
     if not path.exists():
         raise FileNotFoundError(f"prompt version {version} not found: {path.name}")
     rule = AGGREGATE_RULE if settings.agent.result_mode == "aggregate_only" else ""
-    return Template(path.read_text(encoding="utf-8")).substitute(
+    text = Template(path.read_text(encoding="utf-8")).substitute(
         tables="\n".join(f"- {t}" for t in agent_tables(settings)), result_mode_rule=rule
     )
+    mentions = "search_knowledge" in text
+    if mentions != settings.agent.search_knowledge:
+        state = "on" if settings.agent.search_knowledge else "off"
+        says = "mentions" if mentions else "does not mention"
+        raise PromptToolMismatchError(
+            f"prompt {path.name} {says} search_knowledge, but agent.search_knowledge is {state}"
+        )
+    return text
 
 
 def prompt_sha256(system: str) -> str:

@@ -523,3 +523,63 @@ def test_e_minus_1_staging_scope(agent_settings: Settings) -> None:
     assert blocked["content"].startswith("[table_not_allowed]")
     assert json.loads(tool_results(llm, 2)[0]["content"])["rows"] == [[167]]
     assert result.status == "answered"
+
+
+# --------------------------------------------------------------------------- search_knowledge
+
+
+def search_settings(settings: Settings) -> Settings:
+    settings.agent.prompt_version = "1_search"
+    settings.agent.search_knowledge = True
+    return settings
+
+
+def test_prompt_and_tool_must_agree(agent_settings: Settings) -> None:
+    from scrollback.agent.loop import PromptToolMismatchError, load_system_prompt
+
+    agent_settings.agent.search_knowledge = True  # prompt v1 doesn't mention the tool
+    with pytest.raises(PromptToolMismatchError, match="does not mention"):
+        load_system_prompt(agent_settings)
+    agent_settings.agent.search_knowledge = False
+    agent_settings.agent.prompt_version = "1_search"  # mentions it, tool off
+    with pytest.raises(PromptToolMismatchError, match="mentions"):
+        load_system_prompt(agent_settings)
+
+
+def test_prompt_v1_search_is_v1_plus_one_tool_line() -> None:
+    from scrollback.agent.loop import PROMPTS_DIR
+
+    v1 = (PROMPTS_DIR / "system_v1.md").read_text().splitlines()
+    v1s = (PROMPTS_DIR / "system_v1_search.md").read_text().splitlines()
+    added = [line for line in v1s if line not in v1]
+    assert len(v1s) == len(v1) + 1 and len(added) == 1
+    assert added[0].startswith("- search_knowledge(query):")
+
+
+def test_search_knowledge_tool_in_the_loop(agent_settings: Settings) -> None:
+    settings = search_settings(agent_settings)
+    turns = [
+        mock_turn(("search_knowledge", {"query": "screen time watch minutes"})),
+        mock_turn(("run_sql", {"sql": YESTERDAY_SQL})),
+        mock_turn(final("About 103 minutes.", ["r1"])),
+    ]
+    result, llm = run(settings, turns)
+    assert result.status == "answered"
+    names = [t["name"] for t in llm.requests[0]["tools"]]
+    assert names[0] == "search_knowledge" and "run_sql" in names
+    call = result.trace.tool_calls[0]
+    assert call.name == "search_knowledge" and not call.is_error
+    assert call.meta["retrieved"][0] == "metric:est_watch_minutes"
+    payload = json.loads(tool_results(llm, 1)[0]["content"])
+    assert payload["results"][0]["id"] == "metric:est_watch_minutes"
+    assert "{view_cap_sec}" not in json.dumps(payload)  # params filled in
+
+
+def test_search_knowledge_is_absent_by_default(agent_settings: Settings) -> None:
+    turns = [
+        mock_turn(("search_knowledge", {"query": "watch time"})),
+        mock_turn(final("n/a", [])),
+    ]
+    result, llm = run(agent_settings, turns)
+    assert "search_knowledge" not in [t["name"] for t in llm.requests[0]["tools"]]
+    assert result.trace.tool_calls[0].error_code == "unknown_tool"

@@ -69,6 +69,8 @@ def agent_settings(synthetic_warehouse: BuiltWarehouse, tmp_path: Path) -> Itera
             "warehouse": db_copy,
             "traces_dir": tmp_path / "traces",
             "charts_dir": tmp_path / "charts",
+            "kb_index": tmp_path / "kb" / "knowledge.duckdb",
         }
     )
+    settings.kb = settings.kb.model_copy(update={"embedding_model": "hashing"})
     yield settings
