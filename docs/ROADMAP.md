@@ -71,7 +71,7 @@ Build scope by phase. Each phase ends with a "Done when" check. See `docs/DESIGN
 - [x] **E1** on Sonnet (dev 99.5% vs E0 91.7%; `eval/reports/e01_descriptions.md`); E1 is Sonnet's final config
 - [x] **E0-haiku** and **E1-haiku** on dev (model swap moved to the base of the ladder, §7.5): 90.1% and 97.9% (Sonnet E1 99.5%) at $0.0008 vs $0.0105 per question; `eval/reports/e00_e01_haiku.md`
 - [x] **E2a** (98.4% dev after the no-data fix; re-run on the new retrieval as E2a′, 98.4%) and **E2b** (99.5% after the cross-result scorer fix; `eval/reports/e02b_lookup_rule_haiku.md`) on Haiku
-- [ ] **E6a** on Haiku, built on E2b (`system_v3.md` rules only), then **E6b** (+ the `cannot_answer` doc in the index); split owner decision 2026-11-22, §7.5. E3 skipped and E5 moved to stretch (owner decision 2026-11-22); E4 cut
+- [ ] **E6a** on Haiku, built on E2b (`system_v3.md` rules only; done: 99.0%, q072 fixed; `eval/reports/e06a_refusal_rules_haiku.md`), then **E6b** (+ the `cannot_answer` doc in the index); split owner decision 2026-11-22, §7.5. E3 skipped and E5 moved to stretch (owner decision 2026-11-22); E4 cut
 - [ ] Final: best Haiku config and Sonnet E1 on the test split
 - [x] *(added)* Scorer fixes from the Haiku review ("Sept", weekday date ranges, "est.", a no-data phrase, ratio and row-label cells, group shares) and q060's watch-time reading (§7.2)
 - [x] *(added)* Strong-caveat sub-score (estimate + reason; reported only, §7.2) and `eval report a b --split`
