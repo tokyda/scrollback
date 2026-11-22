@@ -80,6 +80,8 @@ def run_dbt(
 ) -> DbtResult:
     """Run ``dbt <command>`` against ``db_path`` (default: the configured warehouse).
 
+    ``command`` may be several words, e.g. ``"docs generate"``.
+
     dbt runs in a subprocess: dbt-duckdb keeps its DuckDB connection open for the life of the
     process, which would block later read-only connections and leak state between builds.
     dbt's own output (model and test names, counts; never row data) goes to our stdout unless
@@ -91,7 +93,7 @@ def run_dbt(
     args = [
         _dbt_executable(),
         *(["--quiet"] if quiet else []),
-        command,
+        *command.split(),
         "--project-dir",
         str(project_dir),
         "--profiles-dir",

@@ -235,6 +235,47 @@ def build(
     _run_build(settings, db or settings.paths.warehouse, quiet=quiet)
 
 
+@app.command()
+def docs(
+    db: DbOption = None,
+    out: Annotated[
+        Path | None,
+        typer.Option(help="Output folder (default: <dbt_project_dir>/target/docs, git-ignored)."),
+    ] = None,
+    quiet: Annotated[bool, typer.Option("--quiet", "-q", help="Hide dbt's progress log.")] = False,
+    config: ConfigOption = None,
+) -> None:
+    """Build the dbt docs site (lineage graph, model and column descriptions) as one HTML file.
+
+    Runs `dbt docs generate --static` with the same vars as `build`. Build it from the synthetic
+    warehouse (`--config config.sample.yaml`) if you mean to share it."""
+    from scrollback.warehouse.db import has_view_data
+    from scrollback.warehouse.dbt_runner import DbtError, run_dbt
+
+    settings = _settings(config)
+    db_path = db or settings.paths.warehouse
+    if not has_view_data(db_path):
+        typer.echo(
+            f"No watch history in {db_path.name}: run `scrollback ingest <export>` first.",
+            err=True,
+        )
+        raise typer.Exit(1)
+    target = (out or settings.paths.dbt_project_dir / "target" / "docs").resolve()
+    try:
+        result = run_dbt(
+            settings, db_path, command="docs generate", extra_args=["--static"], quiet=quiet,
+            target_path=target,
+        )  # fmt: skip
+    except DbtError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(1) from None
+    page = target / "static_index.html"
+    if not result.success or not page.exists():
+        typer.echo("dbt docs generate: FAILED", err=True)
+        raise typer.Exit(1)
+    typer.echo(f"dbt docs: ok. Open {page} in a browser (one self-contained file).")
+
+
 @inspect_app.command("gaps")
 def inspect_gaps(db: DbOption = None, config: ConfigOption = None) -> None:
     """Distribution of gaps between consecutive views, to tune session/cap parameters."""

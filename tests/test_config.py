@@ -31,6 +31,24 @@ def test_repo_config_yaml_loads() -> None:
     assert settings.paths.sample_dir == REPO_ROOT / "data/sample"
 
 
+def test_sample_config_uses_eval_params_and_otherwise_matches_config_yaml() -> None:
+    """config.sample.yaml (README quickstart) = config.yaml with the eval set's pinned params
+    and its own warehouse file, so synthetic answers follow the eval setup."""
+    from scrollback.evals.questions import load_questions
+
+    def load(name: str):  # type: ignore[no-untyped-def]
+        return load_config(REPO_ROOT / name, env_file=REPO_ROOT / "missing.env", environ={})
+
+    real, sample = load("config.yaml"), load("config.sample.yaml")
+    pinned = load_questions().params
+    assert sample.metrics == pinned.metrics
+    assert sample.timezone == pinned.timezone
+    assert sample.paths.warehouse == REPO_ROOT / "data/warehouse/sample.duckdb"
+    assert sample.paths.warehouse != real.paths.warehouse
+    for section in ("llm", "agent", "kb", "interactive", "bot"):
+        assert getattr(sample, section) == getattr(real, section), section
+
+
 def test_yaml_overrides_defaults(tmp_path: Path) -> None:
     cfg = _write(
         tmp_path / "config.yaml",
