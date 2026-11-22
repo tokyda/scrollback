@@ -98,7 +98,7 @@ Build scope by phase. Each phase ends with a "Done when" check. See `docs/DESIGN
 - [x] dbt docs site (lineage graph) linked from the README: `scrollback docs`, built locally (owner decision 2026-11-22: not hosted until the repo is public)
 - [x] Short write-up: three most instructive bad cases and how each was fixed (README)
 - [x] *(added)* Real-export counts and dates removed from tracked files (shares and plain wording; history unchanged, owner decision)
-- [ ] Clean-clone check: a fresh clone runs end to end on synthetic data with only an API key
+- [x] Clean-clone check: a fresh clone runs end to end on synthetic data with only an API key (2026-11-22, PR #13: quickstart steps all pass; Haiku E6b test x3 reproduced 100% at $0.0011 per question, $0.11 total)
 
 **Done when:** a stranger can clone the repo, run the quickstart, and reproduce the headline eval numbers.
 

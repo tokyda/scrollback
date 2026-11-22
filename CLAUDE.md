@@ -73,7 +73,9 @@ superseded by #3.
 - Real-export counts, dates and session stats removed from tracked files (DESIGN §4.1, §4.3,
   §4.4, §14); git history left as is (owner). Keep new docs free of real figures.
 - `docs/DEMO.md`: raw export and GIF on synthetic data, live bot on real data.
-- Clean-clone check: clone → sync → synth → ingest → docs → check-gold → ask all pass.
+- Clean-clone check: clone → sync → synth → ingest → docs → check-gold → ask all pass;
+  Haiku E6b test x3 from the clone (`20261122T065708Z`) reproduced 100% at $0.0011 per
+  question ($0.11 total; the fresh-clone estimate printed $0.18, owner approved).
 
 **Phase 7 scope** (ROADMAP): the README (problem statement, architecture
 diagram, metric definitions with the watch-time estimation story, eval table, demo GIF, privacy
