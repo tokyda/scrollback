@@ -651,7 +651,11 @@ Opus is no longer on the ladder.
 ## 8. Interfaces
 
 ### CLI (`scrollback`)
-`ingest`, `synth`, `build` (dbt), `inspect gaps`, `ask "<question>" [--show-sql] [--chart] [--today] [--experiment f | --no-experiment]`, `eval run|report|rescore|retrieval|check-gold|import-feedback`, `kb index|search`, `alerts check`, `digest send`, `serve api`, `serve bot`.
+`ingest`, `synth`, `build` (dbt), `docs` (dbt docs site), `inspect gaps`, `ask "<question>" [--show-sql] [--chart] [--today] [--experiment f | --no-experiment]`, `eval run|report|rescore|retrieval|check-gold|import-feedback`, `kb index|search`, `alerts check`, `digest send`, `serve api`, `serve bot`.
+
+`docs` *(added, Phase 7)* runs `dbt docs generate --static` with the same `--vars` as `build` and writes one self-contained HTML file (lineage graph, model and column descriptions) to the git-ignored `dbt/target/docs/`. It is built locally, not hosted *(owner decision 2026-11-22; GitHub Pages can follow once the repo is public)*. Build it from the synthetic warehouse (`--config config.sample.yaml`) if it will be shared.
+
+**Quickstart config** *(added, Phase 7)*. `config.sample.yaml` is `config.yaml` with the eval set's pinned metric parameters and its own warehouse file (`data/warehouse/sample.duckdb`). The README quickstart passes it with `--config`, so synthetic answers follow the eval setup (180 s cap) and never touch the owner's real warehouse. `tests/test_config.py` keeps it equal to `eval/questions.yaml` `params` and to `config.yaml`'s other sections.
 
 `inspect gaps` *(added)* prints the distribution of gaps between consecutive views, for tuning `session_gap_min` and `view_cap_sec` on a real export (§14). It shows the count, percentiles for all gaps and for within-session gaps, and a histogram whose bin edges include the current parameter values. It also prints two what-if tables: how many sessions each candidate `session_gap_min` would give, and what share of within-session gaps each candidate `view_cap_sec` would cap. It prints aggregates only (no timestamps, IDs or rows), so it's safe on real data.
 
@@ -683,6 +687,7 @@ Opus is no longer on the ladder.
 - **Logging and privacy.** Logs carry trace IDs, statuses, costs and error *types* only: no question text, answers, query results, chat IDs or the token. The token is part of every Bot API URL, so the client keeps the `httpx`/`httpcore` loggers at WARNING (at INFO they log each URL), and also `httpx2`, the Anthropic SDK's own httpx copy, which logged API URLs (no key) in the first real run. `serve bot` also mutes matplotlib's INFO messages, redacts it from every error, and `serve bot` adds a redacting log filter. A test plants a fake token, forces API errors and checks the logs and traces.
 
 ### Demo script (3 minutes)
+The rehearsal script with exact commands and messages is [DEMO.md](DEMO.md). *(Owner decision 2026-11-22, Phase 7: steps 1 and 2 and the README GIF use the synthetic sample; steps 3 and 4 use the live bot on the real export, aggregates only.)*
 1. Show the raw export: just timestamps and links, no durations. That's the problem.
 2. Explain how watch time is estimated (§4.3), using one diagram of gaps between views.
 3. Ask the bot a question live and show the answer, the SQL, the metric used and the caveat.
@@ -721,11 +726,13 @@ scrollback/
 ├── CLAUDE.md
 ├── pyproject.toml
 ├── config.yaml
+├── config.sample.yaml       # quickstart: synthetic warehouse + eval params
 ├── .env.example
 ├── .github/workflows/ci.yml
 ├── docs/
 │   ├── DESIGN.md
-│   └── ROADMAP.md
+│   ├── ROADMAP.md
+│   └── DEMO.md              # three-minute demo script (§8)
 ├── data/
 │   ├── sample/              # synthetic export (committed)
 │   ├── raw/                 # real exports (git-ignored)
