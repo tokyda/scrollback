@@ -23,9 +23,6 @@ cannot answer, and an evaluation set that measures accuracy as the agent changes
 3. **Answers questions** from the command line or a Telegram bot, showing the SQL it ran, the
    metric definitions it used and its assumptions, and refusing what the data cannot support.
 
-<!-- Demo GIF placeholder: docs/demo.gif, recorded on the author's real export (aggregate answers only; owner decision 2026-11-23). -->
-*Demo GIF to come, recorded on the author's own viewing history (aggregate answers only).*
-
 ## Architecture
 
 ```mermaid
@@ -337,15 +334,13 @@ Scrollback runs on one person's viewing history, so the repository is built to h
   enforces, the SQL guard rejects row-level results, so only aggregates leave the machine.
 - Command output, logs and errors report counts and key names, never records. Bot logs never
   contain question text, answers, chat IDs or the bot token.
-- Figures in this README about the real export are percentages from the calibration only. The
-  exception is the demo GIF, which shows aggregate answers from the author's own history by the
-  author's choice.
+- Figures in this README about the real export are percentages from the calibration only.
 
 ## Repository guide
 
 - [docs/DESIGN.md](docs/DESIGN.md): the specification and every design decision.
 - [docs/ROADMAP.md](docs/ROADMAP.md): build phases and progress.
-- [docs/DEMO.md](docs/DEMO.md): the three-minute demo script.
+- [docs/DEMO.md](docs/DEMO.md): the demo script (what it does, then how it is built).
 - [eval/](eval/): questions, experiment configs, labels and reports.
 - [dbt/](dbt/): the warehouse models and tests.
 - [knowledge/](knowledge/): metric definitions and glossary documents the agent retrieves.

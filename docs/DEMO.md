@@ -1,147 +1,236 @@
-# Scrollback: three-minute demo script
+# Scrollback: demo script
 
-This script follows the demo outline in DESIGN §8. Steps 1, 2 and 5 use the synthetic sample
-and the README. Steps 3 and 4 use the live Telegram bot on the owner's real export. Timings are
-targets. Each step lists what to show, the exact command or message, and what to say.
+The demo has two parts. **Part 1** shows what Scrollback does, live on the phone, before any
+explanation. **Part 2** opens it up: the data problem, the warehouse, the agent and its guard.
+Results get one sentence at the end, not a section.
 
-## Before the demo (10 minutes ahead)
+Target length: about 4 minutes 30 seconds. For a 3-minute slot, use the cuts listed at the
+end. The lines under **Say** are the exact words; the lines under **Do** are the actions.
 
-1. **Start the bot** on the real configuration, in its own terminal, and leave it running:
+Part 1 uses the live Telegram bot on the owner's real export (aggregate answers only). Part 2
+uses the synthetic sample, the README and the dbt docs site.
+
+## Before the demo (15 minutes ahead)
+
+1. **Build the synthetic warehouse and the docs site** (free, no API calls):
+   ```bash
+   uv run scrollback synth --config config.sample.yaml
+   uv run scrollback ingest data/sample/user_data_tiktok.json --config config.sample.yaml
+   uv run scrollback docs --config config.sample.yaml -q
+   ```
+   Open `dbt/target/docs/static_index.html` in a browser tab. Click `fct_views` in the left
+   panel, then the lineage button (bottom right) so the graph shows raw → staging →
+   intermediate → marts.
+2. **Start the bot** on the real configuration, in its own terminal, and leave it running:
    ```bash
    uv run scrollback serve bot
    ```
    Check that the start-up line shows Haiku E6b, `aggregate_only` and the current commit. If it
    says another bot holds the lock, stop that one first: only one process can poll the token.
-2. **Warm it up.** Send `/today` from the phone once, so the knowledge index and the API
-   connection are warm and the first live answer isn't slow. Delete the chat messages
-   afterwards if you don't want them on screen.
-3. **Screens.**
-   - Terminal: large font, in the repository folder, history cleared.
-   - Browser: the README on GitHub, scrolled to "Estimating watch time without durations";
-     a second tab at "Results".
+3. **Warm it up.** Send `/today` once, so the knowledge index and API connection are warm.
+   Then clear the chat history so the demo starts on an empty chat.
+4. **Screens.**
    - Phone: Telegram open in the bot chat, mirrored to the screen (QuickTime "New Movie
      Recording" with the iPhone as camera works on a Mac), or the Telegram desktop app.
-4. **Notifications off** on the laptop and phone.
+   - Terminal: large font, in the repository folder, history cleared. This is a second
+     terminal, not the one running the bot.
+   - Browser tab 1: the README on GitHub, scrolled to "Estimating watch time without
+     durations".
+   - Browser tab 2: the README "Architecture" diagram.
+   - Browser tab 3: the dbt docs lineage graph from step 1.
+5. **Notifications off** on the laptop and phone.
 
 Expected API spend for the whole demo: under $0.01.
 
-## 0:00 – 0:30 · The problem: the export has no durations
+---
 
-**Show** the synthetic export in the terminal:
+# Part 1: what it does
+
+## 0:00 – 0:20 · Opening
+
+**Do:** Phone on screen, empty bot chat.
+
+**Say:**
+> "I wanted to know how much TikTok I actually watch. TikTok doesn't tell you, and its data
+> export doesn't either. So I built Scrollback: a data agent over my own watch history. I ask
+> it a question in plain English, and it answers from a warehouse built from my export. Let me
+> show you first, and then I'll show how it's built."
+
+## 0:20 – 0:45 · A one-tap question
+
+**Do:** Send `/today`.
+
+**Say, while it runs:**
+> "The slash-today command asks about the most recent day in my data. The export always ends a
+> few days before I download it, so 'today' means the last day it covers."
+
+**Do:** When the answer arrives, point at each part as you name it.
+
+**Say:**
+> "It gives the number first. Under it, the exact date it used, and a note that watch time is
+> an estimate. I'll come back to why it's an estimate, because that's the core of the
+> project."
+
+## 0:45 – 1:35 · A free-text question
+
+**Do:** Type and send:
+
+> What share of my watch time is after midnight, and how does last month compare with the month before?
+
+**Say, while it runs (about 5 to 10 seconds):**
+> "This one isn't a canned command. The agent has to work out which metric 'after midnight'
+> means, which dates 'last month' covers, write the SQL, and run it."
+
+**Do:** When the answer arrives, point at the assumptions line.
+
+**Say:**
+> "Here it says which dates it took for 'last month' and 'the month before'. Here it names the
+> metric it used: late-night share of estimated watch time."
+
+**Do:** Tap **Show SQL**.
+
+**Say:**
+> "And this is the SQL that actually ran. Not SQL the model says it ran: the query that
+> produced the number. So every answer can be checked."
+
+**Do:** Point at the footer.
+
+**Say:**
+> "The footer has a trace ID, the model, Claude Haiku, and the cost: about a tenth of a cent."
+
+## 1:35 – 2:00 · A question it can't answer
+
+**Do:** Type and send:
+
+> Which creator do I watch most?
+
+**Do:** When the answer arrives, point at the first sentence.
+
+**Say:**
+> "The export has video links but no creator names, so it says that in the first sentence. It
+> doesn't guess, and it offers what it can answer instead."
+
+**Do:** Point at the 👍 and 👎 buttons.
+
+**Say:**
+> "Every answer has a thumbs up and down. A thumbs down asks what was wrong, and that becomes a
+> candidate test question. That's what it does. Now, how it works."
+
+---
+
+# Part 2: how it's built
+
+## 2:00 – 2:45 · The data problem: no durations
+
+**Do:** In the terminal, run:
 
 ```bash
 jq '."Your Activity"."Watch History".VideoList[:3]' data/sample/user_data_tiktok.json
 ```
 
 **Say:**
-- "This is what TikTok's data export gives you: a timestamp and a link for each view. This
-  file is synthetic, generated to have the same shape as a real export."
-- "There is no duration field anywhere. So 'how much did I watch last week?' has no direct
-  answer. The data only says when each video started."
-- Point at the three times (11:45:26, 11:46:01, 11:46:17, newest first): "35 seconds, then 16
-  seconds. The gaps between views are all we have."
+> "This is the shape of TikTok's export. This file is synthetic, with the same shape as the
+> real one. Each view is a timestamp and a link. There is no duration anywhere."
 
-## 0:30 – 1:00 · How watch time is estimated
-
-**Show** the README section "Estimating watch time without durations" (the timeline diagram).
+**Do:** Point at the three times (newest first): 11:46:17, 11:46:01, 11:45:26.
 
 **Say:**
-- "Each view is credited with the gap to the next view, capped. A long gap means the person
-  looked away, not a four-minute video."
-- "A gap of more than 30 minutes ends a session. The last view in a session has no next view,
-  so it gets the median of the others."
-- "I calibrated the cap against my iPhone's Screen Time. A 180-second cap came out about 5%
-  above Screen Time, 120 seconds about 8% below. Screen Time includes comments and browsing,
-  so the estimate should sit below it: I use 120. The cost is that long videos are
-  undercounted, and the agent says so."
-- "This definition lives in the warehouse and in a metrics file, not in the model's head.
-  That turns out to be the biggest lever on accuracy."
+> "So all I know is when each video started. Sixteen seconds between the top two, thirty-five
+> between the next two. The gaps are the only signal."
 
-## 1:00 – 1:50 · A live question on my real data
-
-**Send** in Telegram (free text):
-
-> What share of my watch time is after midnight, and how does last month compare with the month before?
-
-**While it runs (about 5–10 seconds), say:** "This is my real history. The bot runs Claude
-Haiku with tools: it searches the metric definitions, writes SQL against the marts, and every
-query passes a guard that only allows read-only, aggregate results."
-
-**When the answer arrives, point at:**
-1. The number and the comparison.
-2. **Assumptions**: the exact dates it used for "last month" and "the month before".
-3. **Metrics used**: `late_night_share` and estimated watch time.
-4. The **caveat** that watch time is an estimate.
-5. Tap **Show SQL**: "Every number traces back to a query I can read."
-6. The footer: trace ID, model and cost, about a tenth of a cent.
-
-**Backup question** if the first answer is slow or odd:
-
-> How did my watch time per day change over the last 7 days of data? Show a chart.
-
-(Or simply send `/week`, which always returns a seven-day table and a chart.)
-
-## 1:50 – 2:20 · A question it cannot answer
-
-**Send:**
-
-> Which creator do I watch most?
-
-**Point at** the refusal: it leads with "can't answer", explains that the export has video
-links but no creator names, and offers what it can answer instead, without inventing a
-number.
-
-**Say:** "Refusing cleanly is part of being trustworthy. The eval set has unanswerable
-questions and trap questions, and a refusal with a made-up number in it counts as a failure."
-
-**Optional, if time allows:**
-
-> How long have I watched TikTok today?
-
-"The export always ends before today. The right answer is 'no data for today', not 0 minutes.
-That was the hardest bad case to fix."
-
-## 2:20 – 3:00 · How I know it works: the eval ladder
-
-**Show** the README "Results" table, then scroll to "Three instructive bad cases".
+**Do:** Switch to browser tab 1, the timeline diagram.
 
 **Say:**
-- "96 questions with gold SQL, on synthetic data so anyone can reproduce them, each run three
-  times and scored deterministically. 32 are held out and were run only for the baseline and
-  the final configs."
-- "Same agent, only the tables change: staging views get 51%, the modelled marts 92%. The
-  data modelling is worth about 40 points."
-- "Adding column descriptions fixed the main failure, session length measured as a clock span
-  instead of watch time: 99.5%."
-- "With retrieval and refusal rules, Haiku matches Sonnet, 100% on the held-out test, at
-  about a ninth of the cost per question."
-- "And the loop keeps going: the bot's `/week` once labelled every weekday one off. I tapped
-  rated it bad from my phone, that became a candidate eval question, and it's now q097."
+> "So watch time is estimated. Each view gets the gap to the next view, capped at two minutes,
+> because a long gap usually means I put the phone down. A gap over thirty minutes ends a
+> session. The last view in a session has no next view, so it gets the median of the others.
+> I checked the cap against my phone's Screen Time: the estimate lands a bit under it, which
+> is right, because Screen Time also counts comments and browsing."
 
-**Close:** "So: a real warehouse, explicit definitions, an agent that shows its work, and
-evals that say how far to trust it."
+## 2:45 – 3:15 · The warehouse
+
+**Do:** Switch to browser tab 3, the dbt lineage graph.
+
+**Say:**
+> "That definition is built into the warehouse, not left to the model. The export is loaded
+> into DuckDB and modelled with dbt in layers. Raw keeps the records as exported. Staging
+> types them and converts to local time. Intermediate computes the gaps and the sessions. The
+> marts are the clean tables: views, sessions, a daily summary, a date table. Every layer has
+> data tests, and every column in the marts has a description. The agent can only query the
+> marts."
+
+## 3:15 – 4:05 · The agent and its guard
+
+**Do:** Switch to browser tab 2, the architecture diagram.
+
+**Say:**
+> "The agent is a plain tool-calling loop on Claude, no framework. It has four tools. It
+> searches the metric definitions, which are embedded and indexed locally. It describes a
+> table. It runs SQL. And it finishes with a final answer that has to cite which query
+> results it used. That's why the SQL I showed is guaranteed to be the SQL behind the
+> number."
+
+**Do:** In the terminal, run:
+
+```bash
+uv run python -c '
+from scrollback.agent.sql_guard import guard_sql, SqlGuardError
+for q in ["SELECT * FROM fct_views", "DROP TABLE fct_views",
+          "SELECT local_date, SUM(est_watch_sec)/60 AS minutes FROM fct_views GROUP BY 1"]:
+    try:
+        print("allowed :", guard_sql(q, result_mode="aggregate_only", max_rows=200).sql)
+    except SqlGuardError as e:
+        print("rejected:", e)
+'
+```
+
+**Say:**
+> "Every query goes through this guard before it runs. It parses the SQL. Anything that
+> writes is rejected. Raw rows are rejected too: in this mode, only aggregates leave my
+> machine, so individual viewing records never reach the model. An aggregate query passes,
+> and it gets a row limit added."
+
+## 4:05 – 4:30 · How I know it's right, and close
+
+**Say:**
+> "To check all of this, there's a set of 97 test questions with hand-written answers on
+> synthetic data, scored automatically. The biggest lesson from it: the same agent on the raw
+> tables gets about half right; on the modelled marts, over ninety percent. The data modelling
+> mattered more than the prompt."
+
+> "So that's Scrollback: a real warehouse with explicit definitions, an agent that shows its
+> work and refuses what it can't know, and tests that say how far to trust it."
+
+---
+
+## Cuts for a 3-minute slot
+
+- Drop `/today` (0:20 – 0:45). Start with the free-text question.
+- Drop the dbt lineage graph (2:45 – 3:15). Say its first two sentences over the architecture
+  diagram instead.
+- Drop the 👍/👎 line at 1:35 – 2:00 and go straight to "That's what it does".
 
 ## If something goes wrong
 
 - **The bot doesn't reply within 20 seconds.** Keep talking through the step, then switch to
-  the terminal and ask the same question there. It runs the same config on the same real data,
-  so the numbers match what the bot would have said:
+  the terminal and ask the same question there. It runs the same config on the same real data:
   ```bash
   uv run scrollback ask "What share of my watch time is after midnight, and how does last month compare with the month before?" --show-sql
   uv run scrollback ask "Which creator do I watch most?"
   ```
   This only helps when Telegram is the problem: if the Anthropic API is down, the terminal
   fails too.
-- **The answer is wrong.** Say so, tap 👎, and use it: "This is exactly how q097 got into the
-  eval set." It is a better demo moment than a perfect run.
+- **The answer is wrong.** Say so, tap 👎, and use it: "This is exactly how test questions
+  get added. The bot once labelled every weekday one day off; a thumbs down turned that into
+  question 97." It is a better demo moment than a perfect run.
 - **409 Conflict in the bot log.** Another process is polling the token; stop it (`kill` the
   PID the error names) and restart `serve bot`.
+- **The docs page is blank.** Re-run `uv run scrollback docs --config config.sample.yaml` and
+  reload the tab.
 
 ## Privacy during the demo
 
-- Steps 3 and 4 show aggregates from the real export on screen, by the owner's choice. Don't
-  show the raw real export, `data/raw/`, traces, or the bot's log.
-- The README GIF is recorded on the real export (owner decision 2026-11-23). Record with the
-  default config (no `--config`), so answers come from `real.duckdb` in `aggregate_only` mode.
-  Keep out of frame: the raw real export, `data/raw/`, `.env`, traces, the bot's log, and phone
-  notifications. Check every frame before committing: the GIF stays in git history.
+- Part 1 shows aggregates from the real export on screen, by the owner's choice. Don't show
+  the raw real export, `data/raw/`, traces, or the bot's log.
+- Part 2 uses only the synthetic sample. The dbt docs site is built from the synthetic
+  warehouse (`--config config.sample.yaml`), never from `real.duckdb`.

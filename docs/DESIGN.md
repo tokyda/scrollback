@@ -686,13 +686,19 @@ Opus is no longer on the ladder.
 - **`scrollback eval import-feedback`** (`evals/feedback_import.py`) turns bad feedback into candidate eval questions. For every trace whose *latest* rating is `bad`, it appends one entry to `eval/candidates/feedback.yaml`: the feedback, the question and its `today`, status, model and prompt hash, the answer with its assumptions, metrics and SQL, the tool error codes, any eval question with the same text, and a `proposed` `questions.yaml` stub whose category, anchor and gold are `TODO`. It **never writes `questions.yaml`**. The owner reviews each entry, copies accepted ones by hand, picks a synthetic `today` anchor and writes the gold from the definitions (§7.1 writing rules), then runs `check-gold --update`. The file is **git-ignored** (owner decision 2026-11-22), because it holds real questions and answers. Re-runs add only new traces and keep the owner's edits. A bad rating whose trace isn't found yet is retried on the next run. An entry whose rating has since turned `good` is flagged, not deleted. The command prints counts only.
 - **Logging and privacy.** Logs carry trace IDs, statuses, costs and error *types* only: no question text, answers, query results, chat IDs or the token. The token is part of every Bot API URL, so the client keeps the `httpx`/`httpcore` loggers at WARNING (at INFO they log each URL), and also `httpx2`, the Anthropic SDK's own httpx copy, which logged API URLs (no key) in the first real run. `serve bot` also mutes matplotlib's INFO messages, redacts it from every error, and `serve bot` adds a redacting log filter. A test plants a fake token, forces API errors and checks the logs and traces.
 
-### Demo script (3 minutes)
-The rehearsal script with exact commands and messages is [DEMO.md](DEMO.md). *(Owner decision 2026-11-22, Phase 7: steps 1 and 2 use the synthetic sample; steps 3 and 4 use the live bot on the real export, aggregates only. Changed 2026-11-23, owner decision: the README GIF is recorded on the real export too, aggregate answers only, as the one exception to keeping real figures out of the repo; the raw real export is never shown.)*
-1. Show the raw export: just timestamps and links, no durations. That's the problem.
-2. Explain how watch time is estimated (§4.3), using one diagram of gaps between views.
-3. Ask the bot a question live and show the answer, the SQL, the metric used and the caveat.
-4. Ask something it can't answer ("which creator do I watch most?") and show the clean refusal.
-5. Show the eval table: E0 → best config, plus the top bad-case types and how each was fixed.
+### Demo script (about 4.5 minutes, cuts to 3)
+The rehearsal script with exact words, commands and messages is [DEMO.md](DEMO.md). *(Owner decision 2026-11-22, Phase 7: the live bot runs on the real export, aggregates only; everything else uses the synthetic sample. Changed 2026-11-23, owner decision: no README demo GIF (an earlier plan recorded one on the real export), so no real figures enter the repo; the raw real export is never shown. Changed 2026-11-23, owner decision: the demo now shows the product working first and then the technical build; results shrink from a closing section to one sentence, because the old order spent too long on eval numbers.)*
+
+**Part 1, what it does (live bot, real data):**
+1. `/today`: the answer, the date it used, the estimate caveat.
+2. A free-text question: assumptions (resolved dates), metric used, Show SQL, footer with cost.
+3. Something it can't answer ("which creator do I watch most?"): the refusal and the 👍/👎 buttons.
+
+**Part 2, how it's built (synthetic data):**
+4. The raw export has no durations; how watch time is estimated (§4.3) and calibrated.
+5. The dbt lineage graph: raw → staging → intermediate → marts, tests and descriptions.
+6. The agent loop and its tools; the SQL guard rejecting a row-level and a write query live.
+7. One sentence on the eval set and its main lesson (data modelling over prompting), then close.
 
 ---
 

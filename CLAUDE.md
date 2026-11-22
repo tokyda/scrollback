@@ -66,21 +66,20 @@ superseded by #3.
 
 **Phase 7 (branch `phase-7`, PR open, not merged; owner decisions 2026-11-22):**
 - README rewritten for a 2-minute read; full ladder in `<details>`; Screen Time story as the
-  cap comparison (−8.2% / +4.7%) only. Demo GIF still a placeholder; it
-  will be recorded on real data, aggregates only (owner, 2026-11-23: the one exception to no
-  real figures in the repo).
+  cap comparison (−8.2% / +4.7%) only. No demo GIF (owner, 2026-11-23:
+  dropped).
 - Quickstart uses `config.sample.yaml` (eval params, `data/warehouse/sample.duckdb`) via
   `--config`; a test keeps it equal to `questions.yaml` params and to config.yaml otherwise.
 - `scrollback docs`: dbt docs as one static HTML file, built locally, not hosted.
 - Real-export counts, dates and session stats removed from tracked files (DESIGN §4.1, §4.3,
   §4.4, §14); git history left as is (owner). Keep new docs free of real figures.
-- `docs/DEMO.md`: raw export on synthetic data; live bot and the README GIF on real data.
+- `docs/DEMO.md`: raw export on synthetic data; live bot on real data.
 - Clean-clone check: clone → sync → synth → ingest → docs → check-gold → ask all pass;
   Haiku E6b test x3 from the clone (`20261122T065708Z`) reproduced 100% at $0.0011 per
   question ($0.11 total; the fresh-clone estimate printed $0.18, owner approved).
 
 **Phase 7 scope** (ROADMAP): the README (problem statement, architecture
-diagram, metric definitions with the watch-time estimation story, eval table, demo GIF, privacy
+diagram, metric definitions with the watch-time estimation story, eval table, privacy
 note, synthetic quickstart), rehearsing the 3-minute demo (DESIGN §8) on real data, the dbt docs
 site linked from the README, a short write-up of the three most instructive bad cases, and a
 clean-clone check. Done when a stranger can clone the repo, run the quickstart and reproduce the
