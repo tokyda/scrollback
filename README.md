@@ -246,7 +246,8 @@ uv run scrollback ask "How many minutes did I watch on each day of last week?" \
 ```
 
 The first question builds the local knowledge index, which downloads a small embedding model
-once. A question costs about $0.001 on the default configuration (Haiku E6b).
+from Hugging Face once (a warning about `HF_TOKEN` can be ignored). A question costs about
+$0.001 on the default configuration (Haiku E6b).
 
 **Browse the warehouse.** `uv run scrollback docs --config config.sample.yaml` builds the dbt
 documentation site (lineage graph, every model and column description) as one file,
@@ -258,13 +259,15 @@ warehouses, so it needs no ingest. Without `--yes` it only prints a cost estimat
 ```bash
 uv run scrollback eval check-gold                    # gold SQL is valid and unchanged (free)
 uv run scrollback eval run --config eval/experiments/e06b_cannot_answer_haiku.yaml \
-  --split test --repeat 3                            # prints the estimate (about $0.11)
+  --split test --repeat 3                            # prints a cost estimate only
 uv run scrollback eval run --config eval/experiments/e06b_cannot_answer_haiku.yaml \
   --split test --repeat 3 --yes                      # runs it
 uv run scrollback eval report eval/runs/<run-folder>
 ```
 
-Expect results close to, not identical with, the table above: model outputs vary between runs.
+The final test run of this configuration cost about $0.11. On a fresh clone the printed
+estimate is higher, because it is based on the few traces you have so far. Expect results
+close to, not identical with, the table above: model outputs vary between runs.
 
 ## Telegram bot
 
