@@ -6,26 +6,22 @@ targets. Each step lists what to show, the exact command or message, and what to
 
 ## Before the demo (10 minutes ahead)
 
-1. **Synthetic warehouse ready** (for step 1 and the fallback):
-   ```bash
-   uv run scrollback ingest data/sample/user_data_tiktok.json --config config.sample.yaml
-   ```
-2. **Start the bot** on the real configuration, in its own terminal, and leave it running:
+1. **Start the bot** on the real configuration, in its own terminal, and leave it running:
    ```bash
    uv run scrollback serve bot
    ```
    Check that the start-up line shows Haiku E6b, `aggregate_only` and the current commit. If it
    says another bot holds the lock, stop that one first: only one process can poll the token.
-3. **Warm it up.** Send `/today` from the phone once, so the knowledge index and the API
+2. **Warm it up.** Send `/today` from the phone once, so the knowledge index and the API
    connection are warm and the first live answer isn't slow. Delete the chat messages
    afterwards if you don't want them on screen.
-4. **Screens.**
+3. **Screens.**
    - Terminal: large font, in the repository folder, history cleared.
    - Browser: the README on GitHub, scrolled to "Estimating watch time without durations";
      a second tab at "Results".
    - Phone: Telegram open in the bot chat, mirrored to the screen (QuickTime "New Movie
      Recording" with the iPhone as camera works on a Mac), or the Telegram desktop app.
-5. **Notifications off** on the laptop and phone.
+4. **Notifications off** on the laptop and phone.
 
 Expected API spend for the whole demo: under $0.01.
 
@@ -128,12 +124,14 @@ evals that say how far to trust it."
 ## If something goes wrong
 
 - **The bot doesn't reply within 20 seconds.** Keep talking through the step, then switch to
-  the terminal and ask the same question on synthetic data:
+  the terminal and ask the same question there. It runs the same config on the same real data,
+  so the numbers match what the bot would have said:
   ```bash
-  uv run scrollback ask "Which creator do I watch most?" --today 2026-11-20 --config config.sample.yaml
-  uv run scrollback ask "What share of my watch time was after midnight in October?" \
-    --today 2026-11-20 --show-sql --config config.sample.yaml
+  uv run scrollback ask "What share of my watch time is after midnight, and how does last month compare with the month before?" --show-sql
+  uv run scrollback ask "Which creator do I watch most?"
   ```
+  This only helps when Telegram is the problem: if the Anthropic API is down, the terminal
+  fails too.
 - **The answer is wrong.** Say so, tap 👎, and use it: "This is exactly how q097 got into the
   eval set." It is a better demo moment than a perfect run.
 - **409 Conflict in the bot log.** Another process is polling the token; stop it (`kill` the
@@ -143,4 +141,7 @@ evals that say how far to trust it."
 
 - Steps 3 and 4 show aggregates from the real export on screen, by the owner's choice. Don't
   show the raw real export, `data/raw/`, traces, or the bot's log.
-- Don't record or publish the live bot part. The README GIF is recorded on synthetic data only.
+- The README GIF is recorded on the real export (owner decision 2026-11-23). Record with the
+  default config (no `--config`), so answers come from `real.duckdb` in `aggregate_only` mode.
+  Keep out of frame: the raw real export, `data/raw/`, `.env`, traces, the bot's log, and phone
+  notifications. Check every frame before committing: the GIF stays in git history.

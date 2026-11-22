@@ -66,13 +66,15 @@ superseded by #3.
 
 **Phase 7 (branch `phase-7`, PR open, not merged; owner decisions 2026-11-22):**
 - README rewritten for a 2-minute read; full ladder in `<details>`; Screen Time story as the
-  cap comparison (−8.2% / +4.7%) only. Demo GIF still a placeholder (record on synthetic data).
+  cap comparison (−8.2% / +4.7%) only. Demo GIF still a placeholder; it
+  will be recorded on real data, aggregates only (owner, 2026-11-23: the one exception to no
+  real figures in the repo).
 - Quickstart uses `config.sample.yaml` (eval params, `data/warehouse/sample.duckdb`) via
   `--config`; a test keeps it equal to `questions.yaml` params and to config.yaml otherwise.
 - `scrollback docs`: dbt docs as one static HTML file, built locally, not hosted.
 - Real-export counts, dates and session stats removed from tracked files (DESIGN §4.1, §4.3,
   §4.4, §14); git history left as is (owner). Keep new docs free of real figures.
-- `docs/DEMO.md`: raw export and GIF on synthetic data, live bot on real data.
+- `docs/DEMO.md`: raw export on synthetic data; live bot and the README GIF on real data.
 - Clean-clone check: clone → sync → synth → ingest → docs → check-gold → ask all pass;
   Haiku E6b test x3 from the clone (`20261122T065708Z`) reproduced 100% at $0.0011 per
   question ($0.11 total; the fresh-clone estimate printed $0.18, owner approved).
