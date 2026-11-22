@@ -1,0 +1,73 @@
+# Scrollback configuration for the committed SYNTHETIC sample (README quickstart).
+# Pass it with `--config config.sample.yaml`. It differs from config.yaml in two places only:
+# the warehouse file, and the metric parameters, which are the eval set's pinned values
+# (eval/questions.yaml `params`; tests/test_config.py keeps them in sync). config.yaml is tuned
+# for the owner's real export. Secrets live in .env (see .env.example).
+# Environment variables override values here (see src/scrollback/config.py).
+
+timezone:
+  source_tz: UTC              # timezone of timestamps in the TikTok export (DESIGN §4.1; confirmed)
+  local_tz: Asia/Singapore    # timezone used for local_date / local_hour
+
+paths:
+  raw_dir: data/raw
+  sample_dir: data/sample
+  warehouse: data/warehouse/sample.duckdb   # synthetic sample (git-ignored, rebuilt by ingest)
+  dbt_project_dir: dbt
+  traces_dir: traces
+  eval_runs_dir: eval/runs
+  charts_dir: charts
+  kb_index: data/kb/knowledge.duckdb   # search_knowledge index (git-ignored, rebuilt when stale)
+  kb_models: data/kb/models            # embedding model cache (git-ignored)
+
+# Watch-time estimation, session and data-quality parameters (DESIGN §4.3, §4.4, §5).
+# `scrollback build` passes them to dbt as --vars. These are the eval set's pinned values.
+metrics:
+  session_gap_min: 30
+  view_cap_sec: 180
+  default_last_view_sec: 20
+  binge_threshold_min: 60
+  late_night_start_hour: 0
+  late_night_end_hour: 5
+  max_daily_views: 3000         # sanity bound tested by dbt
+  freshness_warn_days: 14       # dbt warns if the latest event is older than this
+
+llm:
+  provider: anthropic
+  model: claude-sonnet-5-5
+  effort: medium            # low | medium | high | xhigh | max (no temperature: see DESIGN §6.7)
+  max_tokens: 16000
+  timeout_sec: 120
+  retrieval_k: 6
+
+agent:
+  # aggregate_only: the SQL guard rejects row-level results (DESIGN §4.6, §6.3)
+  result_mode: aggregate_only
+  prompt_version: 1         # src/scrollback/agent/prompts/system_v1.md
+  max_steps: 8              # LLM calls per question
+  sql_max_retries: 2        # consecutive failed run_sql calls before SQL is disabled
+  max_result_rows: 200
+  statement_timeout_sec: 10
+  # E0 baseline switches (DESIGN §7.5). E1 turns descriptions on.
+  describe_include_descriptions: false
+  describe_sample_rows: 3
+  # Phase 5 ladder (DESIGN §7.5): search_knowledge arrives in E2a.
+  search_knowledge: false
+  kb_sources: [metrics, docs, tables]   # E3 adds examples, E6 adds cannot_answer
+
+kb:
+  embedding_model: BAAI/bge-small-en-v1.5   # local, via fastembed
+  rrf_k: 60
+
+# What `scrollback ask` and the Telegram bot run (DESIGN §6.7, §8). Evals never read this
+# section: they use llm/agent above plus their own experiment file and pinned params.
+# Only the experiment's llm/agent overrides apply; the metric params above stay (calibrated on
+# the real export). null = llm/agent above as they are. `ask --no-experiment` does the same.
+interactive:
+  experiment: eval/experiments/e06b_cannot_answer_haiku.yaml   # best eval config (Haiku E6b)
+
+# Telegram bot (DESIGN §8). TELEGRAM_BOT_TOKEN and TELEGRAM_ALLOWED_CHAT_IDS live in .env.
+bot:
+  poll_timeout_sec: 30
+  chart_keywords: [chart, plot, graph, trend, visualise, visualize]  # free text asks for a chart
+  drop_pending_on_start: true   # skip messages sent while the bot was off (no surprise runs)

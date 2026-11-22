@@ -21,7 +21,7 @@ Build scope by phase. Each phase ends with a "Done when" check. See `docs/DESIGN
 - [x] Pydantic validation; rejects go to `raw_rejects`
 - [x] Idempotent load via `record_hash`; `ingest_log`
 - [x] Unit tests: each variant, malformed records, video ID extraction, re-ingesting the same file adds 0 rows, overlapping exports merge correctly
-- [ ] Ingest one real export locally (never committed) and record anything new about the format in DESIGN §4.1 *(blocked: no real export yet; see the assumption list in DESIGN §4.1)*
+- [x] Ingest one real export locally (never committed) and record anything new about the format in DESIGN §4.1 *(done 2026-11-22 in #8: added `v3_likes_favorites`)*
 
 **Done when:** `scrollback synth && scrollback ingest data/sample/...` loads the expected row counts, and running it twice changes nothing.
 
@@ -91,11 +91,14 @@ Build scope by phase. Each phase ends with a "Done when" check. See `docs/DESIGN
 **Done when:** asking a question from your phone returns an answer and chart, and bad feedback shows up as a candidate eval question.
 
 ## Phase 7: Polish and demo
-- [ ] README: problem statement (DESIGN §0), architecture diagram, metric definitions (with the watch-time estimation story), eval results table, demo GIF, privacy note, quickstart using synthetic data
+- [x] README: problem statement (DESIGN §0), architecture diagram (Mermaid), the watch-time estimation story (Screen Time calibration as percentages only), eval results table, limitations, privacy note, quickstart using synthetic data (`config.sample.yaml`)
+- [ ] Demo GIF, recorded on the synthetic sample (placeholder in the README)
+- [x] Demo script with exact commands and messages: [docs/DEMO.md](DEMO.md)
 - [ ] Rehearse the 3-minute demo script (DESIGN §8) on real data
-- [ ] dbt docs site (lineage graph) linked from the README
-- [ ] Short write-up: three most instructive bad cases and how each was fixed
-- [ ] Clean-clone check: a fresh clone runs end to end on synthetic data with only an API key
+- [x] dbt docs site (lineage graph) linked from the README: `scrollback docs`, built locally (owner decision 2026-11-22: not hosted until the repo is public)
+- [x] Short write-up: three most instructive bad cases and how each was fixed (README)
+- [x] *(added)* Real-export counts and dates removed from tracked files (shares and plain wording; history unchanged, owner decision)
+- [x] Clean-clone check: a fresh clone runs end to end on synthetic data with only an API key (2026-11-22, PR #13: quickstart steps all pass; Haiku E6b test x3 reproduced 100% at $0.0011 per question, $0.11 total)
 
 **Done when:** a stranger can clone the repo, run the quickstart, and reproduce the headline eval numbers.
 

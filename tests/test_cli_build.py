@@ -57,3 +57,18 @@ def test_failing_data_test_fails_build_and_ingest(tmp_path: Path) -> None:
     assert "Raw data was loaded" in ingest.output
     build = runner.invoke(app, ["build", "--config", str(cfg), "-q"])
     assert build.exit_code == 1
+
+
+def test_docs_builds_one_static_page(tmp_path: Path) -> None:
+    cfg = _config(tmp_path)
+    nodata = runner.invoke(app, ["docs", "--config", str(cfg)])
+    assert nodata.exit_code == 1
+    assert "run `scrollback ingest <export>` first" in nodata.output
+    assert runner.invoke(app, ["ingest", str(SAMPLE_EXPORT), "--config", str(cfg)]).exit_code == 0
+    out = tmp_path / "docs"
+    result = runner.invoke(app, ["docs", "--config", str(cfg), "--out", str(out), "-q"])
+    assert result.exit_code == 0, result.output
+    assert "dbt docs: ok" in result.output
+    page = out / "static_index.html"
+    assert page.exists()
+    assert "fct_views" in page.read_text(encoding="utf-8")
