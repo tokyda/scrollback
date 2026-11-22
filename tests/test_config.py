@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from scrollback.config import ConfigError, load_config
+from scrollback.config import ConfigError, Settings, load_config
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -36,7 +36,7 @@ def test_sample_config_uses_eval_params_and_otherwise_matches_config_yaml() -> N
     and its own warehouse file, so synthetic answers follow the eval setup."""
     from scrollback.evals.questions import load_questions
 
-    def load(name: str):  # type: ignore[no-untyped-def]
+    def load(name: str) -> Settings:
         return load_config(REPO_ROOT / name, env_file=REPO_ROOT / "missing.env", environ={})
 
     real, sample = load("config.yaml"), load("config.sample.yaml")
