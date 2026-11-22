@@ -25,7 +25,7 @@ paths:
 metrics:
   session_gap_min: 30
   view_cap_sec: 120             # calibrated against a week of phone Screen Time; 180 overshot
-  default_last_view_sec: 10     # ~ the real median within-session gap (9 s)
+  default_last_view_sec: 10     # ~ the real median within-session gap
   binge_threshold_min: 60
   late_night_start_hour: 0
   late_night_end_hour: 5

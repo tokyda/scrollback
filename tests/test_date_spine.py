@@ -1,6 +1,6 @@
 """The date spine covers the watch-history window only (DESIGN §4.4, owner decision 2026-11-22).
 
-The first real export had likes reaching back about 500 days before its watch history; with a
+The first real export had likes reaching back over a year before its watch history; with a
 spine over every dataset those days looked like zero-view days instead of unknown ones.
 """
 
