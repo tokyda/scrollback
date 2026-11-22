@@ -92,7 +92,7 @@ Build scope by phase. Each phase ends with a "Done when" check. See `docs/DESIGN
 
 ## Phase 7: Polish and demo
 - [x] README: problem statement (DESIGN §0), architecture diagram (Mermaid), the watch-time estimation story (Screen Time calibration as percentages only), eval results table, limitations, privacy note, quickstart using synthetic data (`config.sample.yaml`)
-- [ ] Demo GIF, recorded on the synthetic sample (placeholder in the README)
+- [ ] Demo GIF, recorded on the real export, aggregate answers only (owner decision 2026-11-23; placeholder in the README)
 - [x] Demo script with exact commands and messages: [docs/DEMO.md](DEMO.md)
 - [ ] Rehearse the 3-minute demo script (DESIGN §8) on real data
 - [x] dbt docs site (lineage graph) linked from the README: `scrollback docs`, built locally (owner decision 2026-11-22: not hosted until the repo is public)

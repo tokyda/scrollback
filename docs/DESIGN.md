@@ -687,7 +687,7 @@ Opus is no longer on the ladder.
 - **Logging and privacy.** Logs carry trace IDs, statuses, costs and error *types* only: no question text, answers, query results, chat IDs or the token. The token is part of every Bot API URL, so the client keeps the `httpx`/`httpcore` loggers at WARNING (at INFO they log each URL), and also `httpx2`, the Anthropic SDK's own httpx copy, which logged API URLs (no key) in the first real run. `serve bot` also mutes matplotlib's INFO messages, redacts it from every error, and `serve bot` adds a redacting log filter. A test plants a fake token, forces API errors and checks the logs and traces.
 
 ### Demo script (3 minutes)
-The rehearsal script with exact commands and messages is [DEMO.md](DEMO.md). *(Owner decision 2026-11-22, Phase 7: steps 1 and 2 and the README GIF use the synthetic sample; steps 3 and 4 use the live bot on the real export, aggregates only.)*
+The rehearsal script with exact commands and messages is [DEMO.md](DEMO.md). *(Owner decision 2026-11-22, Phase 7: steps 1 and 2 use the synthetic sample; steps 3 and 4 use the live bot on the real export, aggregates only. Changed 2026-11-23, owner decision: the README GIF is recorded on the real export too, aggregate answers only, as the one exception to keeping real figures out of the repo; the raw real export is never shown.)*
 1. Show the raw export: just timestamps and links, no durations. That's the problem.
 2. Explain how watch time is estimated (§4.3), using one diagram of gaps between views.
 3. Ask the bot a question live and show the answer, the SQL, the metric used and the caveat.

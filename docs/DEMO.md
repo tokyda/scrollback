@@ -143,4 +143,7 @@ evals that say how far to trust it."
 
 - Steps 3 and 4 show aggregates from the real export on screen, by the owner's choice. Don't
   show the raw real export, `data/raw/`, traces, or the bot's log.
-- Don't record or publish the live bot part. The README GIF is recorded on synthetic data only.
+- The README GIF is recorded on the real export (owner decision 2026-11-23). Record with the
+  default config (no `--config`), so answers come from `real.duckdb` in `aggregate_only` mode.
+  Keep out of frame: the raw real export, `data/raw/`, `.env`, traces, the bot's log, and phone
+  notifications. Check every frame before committing: the GIF stays in git history.
