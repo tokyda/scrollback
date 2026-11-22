@@ -269,6 +269,39 @@ The final test run of this configuration cost about $0.11. On a fresh clone the 
 estimate is higher, because it is based on the few traces you have so far. Expect results
 close to, not identical with, the table above: model outputs vary between runs.
 
+## Refreshing the data
+
+TikTok only provides data through a manual export, so the warehouse is updated by hand, one
+export at a time.
+
+1. Request your data from TikTok (in the app: Settings and privacy → Account → Download your
+   data, JSON format) and download the file when it is ready.
+2. Put the file in `data/raw/`, which is git-ignored.
+3. Stop the Telegram bot if it is running. DuckDB allows one writer at a time, so an import
+   and a question at the same moment can collide on the file lock.
+4. Run `uv run scrollback ingest data/raw/<file>`, then restart the bot.
+
+Exports overlap, and that is expected. Each record is identified by a hash of its dataset,
+timestamp and video ID (or search term), so records already in the warehouse are skipped and
+only new ones are added. Importing the same file twice adds nothing. After loading, `ingest`
+rebuilds every model with `dbt build`, so sessions and watch time are recomputed with the
+current parameters.
+
+**How often.** There is no fixed schedule, but two limits apply.
+
+- **At least every two to three months.** An export only covers roughly the last six months
+  of watch history. Data already imported stays in the warehouse, but if two exports are
+  further apart than the export's window, the days between them are lost. Those days are not
+  flagged as missing: the date spine runs without gaps from the first view to the last, so
+  they appear as days with zero viewing and distort averages and streaks.
+- **Every one to two weeks for regular bot use.** An export always ends on the day before it
+  was requested, and `/today` and `/week` report the most recent data, not the calendar date.
+  After 14 days without new data, `dbt build` warns that the data is stale
+  (`freshness_warn_days` in `config.yaml`).
+
+Weekly or fortnightly exports keep the bot's answers current; a monthly export is enough for
+occasional use and still well inside the six-month window.
+
 ## Telegram bot
 
 The bot answers questions from a phone with the same configuration as `scrollback ask`. It
